@@ -1,5 +1,0 @@
-display_name: Cogni System
-short_description: End-to-end Cogni runtime, playground, docs, and refactor workflow.
-default_prompt: |
-  Use the Cogni system workflow to make coordinated runtime, playground, and docs changes,
-  then run verification commands and remove dead code.

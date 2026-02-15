@@ -1,0 +1,17 @@
+name: cogni-examples
+version: 0.1.0
+
+authors:
+  - CogniCore Team
+
+crystal: ">= 1.12.0"
+
+license: MIT
+
+dependencies:
+  cogni:
+    path: ../..
+
+targets:
+  cogni_examples:
+    main: src/cogni_examples.cr

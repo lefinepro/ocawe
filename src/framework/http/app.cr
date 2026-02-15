@@ -1,5 +1,6 @@
 require "kemal"
 require "yaml"
+require "set"
 require "../discovery/workflow_locator"
 require "../agents/loader"
 require "../skills/loader"
@@ -65,6 +66,7 @@ module ACD
       end
 
       def start
+        register_configured_functions!
         reload_cache!
         start_reload_watcher
 
@@ -236,6 +238,16 @@ module ACD
         merged.values.to_a
       end
 
+      private def register_configured_functions! : Nil
+        config = CogniCore::Config::AppConfig.settings
+        snake_case = /\A[a-z][a-z0-9_]*\z/
+
+        config.functions.each do |name, handler|
+          raise "invalid function name '#{name}' in AppConfig.settings.functions; expected snake_case" unless snake_case.matches?(name)
+          CogniCore::Workflow.register_function(name, &handler)
+        end
+      end
+
       private def current_fingerprint : String
         bundles = @locator.list_workflows
         file_count = 0
@@ -330,11 +342,17 @@ module ACD
         loaded_agents.each { |agent| agent_index[agent.id] = agent }
         last_agent_id = nil.as(String?)
 
-        crystal_tool_pattern = /^\s*tool\s+(tool_[A-Za-z0-9_]+)\s*$/
+        crystal_tool_pattern = /^\s*tool\s+([a-z][a-z0-9_]*)\s*$/
         external_tool_pattern = /^\s*tool\s+"([^"]+)"\s*,\s*runtime:\s*(\{.*\})\s*$/
         skill_pattern = /^\s*skill\s+"([^"]+)"(?:\s*,\s*agent:\s*"([^"]+)")?/
         rag_pattern = /^\s*rag\s+"([^"]+)"(?:\s*,\s*config:\s*(\{.*\}))?/
         approve_pattern = /^\s*approve\s+"([^"]+)"(?:\s*,\s*reason:\s*"([^"]+)")?/
+        bare_fn_pattern = /^[a-z][a-z0-9_]*$/
+        reserved_keywords = Set{
+          "workflow", "do", "end", "struct", "class", "module",
+          "agent", "skill", "tool", "voice", "rag", "approve",
+          "use_model", "input_type", "output_type", "input_validate", "output_validate",
+        }
 
         File.each_line(bundle.workflow_file) do |raw|
           line = raw.strip
@@ -345,9 +363,11 @@ module ACD
             tail = match[2]? || ""
             loaded = agent_index[agent_id]?
             params = parse_line_params(tail, bundle.workflow_file, "agent #{agent_id}")
+            if params["custom_fn"]?
+              raise "#{bundle.workflow_file}: `custom_fn` is not supported for agent. Register a snake_case function and call it as a standalone DSL step."
+            end
             model = parse_optional_string(params["model"]?) || loaded.try(&.model)
             prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
-
             input_schema = resolve_agent_schema(
               params["input_schema"]?,
               loaded,
@@ -411,14 +431,17 @@ module ACD
             next
           end
           if line.starts_with?("tool ")
-            raise "#{bundle.workflow_file}: unsupported tool syntax '#{line}'. Use `tool tool_*` or `tool \"path\", runtime: { ... }`"
+            raise "#{bundle.workflow_file}: unsupported tool syntax '#{line}'. Use `tool snake_case_fn` or `tool \"path\", runtime: { ... }`"
           end
           if match = line.match(approve_pattern)
             workflow.approve(match[1], reason: match[2]? || "human approval required")
             next
           end
-          if match = line.match(/^\s*custom\s+"([^"]+)"/)
-            workflow.custom(match[1]) { |_ctx| CogniCore::Workflow::WorkflowNodeResult.continue }
+          if line.match(bare_fn_pattern) && !reserved_keywords.includes?(line)
+            unless CogniCore::Workflow.function_registry.registered?(line)
+              raise "#{bundle.workflow_file}: unknown function '#{line}'. Register it in CogniCore::Config::AppConfig."
+            end
+            workflow.fn(line)
             next
           end
         end

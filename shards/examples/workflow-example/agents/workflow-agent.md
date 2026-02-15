@@ -9,7 +9,7 @@ voice:
 Summarize the task briefly.
 
 ```crystal schema:input
-Schema::Types.object({"task" => Schema::Types.of(String)})
+Schema::Types.object({"input" => Schema::Types.of(JSON::Any)})
 ```
 
 ```crystal schema:output

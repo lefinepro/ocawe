@@ -4,7 +4,7 @@ require "file_utils"
 
 describe CogniCore::Workflow::ToolExecutor do
   it "runs crystal tool functions directly by name" do
-    CogniCore::Workflow.register_tool("tool_create_sandbox") do |_ctx|
+    CogniCore::Workflow.register_tool("create_sandbox") do |_ctx|
       {
         "tool" => json_any("create-sandbox"),
         "status" => json_any("ok"),
@@ -15,12 +15,12 @@ describe CogniCore::Workflow::ToolExecutor do
     ctx = CogniCore::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_1",
-      node_id: "tool_create_sandbox",
+      node_id: "create_sandbox",
       input_data: {} of String => JSON::Any,
       state: {} of String => JSON::Any,
     )
 
-    result = executor.run("tool_create_sandbox", ctx)
+    result = executor.run("create_sandbox", ctx)
     result["tool"].as_s.should eq("create-sandbox")
     result["status"].as_s.should eq("ok")
   end
@@ -68,7 +68,7 @@ describe CogniCore::Workflow::ToolExecutor do
   end
 
   it "runs registered ai generate tool by direct function name" do
-    CogniCore::Workflow.register_tool("tool_ai_generate_text") do |ctx|
+    CogniCore::Workflow.register_tool("ai_generate_text") do |ctx|
       {
         "tool" => json_any("ai-generate-text"),
         "model" => json_any(ctx.state["workflow_model"]?.try(&.as_s?) || "missing"),
@@ -80,12 +80,12 @@ describe CogniCore::Workflow::ToolExecutor do
     ctx = CogniCore::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_4",
-      node_id: "tool_ai_generate_text",
+      node_id: "ai_generate_text",
       input_data: {"task" => json_any("hello")},
       state: {"task" => json_any("hello"), "workflow_model" => json_any("openapi/qwen3-coder-plus")},
     )
 
-    result = executor.run("tool_ai_generate_text", ctx)
+    result = executor.run("ai_generate_text", ctx)
     result["tool"].as_s.should eq("ai-generate-text")
     result["model"].as_s.should eq("openapi/qwen3-coder-plus")
     result["text"].as_s.includes?("hello").should eq(true)

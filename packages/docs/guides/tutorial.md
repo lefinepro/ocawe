@@ -26,7 +26,7 @@ Example bundles are in `shards/examples`:
 - `rag-playground`
 - `simple-model-test`
 
-## 4) Write a typed custom node
+## 4) Write a typed function node
 
 ```crystal
 workflow "typed-node-example" do
@@ -34,15 +34,22 @@ workflow "typed-node-example" do
     "query" => Schema::Types.of(String),
   })
 
-  custom "build-answer",
-    input_schema: Schema::Types.object({"query" => Schema::Types.of(String)}),
-    output_schema: Schema::Types.object({"answer" => Schema::Types.of(String)}) do |ctx|
-      q = ctx.input_data["query"]?.try(&.as_s?) || ""
-      Workflow::WorkflowNodeResult.continue({
-        "answer" => JSON.parse("Echo: #{q}".to_json),
-      })
-    end
+  build_answer
 end
+```
+
+Register function in `AppConfig.settings.functions` (auto-registered at runtime startup):
+
+```crystal
+functions: {
+  "build_answer" => ->(ctx : CogniCore::Workflow::NodeContext) {
+    q = ctx.input_data["input"]?.try(&.as_h?).try(&.["query"]?).try(&.as_s?) || ""
+    CogniCore::Workflow::AgentResult.new(
+      agent_type: "function",
+      content: "Echo: #{q}",
+    )
+  },
+} of String => CogniCore::Workflow::FunctionHandler
 ```
 
 ## 5) Add agent guardrails + crystal schema blocks
@@ -61,7 +68,7 @@ guardrails:
 You are a concise assistant.
 
 ```crystal schema:input
-Schema::Types.object({"task" => Schema::Types.of(String)})
+Schema::Types.object({"input" => Schema::Types.of(JSON::Any)}, strict: false)
 ```
 
 ```crystal schema:output

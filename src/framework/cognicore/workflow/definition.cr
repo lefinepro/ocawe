@@ -16,13 +16,15 @@ module CogniCore
         @default_model = nil
       end
 
-      def custom(
-        id : String,
+      def fn(
+        name : String,
         input_schema : Schema::Validator? = nil,
-        output_schema : Schema::Validator? = nil,
-        &block : NodeContext -> WorkflowNodeResult
+        output_schema : Schema::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(id, NodeKind::Custom, input_schema: input_schema, output_schema: output_schema, &block))
+        append_node(WorkflowNode.new(name, NodeKind::Fn, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          result = Workflow.function_registry.call(name, ctx)
+          WorkflowNodeResult.continue(result.to_any_hash)
+        end)
       end
 
       def then(node : WorkflowNode) : self
@@ -39,11 +41,11 @@ module CogniCore
         output_schema : Schema::Validator? = nil
       ) : self
         append_node(WorkflowNode.new(id, NodeKind::Agent, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          resolved_model = resolve_model(ctx, model)
           user_prompt = build_agent_user_prompt(ctx)
-          system_prompt = prompt || "You are agent #{id}."
           Guardrails.validate_input!(id, user_prompt, guardrails_config)
 
+          resolved_model = resolve_model(ctx, model)
+          system_prompt = prompt || "You are agent #{id}."
           response = AI::Client.new.generate_text(
             model_spec: resolved_model,
             prompt: user_prompt,
@@ -55,17 +57,25 @@ module CogniCore
               "agent_id" => JSON.parse(id.to_json),
             },
           )
-          Guardrails.validate_output!(id, response.text, guardrails_config)
+          agent_result = AgentResult.new(
+            agent_type: "default-agent",
+            content: response.text,
+            provider: response.provider,
+            model: "#{response.provider}/#{response.model}",
+          )
+
+          Guardrails.validate_output!(id, agent_result.content, guardrails_config)
 
           outputs = ctx.state["agent_outputs"]?.try(&.as_h?) || {} of String => JSON::Any
           outputs = outputs.dup
-          outputs[id] = JSON.parse(response.text.to_json)
+          outputs[id] = JSON.parse(agent_result.to_any_hash.to_json)
 
           result = {
             "agent_outputs" => JSON.parse(outputs.to_json),
+            "agent_result" => JSON.parse(agent_result.to_any_hash.to_json),
             "last_agent" => JSON.parse(id.to_json),
-            "last_model" => JSON.parse("#{response.provider}/#{response.model}".to_json),
-            "last_response" => JSON.parse(response.text.to_json),
+            "last_model" => JSON.parse((agent_result.model || "").to_json),
+            "last_response" => JSON.parse(agent_result.content.to_json),
             "active_agent" => JSON.parse(id.to_json),
           } of String => JSON::Any
 
@@ -105,8 +115,8 @@ module CogniCore
         input_schema : Schema::Validator? = nil,
         output_schema : Schema::Validator? = nil
       ) : self
-        if runtime.nil? && !ref.starts_with?("tool_")
-          raise "tool '#{ref}' must be a crystal function name starting with tool_ when runtime is not provided"
+        if runtime.nil? && !snake_case_identifier?(ref)
+          raise "tool '#{ref}' must be a snake_case crystal function name when runtime is not provided"
         end
 
         metadata = {} of String => JSON::Any
@@ -119,6 +129,10 @@ module CogniCore
         end)
       end
 
+      private def snake_case_identifier?(value : String) : Bool
+        !!(value =~ /\A[a-z][a-z0-9_]*\z/)
+      end
+
       # Voice node implemented as first-class DSL behavior.
       # This keeps voice orchestration inside workflow DSL instead of auto-started tools.
       def voice(
@@ -127,7 +141,7 @@ module CogniCore
         input_schema : Schema::Validator? = nil,
         output_schema : Schema::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(id, NodeKind::Custom, metadata: {
+        append_node(WorkflowNode.new(id, NodeKind::Voice, metadata: {
           "dsl_kind" => JSON.parse("voice".to_json),
           "config" => JSON.parse(config.to_json),
         } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
@@ -143,7 +157,7 @@ module CogniCore
         input_schema : Schema::Validator? = nil,
         output_schema : Schema::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(id, NodeKind::Custom, metadata: {
+        append_node(WorkflowNode.new(id, NodeKind::Rag, metadata: {
           "dsl_kind" => JSON.parse("rag".to_json),
           "config" => JSON.parse(config.to_json),
         } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
@@ -186,7 +200,7 @@ module CogniCore
       def branch(conditions : Array(Tuple(BranchCondition, WorkflowNode)), otherwise_node : WorkflowNode? = nil) : self
         ensure_not_committed!
 
-        branching_node = WorkflowNode.new("branch-#{@nodes.size}", NodeKind::Custom) do |ctx|
+        branching_node = WorkflowNode.new("branch-#{@nodes.size}", NodeKind::Control) do |ctx|
           selected = nil.as(WorkflowNode?)
           conditions.each do |(condition, node)|
             if evaluate_condition(condition, ctx)
@@ -210,7 +224,7 @@ module CogniCore
       def parallel(parallel_nodes : Array(WorkflowNode)) : self
         ensure_not_committed!
 
-        aggregator = WorkflowNode.new("parallel-#{@nodes.size}", NodeKind::Custom) do |ctx|
+        aggregator = WorkflowNode.new("parallel-#{@nodes.size}", NodeKind::Control) do |ctx|
           branch_results = Array(Tuple(Int32, WorkflowNodeResult)).new
           ch = Channel(Tuple(Int32, WorkflowNodeResult)).new
 
@@ -279,7 +293,7 @@ module CogniCore
       end
 
       def map(id : String, &block : NodeContext -> AnyHash) : self
-        append_node(WorkflowNode.new(id, NodeKind::Custom) do |ctx|
+        append_node(WorkflowNode.new(id, NodeKind::Control) do |ctx|
           WorkflowNodeResult.continue(block.call(ctx))
         end)
       end
@@ -291,7 +305,7 @@ module CogniCore
       def dowhile(node : WorkflowNode, condition : BranchCondition) : self
         ensure_not_committed!
 
-        loop_node = WorkflowNode.new("dowhile-#{@nodes.size}", NodeKind::Custom) do |ctx|
+        loop_node = WorkflowNode.new("dowhile-#{@nodes.size}", NodeKind::Control) do |ctx|
           iterations = 0
           result = WorkflowNodeResult.continue
           loop do
@@ -311,7 +325,7 @@ module CogniCore
       def dountil(node : WorkflowNode, condition : BranchCondition) : self
         ensure_not_committed!
 
-        loop_node = WorkflowNode.new("dountil-#{@nodes.size}", NodeKind::Custom) do |ctx|
+        loop_node = WorkflowNode.new("dountil-#{@nodes.size}", NodeKind::Control) do |ctx|
           iterations = 0
           result = WorkflowNodeResult.continue
           loop do
@@ -331,7 +345,7 @@ module CogniCore
       def wait_for_event(event_name : String, resume_label : String? = nil) : self
         ensure_not_committed!
 
-        waiter = WorkflowNode.new("wait-for-event-#{event_name}-#{@nodes.size}", NodeKind::Custom) do |ctx|
+        waiter = WorkflowNode.new("wait-for-event-#{event_name}-#{@nodes.size}", NodeKind::Control) do |ctx|
           event = ctx.resume_data.try(&.["event_name"]?) || ctx.state["event_name"]?
           if event && event.raw == event_name
             WorkflowNodeResult.continue({"event_name" => JSON.parse(event_name.to_json)})
@@ -350,7 +364,7 @@ module CogniCore
       def send_event(event_name : String, payload : AnyHash = {} of String => JSON::Any) : self
         ensure_not_committed!
 
-        sender = WorkflowNode.new("send-event-#{event_name}-#{@nodes.size}", NodeKind::Custom) do |_ctx|
+        sender = WorkflowNode.new("send-event-#{event_name}-#{@nodes.size}", NodeKind::Control) do |_ctx|
           event_payload = {"event_name" => JSON.parse(event_name.to_json)}
           payload.each { |k, v| event_payload[k] = v }
           WorkflowNodeResult.continue(event_payload)
@@ -362,7 +376,7 @@ module CogniCore
 
       def sleep(milliseconds : Int32) : self
         ensure_not_committed!
-        sleeper = WorkflowNode.new("sleep-#{@nodes.size}", NodeKind::Custom) do |_ctx|
+        sleeper = WorkflowNode.new("sleep-#{@nodes.size}", NodeKind::Control) do |_ctx|
           ::sleep(milliseconds / 1000.0)
           WorkflowNodeResult.continue
         end
@@ -372,7 +386,7 @@ module CogniCore
 
       def sleep_until(unix_time_seconds : Int64) : self
         ensure_not_committed!
-        sleeper = WorkflowNode.new("sleep-until-#{@nodes.size}", NodeKind::Custom) do |_ctx|
+        sleeper = WorkflowNode.new("sleep-until-#{@nodes.size}", NodeKind::Control) do |_ctx|
           now = Time.utc.to_unix
           remaining = unix_time_seconds - now
           ::sleep(remaining) if remaining > 0
@@ -490,6 +504,16 @@ module CogniCore
       end
 
       private def build_agent_user_prompt(ctx : NodeContext) : String
+        if input = ctx.input_data["input"]?
+          if as_text = input.as_s?
+            return as_text
+          end
+          if hash = input.as_h?
+            return hash["content"]?.try(&.as_s?) || hash["text"]?.try(&.as_s?) || input.to_json
+          end
+          return input.to_json
+        end
+
         task = ctx.input_data["task"]?.try(&.as_s?) || ctx.state["task"]?.try(&.as_s?)
         return task if task
 

@@ -19,7 +19,7 @@ module CogniCore
       end
 
       def default_function_name(tool_id : String) : String
-        "tool_#{normalize_identifier(tool_id)}"
+        normalize_identifier(tool_id)
       end
 
       private def normalize(value : String) : String

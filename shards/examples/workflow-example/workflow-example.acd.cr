@@ -12,10 +12,7 @@ workflow "workflow-example" do
   })
 
   agent "workflow-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
-  custom "append-note" do |ctx|
-    task = ctx.state["task"]?.try(&.as_s?) || ctx.input_data["task"]?.try(&.as_s?) || ""
-    Workflow::WorkflowNodeResult.continue({
-      "note" => JSON.parse("Processed task: #{task}".to_json),
-    })
-  end
+  agent_opencode
+  agent_codex
+  agent_cliproxy
 end

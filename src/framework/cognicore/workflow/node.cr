@@ -50,7 +50,7 @@ module CogniCore
 
       def initialize(
         @id : String,
-        @kind : NodeKind = NodeKind::Custom,
+        @kind : NodeKind = NodeKind::Control,
         @metadata : AnyHash = {} of String => JSON::Any,
         @input_schema : Schema::Validator? = nil,
         @output_schema : Schema::Validator? = nil,
