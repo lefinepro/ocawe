@@ -1,0 +1,5 @@
+
+[[repo]]
+dir = './clones/mastra'
+remote = 'https://github.com/mastra-ai/mastra'
+branch = 'main'
