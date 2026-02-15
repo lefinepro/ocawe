@@ -98,7 +98,7 @@ module CogniCore
           session_response = HTTP::Client.post(
             join_url(base_url, "/session"),
             headers: headers,
-            body: {} of String => JSON::Any
+            body: "{}"
           )
           unless session_response.success?
             return CogniCore::Workflow::AgentResult.new(
