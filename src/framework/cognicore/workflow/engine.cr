@@ -320,10 +320,22 @@ module CogniCore
             "state" => JSON.parse(@state.to_json),
           } of String => JSON::Any
 
-          return {
+          envelope = {
             "input" => input_payload,
             "context" => JSON.parse(context.to_json),
           } of String => JSON::Any
+
+          if node.kind == NodeKind::Fn
+            if params = node.metadata["params"]?
+              if flat = params.as_h?
+                flat.each do |k, v|
+                  envelope[k] = JSON.parse(v.to_json)
+                end
+              end
+            end
+          end
+
+          return envelope
         end
 
         @state

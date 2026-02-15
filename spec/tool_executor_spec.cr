@@ -82,12 +82,12 @@ describe CogniCore::Workflow::ToolExecutor do
       run_id: "run_4",
       node_id: "ai_generate_text",
       input_data: {"task" => json_any("hello")},
-      state: {"task" => json_any("hello"), "workflow_model" => json_any("openapi/qwen3-coder-plus")},
+      state: {"task" => json_any("hello"), "workflow_model" => json_any("cliproxyapi/qwen3-coder-plus")},
     )
 
     result = executor.run("ai_generate_text", ctx)
     result["tool"].as_s.should eq("ai-generate-text")
-    result["model"].as_s.should eq("openapi/qwen3-coder-plus")
+    result["model"].as_s.should eq("cliproxyapi/qwen3-coder-plus")
     result["text"].as_s.includes?("hello").should eq(true)
   end
 end

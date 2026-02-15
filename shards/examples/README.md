@@ -28,7 +28,7 @@ dependencies:
 
 - `agents-example`: `use_model`, `agent`
 - `skills-example`: `agent`, `skill`
-- `workflow-example`: `agent`, bare `snake_case` function nodes, `schema_ref`
+- `workflow-example`: `agent`, typed `snake_case` function nodes, `schema_ref`
 - `voice-playground`: `voice`, agent `voice`/`guardrails` frontmatter
 - `rag-playground`: `rag`, skills + typed validation blocks
 - `simple-model-test`: model selection via agent/workflow defaults
@@ -50,7 +50,7 @@ curl -s -X POST http://localhost:4111/v1/workflows/full-capabilities/runs -H 'co
 
 ## Crystal function and tool registration
 
-Bare workflow function lines (`snake_case_name`) and `tool snake_case_name` require explicit registration in bootstrap:
+Workflow function lines (`snake_case_name`; with optional flat params like `model`, `args` + `input_schema` when needed) and `tool snake_case_name` require explicit registration in bootstrap:
 
 ```crystal
 CogniCore::Workflow.register_function("agent_custom_step") do |ctx|

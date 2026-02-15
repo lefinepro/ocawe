@@ -1,7 +1,7 @@
 module ACD
   module HTTP
     class App
-      FALLBACK_CHAT_MODEL = "openapi/qwen3-coder-plus"
+      FALLBACK_CHAT_MODEL = "cliproxyapi/qwen3-coder-plus"
 
       private def mount_agent_endpoints
         get "/v1/agents" do |env|

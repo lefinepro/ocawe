@@ -34,7 +34,9 @@ workflow "typed-node-example" do
     "query" => Schema::Types.of(String),
   })
 
-  build_answer
+  build_answer,
+    input_schema: Schema::Types.any(),
+    output_schema: Schema::Types.any()
 end
 ```
 

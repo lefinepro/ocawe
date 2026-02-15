@@ -1,4 +1,6 @@
 require "http/client"
+require "json"
+require "../ai/cliproxy_chat_helper"
 
 module CogniCore
   module Config
@@ -8,8 +10,17 @@ module CogniCore
       def agent_codex : CogniCore::Workflow::FunctionHandler
         ->(ctx : CogniCore::Workflow::NodeContext) do
           prompt = extract_input_text(ctx.input_data["input"]?)
-          command = ENV["CODEX_BIN"]? || "codex"
+          command = resolve_string_param(ctx, "bin", env_keys: ["CODEX_BIN"], default: "codex") || "codex"
+          model = resolve_string_param(ctx, "model", env_keys: ["CODEX_MODEL"])
+          passthrough = resolve_string_array_param(ctx, "args")
+
           args = ["exec"] of String
+          if model && !has_model_flag?(passthrough)
+            args << "--model"
+            args << model
+          end
+          args.concat(passthrough)
+
           stdout = IO::Memory.new
           stderr = IO::Memory.new
           input = IO::Memory.new(prompt)
@@ -20,8 +31,9 @@ module CogniCore
               agent_type: "function",
               content: stdout.to_s.strip,
               metadata: {
-                "engine" => JSON.parse("codex".to_json),
-                "command" => JSON.parse("#{command} #{args.join(" ")}".to_json),
+                "engine"  => any("codex"),
+                "command" => any("#{command} #{args.join(" ")}"),
+                "model"   => any(model || ""),
               } of String => JSON::Any,
             )
           else
@@ -29,8 +41,9 @@ module CogniCore
               agent_type: "function",
               content: "codex exec failed: #{stderr.to_s.strip}",
               metadata: {
-                "engine" => JSON.parse("codex".to_json),
-                "status_code" => JSON.parse(status.exit_code.to_json),
+                "engine"      => any("codex"),
+                "status_code" => any(status.exit_code),
+                "model"       => any(model || ""),
               } of String => JSON::Any,
             )
           end
@@ -42,40 +55,32 @@ module CogniCore
         end
       end
 
-      # OpenAI API v1-compatible proxy call.
       def agent_cliproxy : CogniCore::Workflow::FunctionHandler
         ->(ctx : CogniCore::Workflow::NodeContext) do
           prompt = extract_input_text(ctx.input_data["input"]?)
-          base_url = ENV["CLIPROXY_API_BASE"]? || ENV["CLIPROXY_API_URL"]? || "http://127.0.0.1:8080"
-          model = ENV["CLIPROXY_MODEL"]? || "gpt-4.1-mini"
-          api_key = ENV["CLIPROXY_API_KEY"]?
+          system = resolve_string_param(ctx, "system")
+          base_url = resolve_string_param(ctx, "base_url", env_keys: ["CLIPROXY_API_BASE", "CLIPROXY_API_URL"], default: AI::CLIProxyChatHelper::DEFAULT_BASE_URL) || AI::CLIProxyChatHelper::DEFAULT_BASE_URL
+          model = resolve_string_param(ctx, "model", env_keys: ["CLIPROXY_MODEL"], default: "qwen3-coder-plus") || "qwen3-coder-plus"
+          api_key = resolve_string_param(ctx, "api_key", env_keys: ["CLIPROXY_API_KEY"])
 
-          headers = HTTP::Headers{"Content-Type" => "application/json"}
-          headers["Authorization"] = "Bearer #{api_key}" if api_key
-
-          payload = {
-            "model" => JSON.parse(model.to_json),
-            "messages" => JSON.parse([{role: "user", content: prompt}].to_json),
-          } of String => JSON::Any
-
-          response = HTTP::Client.post(
-            join_url(base_url, "/v1/chat/completions"),
-            headers: headers,
-            body: payload.to_json
+          response = AI::CLIProxyChatHelper.generate_text(
+            provider_name: "cliproxyapi",
+            model: model,
+            prompt: prompt,
+            system: system,
+            api_key: api_key,
+            base_url: base_url,
           )
-
-          content = if response.success?
-                      parse_openai_chat_content(response.body) || response.body
-                    else
-                      "cliproxy request failed (#{response.status_code}): #{response.body}"
-                    end
 
           CogniCore::Workflow::AgentResult.new(
             agent_type: "function",
-            content: content,
+            content: response.text,
+            provider: response.provider,
+            model: "#{response.provider}/#{response.model}",
             metadata: {
-              "engine" => JSON.parse("cliproxy".to_json),
-              "base_url" => JSON.parse(base_url.to_json),
+              "engine"   => any("cliproxyapi"),
+              "base_url" => any(base_url),
+              "model"    => any(model),
             } of String => JSON::Any,
           )
         rescue ex
@@ -90,8 +95,10 @@ module CogniCore
       def agent_opencode : CogniCore::Workflow::FunctionHandler
         ->(ctx : CogniCore::Workflow::NodeContext) do
           prompt = extract_input_text(ctx.input_data["input"]?)
-          base_url = ENV["OPENCODE_API_BASE"]? || ENV["OPENCODE_API_URL"]? || "http://127.0.0.1:4096"
-          api_key = ENV["OPENCODE_API_KEY"]?
+          base_url = resolve_string_param(ctx, "base_url", env_keys: ["OPENCODE_API_BASE", "OPENCODE_API_URL"], default: "http://127.0.0.1:4096") || "http://127.0.0.1:4096"
+          api_key = resolve_string_param(ctx, "api_key", env_keys: ["OPENCODE_API_KEY"])
+          model = resolve_string_param(ctx, "model", env_keys: ["OPENCODE_MODEL"])
+
           headers = HTTP::Headers{"Content-Type" => "application/json"}
           headers["Authorization"] = "Bearer #{api_key}" if api_key
 
@@ -116,8 +123,9 @@ module CogniCore
           end
 
           message_payload = {
-            "parts" => JSON.parse([{type: "text", text: prompt}].to_json),
+            "parts" => any([{type: "text", text: prompt}]),
           } of String => JSON::Any
+          message_payload["model"] = any(model) if model
 
           message_response = HTTP::Client.post(
             join_url(base_url, "/session/#{session_id}/message"),
@@ -135,9 +143,10 @@ module CogniCore
             agent_type: "function",
             content: content,
             metadata: {
-              "engine" => JSON.parse("opencode".to_json),
-              "session_id" => JSON.parse(session_id.to_json),
-              "base_url" => JSON.parse(base_url.to_json),
+              "engine"     => any("opencode"),
+              "session_id" => any(session_id),
+              "base_url"   => any(base_url),
+              "model"      => any(model || ""),
             } of String => JSON::Any,
           )
         rescue ex
@@ -164,22 +173,54 @@ module CogniCore
         "#{base}#{path}"
       end
 
-      private def parse_openai_chat_content(body : String) : String?
-        parsed = JSON.parse(body).as_h?
-        return nil unless parsed
-        choices = parsed["choices"]?.try(&.as_a?)
-        return nil unless choices && !choices.empty?
-        first = choices[0].as_h?
-        return nil unless first
-        message = first["message"]?.try(&.as_h?)
-        return nil unless message
-        if content = message["content"]?.try(&.as_s?)
-          return content
+      private def has_model_flag?(args : Array(String)) : Bool
+        args.any? { |arg| arg == "--model" || arg == "-m" || arg.starts_with?("--model=") }
+      end
+
+      private def resolve_string_param(
+        ctx : CogniCore::Workflow::NodeContext,
+        key : String,
+        env_keys : Array(String) = [] of String,
+        default : String? = nil
+      ) : String?
+        if value = param_from_ctx(ctx, key)
+          if string = value.as_s?
+            return string
+          end
         end
-        parts = message["content"]?.try(&.as_a?)
-        return nil unless parts
-        parts.compact_map { |part| part.as_h?.try(&.["text"]?).try(&.as_s?) }.join("\n")
-      rescue
+
+        env_keys.each do |env_key|
+          env_val = ENV[env_key]?
+          return env_val if env_val && !env_val.empty?
+        end
+
+        default
+      end
+
+      private def resolve_string_array_param(ctx : CogniCore::Workflow::NodeContext, key : String) : Array(String)
+        value = param_from_ctx(ctx, key)
+        return [] of String unless value
+
+        if entries = value.as_a?
+          return entries.compact_map(&.as_s?)
+        end
+
+        if single = value.as_s?
+          return [single]
+        end
+
+        [] of String
+      end
+
+      private def param_from_ctx(ctx : CogniCore::Workflow::NodeContext, key : String) : JSON::Any?
+        direct = ctx.input_data[key]?
+        return direct if direct
+
+        input_payload = ctx.input_data["input"]?.try(&.as_h?)
+        if input_payload
+          return input_payload[key]? if input_payload[key]?
+        end
+
         nil
       end
 
@@ -221,6 +262,10 @@ module CogniCore
         nil
       rescue
         nil
+      end
+
+      private def any(value) : JSON::Any
+        JSON.parse(value.to_json)
       end
     end
   end

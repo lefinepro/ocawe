@@ -347,7 +347,6 @@ module ACD
         skill_pattern = /^\s*skill\s+"([^"]+)"(?:\s*,\s*agent:\s*"([^"]+)")?/
         rag_pattern = /^\s*rag\s+"([^"]+)"(?:\s*,\s*config:\s*(\{.*\}))?/
         approve_pattern = /^\s*approve\s+"([^"]+)"(?:\s*,\s*reason:\s*"([^"]+)")?/
-        bare_fn_pattern = /^[a-z][a-z0-9_]*$/
         reserved_keywords = Set{
           "workflow", "do", "end", "struct", "class", "module",
           "agent", "skill", "tool", "voice", "rag", "approve",
@@ -437,11 +436,38 @@ module ACD
             workflow.approve(match[1], reason: match[2]? || "human approval required")
             next
           end
-          if line.match(bare_fn_pattern) && !reserved_keywords.includes?(line)
-            unless CogniCore::Workflow.function_registry.registered?(line)
-              raise "#{bundle.workflow_file}: unknown function '#{line}'. Register it in CogniCore::Config::AppConfig."
+          if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
+            fn_name = match[1]
+            tail = match[2]? || ""
+            next if reserved_keywords.includes?(fn_name)
+
+            unless CogniCore::Workflow.function_registry.registered?(fn_name)
+              raise "#{bundle.workflow_file}: unknown function '#{fn_name}'. Register it in CogniCore::Config::AppConfig."
             end
-            workflow.fn(line)
+
+            params = parse_line_params(tail, bundle.workflow_file, "function #{fn_name}")
+            schema_keys = Set{"input_schema", "output_schema"}
+            fn_args_defined = params.keys.any? { |k| !schema_keys.includes?(k) }
+            input_schema = if fn_args_defined
+                             compile_required_function_schema(params["input_schema"]?, bundle.workflow_file, fn_name, "input")
+                           else
+                             compile_optional_function_schema(params["input_schema"]?, bundle.workflow_file, fn_name, "input")
+                           end
+            output_schema = compile_optional_function_schema(params["output_schema"]?, bundle.workflow_file, fn_name, "output")
+            if input = input_schema
+              if output = output_schema
+                ensure_output_schema_superset!(bundle.workflow_file, fn_name, input, output)
+              end
+            end
+
+            fn_params = extract_function_args(params, bundle.workflow_file)
+
+            workflow.fn(
+              fn_name,
+              params: fn_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+            )
             next
           end
         end
@@ -498,6 +524,67 @@ module ACD
           params[key] = value
         end
         params
+      end
+
+      private def extract_function_args(params : Hash(String, String), workflow_file : String) : CogniCore::Workflow::AnyHash?
+        args = {} of String => JSON::Any
+        params.each do |key, value|
+          next if key == "input_schema" || key == "output_schema"
+          args[key] = JSON.parse(value)
+        rescue
+          args[key] = parse_runtime_literal(value, workflow_file)
+        end
+        return nil if args.empty?
+        args
+      end
+
+      private def parse_runtime_literal(literal : String, workflow_file : String) : JSON::Any
+        stripped = literal.strip
+        if stripped.starts_with?("{")
+          return JSON.parse(parse_runtime_object(stripped, workflow_file).to_json)
+        end
+        if stripped.starts_with?("[")
+          return JSON.parse(stripped)
+        end
+        JSON.parse(stripped)
+      rescue
+        if stripped.starts_with?("\"") && stripped.ends_with?("\"")
+          return JSON.parse(stripped)
+        end
+        JSON.parse(stripped.to_json)
+      end
+
+      private def compile_required_function_schema(
+        literal : String?,
+        workflow_file : String,
+        fn_name : String,
+        kind : String
+      ) : CogniCore::Schema::Validator
+        raise "#{workflow_file}: function #{fn_name} requires #{kind}_schema" unless literal
+        stripped = literal.strip
+        CogniCore::Schema::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
+      end
+
+      private def compile_optional_function_schema(
+        literal : String?,
+        workflow_file : String,
+        fn_name : String,
+        kind : String
+      ) : CogniCore::Schema::Validator?
+        return nil unless literal
+        stripped = literal.strip
+        CogniCore::Schema::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
+      end
+
+      private def ensure_output_schema_superset!(
+        workflow_file : String,
+        fn_name : String,
+        input_schema : CogniCore::Schema::Validator,
+        output_schema : CogniCore::Schema::Validator
+      )
+        CogniCore::Schema::Compatibility.ensure_output_superset!(input_schema, output_schema)
+      rescue ex : CogniCore::Schema::ValidationError
+        raise "#{workflow_file}: function #{fn_name} output_schema must cover input_schema: #{ex.message}"
       end
 
       private def split_top_level_params(value : String) : Array(String)

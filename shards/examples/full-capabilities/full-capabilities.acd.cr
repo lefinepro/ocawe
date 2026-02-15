@@ -3,14 +3,14 @@
 # tool project_healthcheck
 
 workflow "full-capabilities" do
-  use_model "openapi/qwen3-coder-plus"
+  use_model "cliproxyapi/qwen3-coder-plus"
 
   agent "full-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
   skill "full-skill", agent: "full-agent"
 
-  agent_opencode
-  agent_codex
-  agent_cliproxy
+  agent_opencode, input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+  agent_codex, model: "gpt-5", args: ["--json"], input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+  agent_cliproxy, model: "qwen3-coder-plus", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
 
   # External tool with runtime metadata
   tool "tools/echo-json.sh", runtime: {shell: "bash"}

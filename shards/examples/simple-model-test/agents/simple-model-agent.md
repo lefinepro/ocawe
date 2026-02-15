@@ -1,6 +1,6 @@
 ---
 description: "Minimal model test agent"
-model: "openapi/qwen3-coder-plus"
+model: "cliproxyapi/qwen3-coder-plus"
 ---
 
 You are a concise test agent.

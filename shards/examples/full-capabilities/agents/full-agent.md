@@ -1,6 +1,6 @@
 ---
 description: "Agent covering schema_ref, voice and guardrails"
-model: "openapi/qwen3-coder-plus"
+model: "cliproxyapi/qwen3-coder-plus"
 voice:
   voice_operator: "openai"
   speaker: "alloy"
