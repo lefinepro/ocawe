@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "../src/framework/cognicore/config/acd_toml"
 
 describe CogniCore::Config::ACDToml do
   it "loads workflow roots from acd config" do
