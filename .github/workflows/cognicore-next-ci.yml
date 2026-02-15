@@ -1,0 +1,54 @@
+name: cognicore-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Crystal
+        uses: crystal-lang/install-crystal@v1
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.22
+
+      - name: Crystal version
+        run: crystal --version
+
+      - name: Install shards
+        run: shards install
+
+      - name: Run specs
+        run: crystal spec --error-trace
+
+      - name: Build playground
+        run: |
+          bun --cwd packages/playground install
+          bun --cwd packages/playground run build
+
+      - name: Build docs
+        run: |
+          bun --cwd packages/docs install
+          bun --cwd packages/docs run build
+
+      - name: Build runtime binary
+        run: mkdir -p build && crystal build src/cogni.cr --release -o build/cognicore
+
+      - name: Upload runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cognicore-linux
+          path: build/cognicore

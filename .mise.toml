@@ -1,0 +1,44 @@
+[tools]
+crystal = "1.12.2"
+bun = "1.2.22"
+
+[tasks.cli-build]
+run = "mkdir -p build && crystal build src/cli/main.cr -o build/cogni"
+
+[tasks.playground-install]
+run = "cd packages/playground && bun install"
+
+[tasks.playground-dev]
+depends = ["playground-install"]
+run = "cd packages/playground && bun run dev"
+
+[tasks.playground-build]
+depends = ["playground-install"]
+run = "cd packages/playground && bun run build"
+
+[tasks.playground-test]
+depends = ["playground-install"]
+run = "cd packages/playground && bun run test"
+
+[tasks.docs-install]
+run = "cd packages/docs && bun install"
+
+[tasks.docs-dev]
+depends = ["docs-install"]
+run = "cd packages/docs && bun run dev"
+
+[tasks.docs-build]
+depends = ["docs-install"]
+run = "cd packages/docs && bun run build"
+
+[tasks.build]
+depends = ["cli-build"]
+run = "./build/cogni build --release"
+
+[tasks.dev]
+depends = ["cli-build"]
+run = "./build/cogni dev --port 4111"
+
+[tasks.up]
+depends = ["cli-build"]
+run = "./build/cogni up --port 4111"

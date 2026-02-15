@@ -1,0 +1,27 @@
+require "./spec_helper"
+
+describe CogniCore::Schema::CrystalDSL do
+  it "compiles and validates supported schema dsl expressions" do
+    validator = CogniCore::Schema::CrystalDSL.compile(
+      "Schema::Types.object({\"task\" => Schema::Types.of(String), \"tags\" => Schema::Types.optional(Schema::Types.array(Schema::Types.of(String)))})",
+      "schema-spec"
+    )
+
+    valid_payload = JSON.parse({
+      "task" => "write tests",
+      "tags" => ["crystal", "dsl"],
+    }.to_json)
+    validator.validate(valid_payload)
+
+    expect_raises(CogniCore::Schema::ValidationError) do
+      invalid_payload = JSON.parse({"tags" => ["missing task"]}.to_json)
+      validator.validate(invalid_payload)
+    end
+  end
+
+  it "rejects unsupported methods in schema dsl" do
+    expect_raises(CogniCore::Schema::CrystalDSL::ParseError) do
+      CogniCore::Schema::CrystalDSL.compile("Schema::Types.unknown()", "schema-invalid")
+    end
+  end
+end
