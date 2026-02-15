@@ -9,3 +9,5 @@ packages/playground/.turbo/
 *.log
 lib/
 bin/
+
+.meta/clones
