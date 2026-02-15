@@ -1,7 +1,7 @@
 require "file_utils"
 require "http/client"
 
-require "../config/acd_config"
+require "../config/app_config"
 
 module CogniCore
   module Runtime
@@ -54,7 +54,8 @@ module CogniCore
       end
 
       private def load_config
-        acd = CogniCore::Config::ACDConfig.settings.runtime
+        app_config = CogniCore::Config::AppConfig.settings
+        acd = app_config.runtime
         runtimes = acd.runtimes.map do |spec|
           RuntimeSpec.new(
             language: spec.language,

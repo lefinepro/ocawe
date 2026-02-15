@@ -4,7 +4,7 @@ require "../discovery/workflow_locator"
 require "../agents/loader"
 require "../skills/loader"
 require "../cognicore/version"
-require "../cognicore/config/acd_config"
+require "../cognicore/config/app_config"
 require "../cognicore/schema/crystal_dsl"
 require "../cognicore/workflow/run"
 require "./endpoints/health"
@@ -22,7 +22,7 @@ module ACD
       RELOAD_INTERVAL_SECONDS = 2.0
 
       def initialize(@port : Int32, workflows_root : String? = nil, fallback_workflows_root : String? = nil)
-        config = CogniCore::Config::ACDConfig.settings.workflows
+        config = CogniCore::Config::AppConfig.settings.workflows
         preferred_root = workflows_root || config.preferred_workflows_root
         fallback_root = fallback_workflows_root || config.fallback_workflows_root
         @locator = Discovery::WorkflowLocator.new(preferred_root, fallback_root)

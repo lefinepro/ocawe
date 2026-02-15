@@ -1,4 +1,5 @@
 require "option_parser"
+require "../framework/cognicore/version"
 
 module CogniCore
   module CLI

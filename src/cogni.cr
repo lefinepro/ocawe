@@ -1,6 +1,7 @@
 require "option_parser"
 require "./framework/utils/config_parser"
 require "./framework/cognicore/version"
+require "./framework/cognicore/config/app_config"
 require "./framework/cognicore/schema/types"
 require "./framework/cognicore/schema/crystal_dsl"
 require "./framework/cognicore/workflow/run"
@@ -30,6 +31,10 @@ module CogniCore
         exit(0)
       end
     end
+
+    # Use default config values if not overridden by command line
+    workflows_root ||= CogniCore::Config::AppConfig::WORKFLOW_PREFERRED_ROOT
+    fallback_workflows_root ||= CogniCore::Config::AppConfig::WORKFLOW_FALLBACK_ROOT
 
     ACD::HTTP::App.new(port, workflows_root: workflows_root, fallback_workflows_root: fallback_workflows_root).start
   end
