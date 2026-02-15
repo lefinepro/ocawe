@@ -1,12 +1,5 @@
 require "./spec_helper"
 
-private def json_bool(v : Bool)
-  JSON.parse(v.to_json)
-end
-
-private def json_str(v : String)
-  JSON.parse(v.to_json)
-end
 
 describe CogniCore::Workflow::Engine do
   it "runs start/resume/cancel/time_travel lifecycle" do

@@ -20,7 +20,12 @@ module CogniCore
           dev(args)
         when "up"
           up(args)
+        when "-v", "--version"
+          puts CogniCore::VERSION
+        when "-h", "--help"
+          print_help
         else
+          puts "Unknown command: #{command}"
           print_help
           exit(1)
         end
@@ -37,6 +42,10 @@ module CogniCore
                 Watch workflows/global agents/tools, recompile and restart runtime in dev mode.
             up [--port N] [--workflows-root PATH] [--fallback-workflows-root PATH]
                 Auto-build release runtime binary and start server.
+            -v, --version
+                Print version.
+            -h, --help
+                Show this help.
         TXT
       end
 

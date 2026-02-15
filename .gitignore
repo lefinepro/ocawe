@@ -7,3 +7,5 @@ packages/playground/dist/
 packages/playground/.svelte-kit/
 packages/playground/.turbo/
 *.log
+lib/
+bin/
