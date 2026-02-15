@@ -1,5 +1,6 @@
 require "./types"
 require "./node"
+require "./function_registry"
 require "./tool_registry"
 require "./tool_executor"
 require "./rag_runtime"

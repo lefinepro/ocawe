@@ -10,3 +10,4 @@ Typical approach:
 
 1. Copy the constants and `settings` shape into `src/framework/cognicore/config/app_config.cr`.
 2. Point `WORKFLOW_PREFERRED_ROOT` / `WORKFLOW_FALLBACK_ROOT` to your bundle roots.
+3. Put any `snake_case` Crystal handlers in `settings.functions`; runtime auto-registers them on startup.

@@ -14,7 +14,8 @@ Key endpoints:
 
 Notes:
 - Voice and RAG are DSL workflow nodes (`voice`, `rag`), not dedicated startup auto-registered tools.
-- `tool_*` remains for explicit Crystal custom function nodes.
+- Crystal function nodes use bare snake_case lines and are auto-registered from Crystal config (`AppConfig.settings.functions`).
+- Crystal tool functions use `tool snake_case_fn` and must be registered in Crystal config.
 - RAG DSL supports Mastra-compatible request keys: `vectorStoreName`, `indexName`, `queryText`, `topK`, `filter`, `operation`.
 - Agent frontmatter supports `voice` and `guardrails`; guardrail violations fail workflow runs with `422` (`workflow_error` envelope).
 - Agent schema validation can be configured from workflow DSL params (`input_schema`/`output_schema`) and markdown `crystal` schema blocks via `schema_ref("input"|"output")`.

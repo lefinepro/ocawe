@@ -6,9 +6,9 @@ describe CogniCore::Workflow::Engine do
     workflow = CogniCore::Workflow.create_workflow("wf-test", "test workflow")
 
     workflow
-      .custom("node-1") { |_ctx| CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("ok")}) }
+      .map("node-1") { |_ctx| {"value" => json_str("ok")} }
       .approve("approval")
-      .custom("final") { |_ctx| CogniCore::Workflow::WorkflowNodeResult.continue({"done" => json_bool(true)}) }
+      .map("final") { |_ctx| {"done" => json_bool(true)} }
       .commit
 
     engine = CogniCore::Workflow::Engine.new
@@ -36,17 +36,17 @@ describe CogniCore::Workflow::Engine do
   it "supports mastra-like branch/map/parallel semantics" do
     workflow = CogniCore::Workflow.create_workflow("wf-mastra", "mastra methods")
 
-    branch_true = CogniCore::Workflow::WorkflowNode.new("branch-true", CogniCore::Workflow::NodeKind::Custom) do |_ctx|
+    branch_true = CogniCore::Workflow::WorkflowNode.new("branch-true", CogniCore::Workflow::NodeKind::Control) do |_ctx|
       CogniCore::Workflow::WorkflowNodeResult.continue({"branch" => json_str("true")})
     end
-    branch_fallback = CogniCore::Workflow::WorkflowNode.new("branch-fallback", CogniCore::Workflow::NodeKind::Custom) do |_ctx|
+    branch_fallback = CogniCore::Workflow::WorkflowNode.new("branch-fallback", CogniCore::Workflow::NodeKind::Control) do |_ctx|
       CogniCore::Workflow::WorkflowNodeResult.continue({"branch" => json_str("fallback")})
     end
 
-    parallel_continue = CogniCore::Workflow::WorkflowNode.new("parallel-continue", CogniCore::Workflow::NodeKind::Custom) do |_ctx|
+    parallel_continue = CogniCore::Workflow::WorkflowNode.new("parallel-continue", CogniCore::Workflow::NodeKind::Control) do |_ctx|
       CogniCore::Workflow::WorkflowNodeResult.continue({"p1" => json_str("ok")})
     end
-    parallel_suspend = CogniCore::Workflow::WorkflowNode.new("parallel-suspend", CogniCore::Workflow::NodeKind::Custom) do |_ctx|
+    parallel_suspend = CogniCore::Workflow::WorkflowNode.new("parallel-suspend", CogniCore::Workflow::NodeKind::Control) do |_ctx|
       CogniCore::Workflow::WorkflowNodeResult.suspend(
         {"type" => json_str("human_approval")},
         resume_label: "approval:parallel-suspend",
@@ -54,7 +54,7 @@ describe CogniCore::Workflow::Engine do
     end
 
     workflow
-      .custom("seed") { |_ctx| CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("v1")}) }
+      .map("seed") { |_ctx| {"value" => json_str("v1")} }
       .branch([
         {->(ctx : CogniCore::Workflow::NodeContext) { ctx.input_data["value"]?.try(&.as_s?) == "v1" }, branch_true},
         {"false", branch_fallback},
@@ -83,25 +83,25 @@ describe CogniCore::Workflow::Engine do
 
     do_counter = 0
     until_counter = 0
-    foreach_node = CogniCore::Workflow::WorkflowNode.new("foreach-node", CogniCore::Workflow::NodeKind::Custom) do |_ctx|
+    foreach_node = CogniCore::Workflow::WorkflowNode.new("foreach-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
       CogniCore::Workflow::WorkflowNodeResult.continue({"foreach_ran" => json_bool(true)})
     end
 
     workflow
-      .then(CogniCore::Workflow::WorkflowNode.new("then-node", CogniCore::Workflow::NodeKind::Custom) do |_ctx|
+      .then(CogniCore::Workflow::WorkflowNode.new("then-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
         CogniCore::Workflow::WorkflowNodeResult.continue({"then_ran" => json_bool(true)})
       end)
       .sleep(0)
       .sleep_until(Time.utc.to_unix)
       .dowhile(
-        CogniCore::Workflow::WorkflowNode.new("do-node", CogniCore::Workflow::NodeKind::Custom) do |_ctx|
+        CogniCore::Workflow::WorkflowNode.new("do-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
           do_counter += 1
           CogniCore::Workflow::WorkflowNodeResult.continue({"dowhile_runs" => json_str(do_counter.to_s)})
         end,
         ->(_ctx : CogniCore::Workflow::NodeContext) { do_counter < 2 }
       )
       .dountil(
-        CogniCore::Workflow::WorkflowNode.new("until-node", CogniCore::Workflow::NodeKind::Custom) do |_ctx|
+        CogniCore::Workflow::WorkflowNode.new("until-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
           until_counter += 1
           CogniCore::Workflow::WorkflowNodeResult.continue({"dountil_runs" => json_str(until_counter.to_s)})
         end,
@@ -128,7 +128,7 @@ describe CogniCore::Workflow::Engine do
   end
 
   it "runs tool nodes through direct crystal tool functions" do
-    CogniCore::Workflow.register_tool("tool_create_sandbox") do |_ctx|
+    CogniCore::Workflow.register_tool("create_sandbox") do |_ctx|
       {
         "tool" => json_any("create-sandbox"),
         "status" => json_any("ok"),
@@ -137,7 +137,7 @@ describe CogniCore::Workflow::Engine do
 
     workflow = CogniCore::Workflow.create_workflow("wf-tools", "tool dispatch")
     workflow
-      .tool("tool_create_sandbox")
+      .tool("create_sandbox")
       .commit
 
     engine = CogniCore::Workflow::Engine.new
@@ -149,9 +149,9 @@ describe CogniCore::Workflow::Engine do
     result.state.not_nil!["tool"].as_s.should eq("create-sandbox")
   end
 
-  it "rejects crystal tool nodes without tool_ prefix" do
+  it "rejects crystal tool nodes without snake_case function name" do
     workflow = CogniCore::Workflow.create_workflow("wf-tools-invalid", "tool dispatch invalid")
-    expect_raises(Exception, /starting with tool_/) do
+    expect_raises(Exception, /snake_case/) do
       workflow.tool("create-sandbox")
     end
   end
@@ -230,7 +230,7 @@ describe CogniCore::Workflow::Engine do
 
     begin
       input_schema = CogniCore::Schema::CrystalDSL.compile(
-        "Schema::Types.object({\"task\" => Schema::Types.of(String)})",
+        "Schema::Types.object({\"input\" => Schema::Types.object({\"task\" => Schema::Types.of(String)})}, strict: false)",
         "wf-schema-input"
       )
 
@@ -249,7 +249,7 @@ describe CogniCore::Workflow::Engine do
 
       invalid = engine.create_run("wf-schema").start(input_data: {"query" => json_str("missing task")})
       invalid.status.should eq("failed")
-      invalid.error.not_nil!.message.includes?("$.input.task is required").should eq(true)
+      invalid.error.not_nil!.message.includes?("$.input.input.task is required").should eq(true)
 
       valid = engine.create_run("wf-schema").start(input_data: {"task" => json_str("present")})
       valid.status.should eq("success")
@@ -298,5 +298,36 @@ describe CogniCore::Workflow::Engine do
     ensure
       ENV.delete("COGNICORE_MOCK_LLM")
     end
+  end
+
+  it "passes previous function output as input envelope for next function" do
+    CogniCore::Workflow.register_function("agent_step_one") do |_ctx|
+      CogniCore::Workflow::AgentResult.new(
+        agent_type: "fn-agent",
+        content: "step-one-output",
+      )
+    end
+
+    CogniCore::Workflow.register_function("agent_step_two") do |ctx|
+      previous = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
+      received = previous["content"]?.try(&.as_s?) || "missing"
+      CogniCore::Workflow::AgentResult.new(
+        agent_type: "fn-agent",
+        content: "seen:#{received}",
+      )
+    end
+
+    workflow = CogniCore::Workflow.create_workflow("wf-fn-chain", "function chaining")
+    workflow
+      .fn("agent_step_one")
+      .fn("agent_step_two")
+      .commit
+
+    engine = CogniCore::Workflow::Engine.new
+    engine.register(workflow)
+
+    result = engine.create_run("wf-fn-chain").start(input_data: {"task" => json_str("demo")})
+    result.status.should eq("success")
+    result.state.not_nil!["content"].as_s.should eq("seen:step-one-output")
   end
 end

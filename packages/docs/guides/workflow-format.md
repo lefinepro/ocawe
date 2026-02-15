@@ -16,12 +16,12 @@ end
 - `use_model "..."`
 - `agent "..."` (+ optional params like `model`, `prompt`, `input_schema`, `output_schema`)
 - `skill "..."` (optional `agent` binding)
-- `tool tool_*` (registered crystal function)
+- `snake_case_fn_name` (registered crystal function node)
+- `tool snake_case_fn_name` (registered crystal tool function)
 - `tool "path", runtime: { ... }` (external tool)
 - `voice "..."` (optional `config`)
 - `rag "..."` (optional `config`)
 - `approve "..."` (optional `reason`)
-- `custom "..."`
 
 ## Agent schema references
 
@@ -30,6 +30,12 @@ agent "workflow-agent", input_schema: schema_ref("input"), output_schema: schema
 ```
 
 `schema_ref("input")` / `schema_ref("output")` resolve markdown `crystal` schema blocks from the agent file.
+
+For `agent` and bare `snake_case` function nodes, runtime passes a chained input envelope:
+
+```json
+{"input": <previous step output>, "context": {"workflow_id": "...", "run_id": "...", "state": {...}}}
+```
 
 ## Full coverage example
 

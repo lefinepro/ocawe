@@ -261,13 +261,17 @@ module CogniCore
           @node_index = idx || @node_index
         end
 
+        previous_node_id = nil.as(String?)
+        previous_node_result = nil.as(AnyHash?)
+
         while @node_index < @definition.nodes.size
           node = @definition.nodes[@node_index]
+          node_input_data = node_input_for(node, previous_node_id, previous_node_result)
           ctx = NodeContext.new(
             workflow_id: @workflow_id,
             run_id: @run_id,
             node_id: node.id,
-            input_data: @state,
+            input_data: node_input_data,
             state: @state,
             init_data: @init_data,
             node_results: @node_results,
@@ -284,7 +288,9 @@ module CogniCore
             if data = result.data
               @node_results[node.id] = data
               data.each { |k, v| @state[k] = v }
+              previous_node_result = data
             end
+            previous_node_id = node.id
             @node_index += 1
           when NodeAction::Suspend.to_s.downcase
             @status = RunStatus::Suspended
@@ -302,6 +308,25 @@ module CogniCore
         @status = RunStatus::Success
         @output = @state.dup
         current_result(output_options)
+      end
+
+      private def node_input_for(node : WorkflowNode, previous_node_id : String?, previous_node_result : AnyHash?) : AnyHash
+        if node.kind == NodeKind::Agent || node.kind == NodeKind::Fn
+          input_payload = previous_node_result ? JSON.parse(previous_node_result.to_json) : JSON.parse(@init_data.to_json)
+          context = {
+            "workflow_id" => JSON.parse(@workflow_id.to_json),
+            "run_id" => JSON.parse(@run_id.to_json),
+            "previous_node_id" => previous_node_id ? JSON.parse(previous_node_id.to_json) : JSON.parse("null"),
+            "state" => JSON.parse(@state.to_json),
+          } of String => JSON::Any
+
+          return {
+            "input" => input_payload,
+            "context" => JSON.parse(context.to_json),
+          } of String => JSON::Any
+        end
+
+        @state
       end
 
       private def current_result(output_options : WorkflowOutputOptions = WorkflowOutputOptions.new)

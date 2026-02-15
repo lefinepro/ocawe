@@ -1,8 +1,24 @@
-# Cogni Examples
+# Cogni Examples (Standalone Crystal Shard)
 
-Examples are under `shards/examples` and are prepared for direct reuse.
+`shards/examples` is an отдельный Crystal package (`cogni-examples`) with its own `shard.yml`.
 
-## Quick run for all examples
+## Package layout
+
+- `shard.yml` — shard metadata and local dependency on `cogni`
+- `src/cogni_examples.cr` — shard entrypoint
+- example workflow bundles (`*.acd.cr`, `agents/`, `skills/`, `tools/`)
+
+## Install as local shard
+
+```yaml
+# shard.yml of your project
+
+dependencies:
+  cogni-examples:
+    path: /absolute/path/to/cogni/shards/examples
+```
+
+## Run all examples with Cogni runtime
 
 ```bash
 ./build/cogni up --port 4111 --workflows-root ./shards/examples --fallback-workflows-root ./shards/examples
@@ -12,7 +28,7 @@ Examples are under `shards/examples` and are prepared for direct reuse.
 
 - `agents-example`: `use_model`, `agent`
 - `skills-example`: `agent`, `skill`
-- `workflow-example`: `agent`, `custom`, `schema_ref`
+- `workflow-example`: `agent`, bare `snake_case` function nodes, `schema_ref`
 - `voice-playground`: `voice`, agent `voice`/`guardrails` frontmatter
 - `rag-playground`: `rag`, skills + typed validation blocks
 - `simple-model-test`: model selection via agent/workflow defaults
@@ -25,19 +41,23 @@ Examples are under `shards/examples` and are prepared for direct reuse.
 ./build/cogni up --port 4111 --workflows-root ./shards/examples/full-capabilities --fallback-workflows-root ./shards/examples/full-capabilities
 ```
 
-## Call API
+## API smoke
 
 ```bash
 curl -s http://localhost:4111/v1/workflows
 curl -s -X POST http://localhost:4111/v1/workflows/full-capabilities/runs -H 'content-type: application/json' -d '{"input_data":{"task":"demo"}}'
 ```
 
-## Crystal tool syntax (`tool tool_*`)
+## Crystal function and tool registration
 
-Direct crystal tools are supported by syntax, but require explicit registration in bootstrap:
+Bare workflow function lines (`snake_case_name`) and `tool snake_case_name` require explicit registration in bootstrap:
 
 ```crystal
-CogniCore::Workflow.register_tool("tool_project_healthcheck") do |_ctx|
+CogniCore::Workflow.register_function("agent_custom_step") do |ctx|
+  CogniCore::Workflow::AgentResult.new(agent_type: "function", content: "ok")
+end
+
+CogniCore::Workflow.register_tool("project_healthcheck") do |_ctx|
   {"status" => JSON.parse("ok".to_json)}
 end
 ```

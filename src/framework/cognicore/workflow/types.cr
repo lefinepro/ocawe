@@ -23,7 +23,40 @@ module CogniCore
       Skill
       Tool
       Approve
-      Custom
+      Fn
+      Voice
+      Rag
+      Control
+    end
+
+    struct AgentResult
+      include JSON::Serializable
+
+      getter agent_type : String
+      getter content : String
+      getter metadata : AnyHash?
+      getter provider : String?
+      getter model : String?
+
+      def initialize(
+        @agent_type : String,
+        @content : String,
+        @metadata : AnyHash? = nil,
+        @provider : String? = nil,
+        @model : String? = nil
+      )
+      end
+
+      def to_any_hash : AnyHash
+        hash = {
+          "agent_type" => JSON.parse(@agent_type.to_json),
+          "content"    => JSON.parse(@content.to_json),
+        } of String => JSON::Any
+        hash["metadata"] = JSON.parse(@metadata.to_json) if @metadata
+        hash["provider"] = JSON.parse(@provider.to_json) if @provider
+        hash["model"] = JSON.parse(@model.to_json) if @model
+        hash
+      end
     end
 
     enum EventType

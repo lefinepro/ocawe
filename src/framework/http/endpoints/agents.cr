@@ -61,6 +61,7 @@ module ACD
           metadata["agent_id"] = JSON.parse(agent_id.to_json)
           metadata["workflow_id"] = JSON.parse(agent[:workflow_id].to_json)
 
+          agent_result = nil.as(CogniCore::Workflow::AgentResult?)
           begin
             response = CogniCore::AI::Client.new.generate_text(
               model_spec: model,
@@ -68,19 +69,29 @@ module ACD
               system: [agent[:prompt], system_message].compact.reject(&.empty?).join("\n\n"),
               metadata: metadata,
             )
+            agent_result = CogniCore::Workflow::AgentResult.new(
+              agent_type: "default-agent",
+              content: response.text,
+              provider: response.provider,
+              model: response.model,
+              metadata: metadata,
+            )
           rescue ex
             env.response.status_code = 422
             env.response.content_type = "application/json"
             next({error: {type: "generation_error", message: ex.message || "agent generation failed"}}.to_json)
           end
+          result = agent_result.not_nil!
 
           env.response.content_type = "application/json"
           {
             "agent_id" => agent[:id],
             "workflow_id" => agent[:workflow_id],
-            "provider" => response.provider,
-            "model" => response.model,
-            "text" => response.text,
+            "agent_type" => result.agent_type,
+            "provider" => result.provider,
+            "model" => result.model,
+            "text" => result.content,
+            "metadata" => result.metadata,
           }.to_json
         end
       end
