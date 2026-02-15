@@ -2,7 +2,7 @@ require "json"
 require "./model_ref"
 require "./provider"
 require "./openai_provider"
-require "./openapi_provider"
+require "./cliproxyapi_provider"
 
 module CogniCore
   module AI
@@ -26,8 +26,8 @@ module CogniCore
         case name
         when "openai"
           OpenAIProvider.new
-        when "openapi"
-          OpenAPIProvider.new
+        when "cliproxyapi"
+          CliproxyAPIProvider.new
         else
           raise "unsupported model provider: #{name}"
         end

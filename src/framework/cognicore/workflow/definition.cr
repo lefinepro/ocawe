@@ -18,10 +18,14 @@ module CogniCore
 
       def fn(
         name : String,
+        params : AnyHash? = nil,
         input_schema : Schema::Validator? = nil,
         output_schema : Schema::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(name, NodeKind::Fn, input_schema: input_schema, output_schema: output_schema) do |ctx|
+        metadata = {} of String => JSON::Any
+        metadata["params"] = JSON.parse(params.to_json) if params
+
+        append_node(WorkflowNode.new(name, NodeKind::Fn, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           result = Workflow.function_registry.call(name, ctx)
           WorkflowNodeResult.continue(result.to_any_hash)
         end)

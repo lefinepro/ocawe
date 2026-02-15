@@ -24,4 +24,32 @@ describe CogniCore::Schema::CrystalDSL do
       CogniCore::Schema::CrystalDSL.compile("Schema::Types.unknown()", "schema-invalid")
     end
   end
+
+  it "accepts output schema that is a superset of input schema" do
+    input_schema = CogniCore::Schema::CrystalDSL.compile(
+      "Schema::Types.object({\"task\" => Schema::Types.of(String), \"tags\" => Schema::Types.optional(Schema::Types.array(Schema::Types.of(String)))}, strict: true)",
+      "input-schema"
+    )
+    output_schema = CogniCore::Schema::CrystalDSL.compile(
+      "Schema::Types.object({\"task\" => Schema::Types.of(String), \"tags\" => Schema::Types.optional(Schema::Types.array(Schema::Types.of(String))), \"answer\" => Schema::Types.optional(Schema::Types.of(String))}, strict: false)",
+      "output-schema"
+    )
+
+    CogniCore::Schema::Compatibility.ensure_output_superset!(input_schema, output_schema)
+  end
+
+  it "rejects output schema that drops required input field" do
+    input_schema = CogniCore::Schema::CrystalDSL.compile(
+      "Schema::Types.object({\"task\" => Schema::Types.of(String), \"answer\" => Schema::Types.of(String)}, strict: true)",
+      "input-schema"
+    )
+    output_schema = CogniCore::Schema::CrystalDSL.compile(
+      "Schema::Types.object({\"task\" => Schema::Types.of(String)}, strict: true)",
+      "output-schema"
+    )
+
+    expect_raises(CogniCore::Schema::ValidationError, /answer/) do
+      CogniCore::Schema::Compatibility.ensure_output_superset!(input_schema, output_schema)
+    end
+  end
 end

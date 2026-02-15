@@ -12,7 +12,7 @@ workflow "workflow-example" do
   })
 
   agent "workflow-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
-  agent_opencode
-  agent_codex
-  agent_cliproxy
+  agent_opencode, input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+  agent_codex, input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+  agent_cliproxy, input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
 end
