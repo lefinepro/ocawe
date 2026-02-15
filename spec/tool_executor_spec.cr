@@ -1,9 +1,6 @@
 require "./spec_helper"
 require "file_utils"
 
-private def json_any(value)
-  JSON.parse(value.to_json)
-end
 
 describe CogniCore::Workflow::ToolExecutor do
   it "runs crystal tool functions directly by name" do

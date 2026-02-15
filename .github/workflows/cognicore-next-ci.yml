@@ -36,13 +36,13 @@ jobs:
 
       - name: Build playground
         run: |
-          bun --cwd packages/playground install
-          bun --cwd packages/playground run build
+          cd packages/playground && bun install
+          cd packages/playground && bun run build
 
       - name: Build docs
         run: |
-          bun --cwd packages/docs install
-          bun --cwd packages/docs run build
+          cd packages/docs && bun install
+          cd packages/docs && bun run build
 
       - name: Build runtime binary
         run: mkdir -p build && crystal build src/cogni.cr --release -o build/cognicore

@@ -1,3 +1,5 @@
+require "../../../framework/utils/config_parser"
+
 module CogniCore
   module Config
     struct ACDSettings
@@ -30,7 +32,7 @@ module CogniCore
             next
           end
 
-          key, value = parse_assignment(line)
+          key, value = CogniCore::Utils::ConfigParser.parse_assignment(line)
           next unless key
           next unless section == "workflows"
 
@@ -42,18 +44,6 @@ module CogniCore
           preferred_workflows_root: preferred,
           fallback_workflows_root: fallback,
         )
-      end
-
-      private def self.parse_assignment(line : String) : Tuple(String?, String)
-        parts = line.split("=", 2)
-        return {nil, ""} if parts.size < 2
-        key = parts[0].strip
-        raw = parts[1].strip
-        value = raw
-        if raw.starts_with?('"') && raw.ends_with?('"') && raw.size >= 2
-          value = raw[1...-1]
-        end
-        {key, value}
       end
     end
   end
