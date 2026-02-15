@@ -1,6 +1,7 @@
 require "json"
 require "./model_ref"
 require "./provider"
+require "./custom_provider_macro"
 require "./openai_provider"
 require "./cliproxyapi_provider"
 

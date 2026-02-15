@@ -34,6 +34,8 @@ dependencies:
 - `simple-model-test`: model selection via agent/workflow defaults
 - `full-capabilities`: all runnable directives supported by current `.acd.cr` loader
 - `config-example`: crystal-native `AppConfig` template
+- `src/custom_provider_example.cr`: macro-based custom AI provider definition + client injection
+- `src/control_flow_workflow_example.cr`: programmatic control-flow (`branch`, `parallel`, loops/events) with explicit input/output schemas
 
 ## Single bundle run
 

@@ -1,4 +1,6 @@
 require "cogni"
+require "./custom_provider_example"
+require "./control_flow_workflow_example"
 
 module CogniExamples
   VERSION = "0.1.0"

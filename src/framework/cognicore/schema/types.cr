@@ -104,7 +104,11 @@ module CogniCore
       getter fields : Hash(String, Validator)
       getter strict : Bool
 
-      def initialize(@fields : Hash(String, Validator), @strict : Bool = true)
+      def initialize(fields : Hash(String, V), @strict : Bool = true) forall V
+        @fields = {} of String => Validator
+        fields.each do |key, validator|
+          @fields[key] = validator.as(Validator)
+        end
       end
 
       def validate(value : JSON::Any, path : String = "$") : Nil
@@ -173,7 +177,7 @@ module CogniCore
         ArrayValidator.new(item)
       end
 
-      def self.object(fields : Hash(String, Validator), strict : Bool = true) : Validator
+      def self.object(fields : Hash(String, V), strict : Bool = true) : Validator forall V
         ObjectValidator.new(fields, strict: strict)
       end
     end
