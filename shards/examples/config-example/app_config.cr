@@ -1,12 +1,10 @@
 module CogniCore
   module Config
-    # Configuration settings defined directly in Crystal code
+    # Example: Crystal-native framework config
     class AppConfig
-      # Workflow settings
-      WORKFLOW_PREFERRED_ROOT = "./src/workflows"
-      WORKFLOW_FALLBACK_ROOT = "./src/workflows"
+      WORKFLOW_PREFERRED_ROOT = "./shards/examples/full-capabilities"
+      WORKFLOW_FALLBACK_ROOT = "./shards/examples"
 
-      # Get all settings as a unified configuration object
       def self.settings : Settings
         Settings.new(
           workflows: WorkflowSettings.new(

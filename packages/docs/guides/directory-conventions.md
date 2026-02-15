@@ -22,12 +22,9 @@
 Workflow-local assets take precedence for conflicting ids/paths.
 
 ## Examples
-- Root: `shards/cogni/shards/examples`
+- Root: `shards/examples`
 - Examples are reference/tutorial assets and are not loaded by default runtime roots.
 
 ## Shard app directories
-- Playground: `shards/cogni/packages/playground`
-- Docs: `shards/cogni/packages/docs`
-
-## Repository boundary
-- `shards/cogni` is maintained as a separate nested git repository.
+- Playground: `packages/playground`
+- Docs: `packages/docs`

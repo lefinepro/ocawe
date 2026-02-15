@@ -128,6 +128,13 @@ describe CogniCore::Workflow::Engine do
   end
 
   it "runs tool nodes through direct crystal tool functions" do
+    CogniCore::Workflow.register_tool("tool_create_sandbox") do |_ctx|
+      {
+        "tool" => json_any("create-sandbox"),
+        "status" => json_any("ok"),
+      }
+    end
+
     workflow = CogniCore::Workflow.create_workflow("wf-tools", "tool dispatch")
     workflow
       .tool("tool_create_sandbox")

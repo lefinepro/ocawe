@@ -2,7 +2,7 @@
 
 Voice is used as a workflow DSL node.
 
-Example bundle: `shards/cogni/shards/examples/voice-playground`
+Example bundle: `shards/examples/voice-playground`
 
 Directive:
 - `voice "voice-node-id"`

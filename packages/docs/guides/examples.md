@@ -1,17 +1,25 @@
 # Examples
 
-Examples live under `shards/cogni/shards/examples` and cover:
-- agents
-- skills
-- workflow composition
-- voice DSL
-- rag DSL
+Examples live under `shards/examples` and are designed for direct reuse.
 
-Examples are not loaded by default runtime discovery (`src/workflows`).
-Use explicit workflow root override when you want to run examples in isolation.
-
-Example:
+## Run all examples
 
 ```bash
-./build/cognicore --port 4111 --workflows-root ./shards/examples --fallback-workflows-root ./shards/examples
+./build/cogni up --port 4111 --workflows-root ./shards/examples --fallback-workflows-root ./shards/examples
 ```
+
+## Bundles
+
+- `agents-example`: agent + model basics
+- `skills-example`: skills with agent context
+- `workflow-example`: agent + custom node + schema refs
+- `voice-playground`: voice DSL + voice frontmatter
+- `rag-playground`: rag DSL + skill choreography
+- `simple-model-test`: model override behavior
+- `full-capabilities`: all currently supported `.acd.cr` directives
+- `config-example`: Crystal-native `AppConfig` template
+
+## Notes
+
+- `tool tool_*` syntax is supported, but crystal tool functions must be registered through `CogniCore::Workflow.register_tool`.
+- External tool syntax (`tool "path", runtime: { ... }`) works out of the box when script paths are valid.

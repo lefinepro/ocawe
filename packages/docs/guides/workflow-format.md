@@ -1,6 +1,6 @@
 # Workflow Format (`.acd.cr`)
 
-Cogni workflows use Crystal DSL files with the extension `.acd.cr`.
+Cogni workflows use Crystal DSL files with extension `.acd.cr`.
 
 Example:
 
@@ -11,23 +11,26 @@ workflow "agents-example" do
 end
 ```
 
-Supported node directives include:
-- `agent "..."`
-- `skill "..."`
-- `tool tool_*` or `tool "path", runtime: { ... }`
-- `voice "..."` (DSL-first voice node)
-- `rag "..."` (DSL-first retrieval node)
+## Directives supported by current loader
+
+- `use_model "..."`
+- `agent "..."` (+ optional params like `model`, `prompt`, `input_schema`, `output_schema`)
+- `skill "..."` (optional `agent` binding)
+- `tool tool_*` (registered crystal function)
+- `tool "path", runtime: { ... }` (external tool)
+- `voice "..."` (optional `config`)
+- `rag "..."` (optional `config`)
+- `approve "..."` (optional `reason`)
 - `custom "..."`
-- `approve "..."`
 
-Voice and RAG are workflow DSL capabilities and do not require startup auto-registration of tool modules.
-
-## Agent Schema Parameters
-
-Agent directives support schema parameters:
+## Agent schema references
 
 ```crystal
 agent "workflow-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
 ```
 
-`schema_ref("input")` and `schema_ref("output")` resolve markdown `crystal` schema blocks from the selected agent file.
+`schema_ref("input")` / `schema_ref("output")` resolve markdown `crystal` schema blocks from the agent file.
+
+## Full coverage example
+
+See `shards/examples/full-capabilities/full-capabilities.acd.cr`.

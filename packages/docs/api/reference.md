@@ -6,7 +6,11 @@ Key endpoints:
 - `GET /v1/workflows`
 - `GET /v1/tools`
 - `GET /v1/skills`
+- `GET /v1/agents`
+- `GET /v1/agents/{agentId}`
+- `POST /v1/agents/{agentId}/generate`
 - `POST /v1/skills/{skillId}/execute`
+- `POST /v1/chat/completions` (OpenAI-compatible)
 
 Notes:
 - Voice and RAG are DSL workflow nodes (`voice`, `rag`), not dedicated startup auto-registered tools.

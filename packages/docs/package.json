@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "sync:playground": "cd ../playground && bun run build:docs",
     "dev": "vitepress dev .",
-    "build": "vitepress build .",
+    "build": "bun run sync:playground && vitepress build .",
     "preview": "vitepress preview .",
     "sync:openapi": "node scripts/sync-openapi.mjs"
   },
