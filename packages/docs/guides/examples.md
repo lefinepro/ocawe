@@ -18,9 +18,37 @@ Examples live under `shards/examples` and are designed for direct reuse.
 - `simple-model-test`: model override behavior
 - `full-capabilities`: all currently supported `.acd.cr` directives
 - `config-example`: Crystal-native `AppConfig` template
+- `src/custom_provider_example.cr`: custom provider creation macro + `AI::Client` injection
+- `src/control_flow_workflow_example.cr`: programmatic control-flow example (`branch`, `parallel`, loops, events) with explicit node schemas
 
 ## Notes
 
 - Bare `snake_case` function lines are supported and are auto-registered from `AppConfig.settings.functions` (or can be registered manually via `CogniCore::Workflow.register_function`).
 - `tool snake_case_fn` syntax is supported for crystal tool functions and should be registered through `CogniCore::Workflow.register_tool`.
 - External tool syntax (`tool "path", runtime: { ... }`) works out of the box when script paths are valid.
+- Advanced control-flow methods such as `branch` and `parallel` are available through programmatic workflow DSL (`WorkflowDefinition` API).
+
+## Custom provider macro
+
+Use `CogniCore::AI.create_custom_provider` to generate a provider class:
+
+```crystal
+CogniCore::AI.create_custom_provider(
+  AcmeProvider,
+  "acme",
+  "ACME_BASE_URL",
+  "ACME_API_KEY",
+  "https://acme.example/v1"
+)
+```
+
+Inject it into `AI::Client`:
+
+```crystal
+providers = {
+  "acme" => CogniCore::AI::AcmeProvider.new,
+} of String => CogniCore::AI::Provider
+
+client = CogniCore::AI::Client.new(providers)
+response = client.generate_text("acme/demo-model", "Hello")
+```

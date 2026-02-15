@@ -44,3 +44,9 @@ If function params are defined in DSL, runtime includes these params as flat fie
 ## Full coverage example
 
 See `shards/examples/full-capabilities/full-capabilities.acd.cr`.
+
+## Programmatic control-flow examples
+
+Methods like `branch`, `parallel`, `dowhile`, `dountil`, `wait_for_event`, and `send_event`
+are currently demonstrated via programmatic workflow DSL in
+`shards/examples/src/control_flow_workflow_example.cr`.
