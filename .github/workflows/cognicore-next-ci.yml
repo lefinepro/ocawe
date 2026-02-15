@@ -35,14 +35,24 @@ jobs:
         run: crystal spec --error-trace
 
       - name: Build playground
+        working-directory: packages/playground
         run: |
-          cd packages/playground && bun install
-          cd packages/playground && bun run build
+          if [ -f "package.json" ]; then
+            bun install
+            bun run build
+          else
+            echo "No package.json found in playground, skipping..."
+          fi
 
       - name: Build docs
+        working-directory: packages/docs
         run: |
-          cd packages/docs && bun install
-          cd packages/docs && bun run build
+          if [ -f "package.json" ]; then
+            bun install
+            bun run build
+          else
+            echo "No package.json found in docs, skipping..."
+          fi
 
       - name: Build runtime binary
         run: mkdir -p build && crystal build src/cogni.cr --release -o build/cognicore

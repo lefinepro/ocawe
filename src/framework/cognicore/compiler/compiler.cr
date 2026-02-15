@@ -1,6 +1,6 @@
 require "file_utils"
 
-require "../config/acd_config"
+require "../config/app_config"
 require "../../discovery/workflow_locator"
 require "../../agents/loader"
 require "../../skills/loader"
@@ -109,11 +109,11 @@ module CogniCore
         end
 
         def self.load
-          acd = CogniCore::Config::ACDConfig.settings
+          app_config = CogniCore::Config::AppConfig.settings
           Config.new(
-            preferred_workflows_root: acd.workflows.preferred_workflows_root,
-            fallback_workflows_root: acd.workflows.fallback_workflows_root,
-            output: acd.compiler.output,
+            preferred_workflows_root: app_config.workflows.preferred_workflows_root,
+            fallback_workflows_root: app_config.workflows.fallback_workflows_root,
+            output: app_config.compiler.output,
           )
         end
       end
