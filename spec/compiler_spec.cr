@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "../src/framework/cognicore/compiler/compiler"
 
 describe CogniCore::Compiler::Compiler::Config do
   it "loads workflow defaults from crystal config" do

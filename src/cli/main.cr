@@ -28,15 +28,15 @@ module CogniCore
 
       private def print_help : Nil
         puts <<-TXT
-Usage: cogni <command> [options]
+          Usage: cogni <command> [options]
 
-Commands:
-  build [--release] [--output PATH]
-      Build runtime binary.
-  dev [--port N] [--interval SECONDS]
-      Watch workflows/global agents/tools, recompile and restart runtime in dev mode.
-  up [--port N] [--workflows-root PATH] [--fallback-workflows-root PATH]
-      Auto-build release runtime binary and start server.
+          Commands:
+            build [--release] [--output PATH]
+                Build runtime binary.
+            dev [--port N] [--interval SECONDS]
+                Watch workflows/global agents/tools, recompile and restart runtime in dev mode.
+            up [--port N] [--workflows-root PATH] [--fallback-workflows-root PATH]
+                Auto-build release runtime binary and start server.
         TXT
       end
 

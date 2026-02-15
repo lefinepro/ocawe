@@ -36,7 +36,7 @@ describe CogniCore::Workflow::ToolExecutor do
       "tools/create-sandbox.sh",
       ctx,
       runtime: runtime,
-      workflow_root: "./src/workflows/aggregation-workflow",
+      workflow_root: "./shards/examples/sandbox-example",
     )
     result["status"].as_s.should eq("ok")
   end

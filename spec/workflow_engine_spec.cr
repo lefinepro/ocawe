@@ -28,7 +28,7 @@ describe CogniCore::Workflow::Engine do
 
     resumed = run.resume(resume_data: {
       "approved" => json_bool(true),
-      "comment" => json_str("approved"),
+      "comment"  => json_str("approved"),
     })
     resumed.status.should eq("success")
     resumed.state.not_nil!["done"].raw.should eq(true)
@@ -69,7 +69,7 @@ describe CogniCore::Workflow::Engine do
       ] of Tuple(CogniCore::Workflow::BranchCondition, CogniCore::Workflow::WorkflowNode), otherwise_node: branch_fallback)
       .map("mapped") do |ctx|
         {
-          "mapped" => json_str("#{ctx.get_node_result("seed").try(&.["value"]?.try(&.as_s?)) || "none"}:#{ctx.get_init_data["value"]?.try(&.as_s?) || "init-none"}")
+          "mapped" => json_str("#{ctx.get_node_result("seed").try(&.["value"]?.try(&.as_s?)) || "none"}:#{ctx.get_init_data["value"]?.try(&.as_s?) || "init-none"}"),
         }
       end
       .parallel([parallel_continue, parallel_suspend])
@@ -160,15 +160,15 @@ describe CogniCore::Workflow::Engine do
     workflow = CogniCore::Workflow.create_workflow("wf-rag", "rag compatibility")
     workflow
       .rag("rag-ingest", config: {
-        "operation" => json_str("upsert"),
+        "operation"       => json_str("upsert"),
         "vectorStoreName" => json_str("memory"),
-        "indexName" => json_str("wf-rag-index"),
+        "indexName"       => json_str("wf-rag-index"),
       })
       .rag("rag-query", config: {
-        "operation" => json_str("query"),
+        "operation"       => json_str("query"),
         "vectorStoreName" => json_str("memory"),
-        "indexName" => json_str("wf-rag-index"),
-        "topK" => JSON.parse(5.to_json),
+        "indexName"       => json_str("wf-rag-index"),
+        "topK"            => JSON.parse(5.to_json),
       })
       .commit
 
@@ -179,7 +179,7 @@ describe CogniCore::Workflow::Engine do
     result = run.start(input_data: {
       "documents" => JSON.parse(["Crystal is a compiled language", "Mastra supports RAG tools"].to_json),
       "queryText" => json_str("compiled"),
-      "topK" => JSON.parse(3.to_json),
+      "topK"      => JSON.parse(3.to_json),
     })
     result.status.should eq("success")
 
@@ -278,7 +278,7 @@ describe CogniCore::Workflow::Engine do
 
       run_request_model = engine.create_run("wf-models")
       result_request_model = run_request_model.start(input_data: {
-        "task" => json_str("request-model"),
+        "task"  => json_str("request-model"),
         "model" => json_str("openai/gpt-4.1-nano"),
       })
       result_request_model.status.should eq("success")

@@ -9,10 +9,12 @@ module CogniCore
       @@indexes = {} of String => Array(StoredDocument)
 
       def self.execute(ctx : NodeContext, config : AnyHash) : AnyHash
-        index_name = string_option(ctx, config, ["indexName", "index_name"], "#{ctx.workflow_id}_default")
-        vector_store_name = string_option(ctx, config, ["vectorStoreName", "vector_store_name"], "memory")
-        operation = string_option(ctx, config, ["operation"], "")
+        # Configuration parameters should come from node config, not from state
+        operation = config_option(ctx, config, ["operation"], "")
+        vector_store_name = config_option(ctx, config, ["vectorStoreName", "vector_store_name"], "memory")
+        index_name = config_option(ctx, config, ["indexName", "index_name"], "#{ctx.workflow_id}_default")
 
+        # Runtime data parameters can come from state, input_data, or config (in that order)
         query_text = string_option(ctx, config, ["queryText", "query_text", "query"], "")
         top_k = int_option(ctx, config, ["topK", "top_k"], 10)
         filter = hash_option(ctx, config, ["filter"])
@@ -185,6 +187,15 @@ module CogniCore
         scored.sort_by { |entry| {-entry[:score], entry[:doc].id} }
       end
 
+      private def self.config_option(ctx : NodeContext, config : AnyHash, keys : Array(String), default_value : String) : String
+        keys.each do |key|
+          if value = config[key]?.try(&.as_s?)
+            return value
+          end
+        end
+        default_value
+      end
+
       private def self.string_option(ctx : NodeContext, config : AnyHash, keys : Array(String), default_value : String) : String
         keys.each do |key|
           if value = ctx.state[key]?.try(&.as_s?)
@@ -195,6 +206,24 @@ module CogniCore
           end
           if value = config[key]?.try(&.as_s?)
             return value
+          end
+        end
+        default_value
+      end
+
+      private def self.config_int_option(ctx : NodeContext, config : AnyHash, keys : Array(String), default_value : Int32) : Int32
+        keys.each do |key|
+          value = config[key]?
+          next unless value
+          if i = value.as_i?
+            return i
+          end
+          if f = value.as_f?
+            return f.to_i
+          end
+          if s = value.as_s?
+            parsed = s.to_i?
+            return parsed if parsed
           end
         end
         default_value
@@ -216,6 +245,24 @@ module CogniCore
           end
         end
         default_value
+      end
+
+      private def self.config_hash_option(ctx : NodeContext, config : AnyHash, keys : Array(String)) : AnyHash?
+        keys.each do |key|
+          value = config[key]?
+          next unless value
+          if hash = value.as_h?
+            return hash
+          end
+          if string = value.as_s?
+            begin
+              parsed = JSON.parse(string).as_h?
+              return parsed if parsed
+            rescue JSON::ParseException
+            end
+          end
+        end
+        nil
       end
 
       private def self.hash_option(ctx : NodeContext, config : AnyHash, keys : Array(String)) : AnyHash?
