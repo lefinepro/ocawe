@@ -3,24 +3,10 @@
 ## 1) Build runtime binary
 
 ```bash
-cd shards/cogni
-crystal build src/cogni.cr --release -o build/cognicore
-```
-
-## 2) Run runtime directly
-
-```bash
-./build/cognicore --port 4111
-```
-
-## 3) Build unified cogni CLI
-
-```bash
-cd shards/cogni
 crystal build src/cli/main.cr -o build/cogni
 ```
 
-## 4) Dev mode and runtime up
+## 2) Run dev mode and runtime up
 
 ```bash
 ./build/cogni dev --port 4111
@@ -30,9 +16,9 @@ crystal build src/cli/main.cr -o build/cogni
 `cogni up` runs auto-build and starts only the runtime server.
 Docs/playground previews are not part of `up`.
 
-## 5) Explore examples
+## 3) Explore examples
 
-Example bundles are in `shards/cogni/shards/examples`:
+Example bundles are in `shards/examples`:
 - `agents-example`
 - `skills-example`
 - `workflow-example`
@@ -40,7 +26,7 @@ Example bundles are in `shards/cogni/shards/examples`:
 - `rag-playground`
 - `simple-model-test`
 
-## 6) Write a typed custom node
+## 4) Write a typed custom node
 
 ```crystal
 workflow "typed-node-example" do
@@ -59,7 +45,7 @@ workflow "typed-node-example" do
 end
 ```
 
-## 7) Add agent guardrails + crystal schema blocks
+## 5) Add agent guardrails + crystal schema blocks
 
 In `agents/<id>.md`:
 

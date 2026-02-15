@@ -1,32 +1,48 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
-  title: "Cogni Docs",
-  description: "CogniCore API and text guides",
+  title: "Cogni",
+  description: "Crystal-first runtime for workflows, agents, tools, and skills",
   themeConfig: {
     nav: [
-      { text: "Guides", link: "/guides/playground" },
-      { text: "API", link: "/api/reference" }
+      { text: "Guides", link: "/guides/tutorial" },
+      { text: "Playground", link: "/playground/" },
+      { text: "API", link: "/api/reference" },
     ],
     sidebar: [
       {
+        text: "Start",
+        items: [
+          { text: "Overview", link: "/" },
+          { text: "Tutorial", link: "/guides/tutorial" },
+          { text: "Examples", link: "/guides/examples" },
+        ],
+      },
+      {
         text: "Guides",
         items: [
-          { text: "Playground", link: "/guides/playground" },
+          { text: "Playground Route", link: "/guides/playground" },
           { text: "Workflow Format", link: "/guides/workflow-format" },
           { text: "Directory Conventions", link: "/guides/directory-conventions" },
-          { text: "Examples", link: "/guides/examples" },
           { text: "Voice Workflow", link: "/guides/voice" },
           { text: "RAG Workflow", link: "/guides/rag" },
-          { text: "Tutorial", link: "/guides/tutorial" }
-        ]
+        ],
+      },
+      {
+        text: "Playground",
+        items: [
+          { text: "Open Playground", link: "/playground/" },
+        ],
       },
       {
         text: "API",
         items: [
-          { text: "Reference", link: "/api/reference" }
-        ]
-      }
-    ]
-  }
+          { text: "Reference", link: "/api/reference" },
+        ],
+      },
+    ],
+    search: {
+      provider: "local",
+    },
+  },
 });

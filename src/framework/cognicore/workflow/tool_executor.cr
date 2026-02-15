@@ -1,5 +1,3 @@
-require "../tooling/defaults"
-
 module CogniCore
   module Workflow
     class ToolExecutor
@@ -12,24 +10,7 @@ module CogniCore
       end
 
       private def run_crystal_tool(function_name : String, ctx : NodeContext) : AnyHash
-        case function_name
-        when "tool_ai_generate_text"
-          CogniCore::Tooling.tool_ai_generate_text(ctx)
-        when "tool_create_sandbox"
-          CogniCore::Tooling.tool_create_sandbox(ctx)
-        when "tool_attach_sandbox"
-          CogniCore::Tooling.tool_attach_sandbox(ctx)
-        when "tool_opencode_coding"
-          CogniCore::Tooling.tool_opencode_coding(ctx)
-        when "tool_create_artifact"
-          CogniCore::Tooling.tool_create_artifact(ctx)
-        when "tool_clear_sandbox"
-          CogniCore::Tooling.tool_clear_sandbox(ctx)
-        when "tool_compress_tarball"
-          CogniCore::Tooling.tool_compress_tarball(ctx)
-        else
-          Workflow.tool_registry.call(function_name, ctx, function_name: function_name)
-        end
+        Workflow.tool_registry.call(function_name, ctx, function_name: function_name)
       end
 
       private def run_external_tool(tool_path : String, ctx : NodeContext, runtime : AnyHash, workflow_root : String?) : AnyHash

@@ -10,6 +10,7 @@ require "../cognicore/workflow/run"
 require "./endpoints/health"
 require "./endpoints/docs"
 require "./endpoints/workflows"
+require "./endpoints/agents"
 require "./endpoints/tools"
 require "./endpoints/skills"
 require "./endpoints/runs"
@@ -46,6 +47,16 @@ module ACD
           description: String,
           file_path: String,
         )
+        @agents_index = {} of String => NamedTuple(
+          id: String,
+          workflow_id: String,
+          name: String,
+          description: String,
+          prompt: String,
+          model: String?,
+          default_model: String?,
+          file_path: String,
+        )
         @tools_index = [] of NamedTuple(
           id: String,
           workflow_id: String,
@@ -61,6 +72,7 @@ module ACD
         mount_health_endpoints
         mount_docs_endpoints
         mount_workflow_endpoints
+        mount_agent_endpoints
         mount_tool_endpoints
         mount_skill_endpoints
         mount_run_endpoints
@@ -108,13 +120,23 @@ module ACD
           description: String,
           file_path: String,
         )
+        agents_index = {} of String => NamedTuple(
+          id: String,
+          workflow_id: String,
+          name: String,
+          description: String,
+          prompt: String,
+          model: String?,
+          default_model: String?,
+          file_path: String,
+        )
         tools_index = [] of NamedTuple(
           id: String,
           workflow_id: String,
         )
+        global_agents = @agent_loader.load_dir("./agents")
 
         bundles.each do |bundle|
-          global_agents = @agent_loader.load_dir("./agents")
           loaded_agents = merge_agents(global_agents, @agent_loader.load_dir(bundle.agents_dir))
           loaded_skills = @skill_loader.load_dir(bundle.skills_dir)
 
@@ -131,6 +153,20 @@ module ACD
               name: skill.name,
               description: skill.description,
               file_path: skill.file_path,
+            }
+          end
+
+          loaded_agents.each do |agent|
+            qualified_id = "#{bundle.id}:#{agent.id}"
+            agents_index[qualified_id] = {
+              id: qualified_id,
+              workflow_id: bundle.id,
+              name: agent.id,
+              description: agent.description,
+              prompt: agent.prompt,
+              model: agent.model,
+              default_model: definition.default_model,
+              file_path: agent.file_path,
             }
           end
 
@@ -155,6 +191,7 @@ module ACD
           @workflow_ids = ids
           @workflow_index = index
           @skills_index = skills_index
+          @agents_index = agents_index
           @tools_index = tools_index
           @workflow_engine = rebuilt_engine
           @workflow_service = CogniCore::Workflow::Service.new(@workflow_engine)
@@ -179,6 +216,14 @@ module ACD
 
       private def skill_by_id(skill_id : String)
         @cache_lock.synchronize { @skills_index[skill_id]? }
+      end
+
+      private def agents : Array(NamedTuple(id: String, workflow_id: String, name: String, description: String, prompt: String, model: String?, default_model: String?, file_path: String))
+        @cache_lock.synchronize { @agents_index.values.to_a }
+      end
+
+      private def agent_by_id(agent_id : String)
+        @cache_lock.synchronize { @agents_index[agent_id]? }
       end
 
       private def merge_agents(

@@ -4,6 +4,13 @@ require "file_utils"
 
 describe CogniCore::Workflow::ToolExecutor do
   it "runs crystal tool functions directly by name" do
+    CogniCore::Workflow.register_tool("tool_create_sandbox") do |_ctx|
+      {
+        "tool" => json_any("create-sandbox"),
+        "status" => json_any("ok"),
+      }
+    end
+
     executor = CogniCore::Workflow::ToolExecutor.new
     ctx = CogniCore::Workflow::NodeContext.new(
       workflow_id: "wf",
@@ -60,25 +67,27 @@ describe CogniCore::Workflow::ToolExecutor do
     end
   end
 
-  it "runs built-in ai generate tool by direct function name" do
-    ENV["COGNICORE_MOCK_LLM"] = "1"
-
-    begin
-      executor = CogniCore::Workflow::ToolExecutor.new
-      ctx = CogniCore::Workflow::NodeContext.new(
-        workflow_id: "wf",
-        run_id: "run_4",
-        node_id: "tool_ai_generate_text",
-        input_data: {"task" => json_any("hello")},
-        state: {"task" => json_any("hello"), "workflow_model" => json_any("openapi/qwen3-coder-plus")},
-      )
-
-      result = executor.run("tool_ai_generate_text", ctx)
-      result["tool"].as_s.should eq("ai-generate-text")
-      result["model"].as_s.should eq("openapi/qwen3-coder-plus")
-      result["text"].as_s.includes?("hello").should eq(true)
-    ensure
-      ENV.delete("COGNICORE_MOCK_LLM")
+  it "runs registered ai generate tool by direct function name" do
+    CogniCore::Workflow.register_tool("tool_ai_generate_text") do |ctx|
+      {
+        "tool" => json_any("ai-generate-text"),
+        "model" => json_any(ctx.state["workflow_model"]?.try(&.as_s?) || "missing"),
+        "text" => json_any(ctx.state["task"]?.try(&.as_s?) || ""),
+      }
     end
+
+    executor = CogniCore::Workflow::ToolExecutor.new
+    ctx = CogniCore::Workflow::NodeContext.new(
+      workflow_id: "wf",
+      run_id: "run_4",
+      node_id: "tool_ai_generate_text",
+      input_data: {"task" => json_any("hello")},
+      state: {"task" => json_any("hello"), "workflow_model" => json_any("openapi/qwen3-coder-plus")},
+    )
+
+    result = executor.run("tool_ai_generate_text", ctx)
+    result["tool"].as_s.should eq("ai-generate-text")
+    result["model"].as_s.should eq("openapi/qwen3-coder-plus")
+    result["text"].as_s.includes?("hello").should eq(true)
   end
 end

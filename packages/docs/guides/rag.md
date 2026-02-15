@@ -2,7 +2,7 @@
 
 RAG is used as a workflow DSL node.
 
-Example bundle: `shards/cogni/shards/examples/rag-playground`
+Example bundle: `shards/examples/rag-playground`
 
 Directive:
 - `rag "rag-node-id", config: { ... }`
