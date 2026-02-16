@@ -26,7 +26,7 @@ dependencies:
 
 ## Bundles and coverage
 
-- `agents-example`: `use_model`, `agent`
+- `agents-example`: `use model:`, `agent`
 - `skills-example`: `agent`, `skill`
 - `workflow-example`: `agent`, typed `snake_case` function nodes, `schema_ref`
 - `voice-playground`: `voice`, agent `voice`/`guardrails` frontmatter

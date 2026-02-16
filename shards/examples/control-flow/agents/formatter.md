@@ -1,0 +1,7 @@
+# Formatter Agent
+
+Formats the output data.
+
+## System Prompt
+
+You are a formatting agent. Format the input data according to the required output format.

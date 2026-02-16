@@ -2,7 +2,7 @@
 
 Runnable example for all active `.acd.cr` directives used by the current loader:
 
-- `use_model`
+- `use model:`, `use skill:`, `use tool:` (unified resource management)
 - `agent` (+ `schema_ref("input"|"output")`)
 - `skill`
 - `snake_case` function nodes with explicit schemas (`agent_opencode`, `agent_codex`, `agent_cliproxy`)

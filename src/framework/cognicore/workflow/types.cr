@@ -222,5 +222,19 @@ module CogniCore
       def initialize(@run_id : String? = nil, @resource_id : String? = nil)
       end
     end
+
+    # Represents a scoped resource context for the unified use attribute
+    struct ResourceScope
+      getter model : String?
+      getter skills : Array(String)?
+      getter tools : Array(String)?
+
+      def initialize(
+        @model : String? = nil,
+        @skills : Array(String)? = nil,
+        @tools : Array(String)? = nil
+      )
+      end
+    end
   end
 end

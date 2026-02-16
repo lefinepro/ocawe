@@ -1,9 +1,13 @@
 # Full capabilities example for the current .acd.cr loader.
+# Demonstrates unified resource management and enhanced execution control.
 # Crystal tool syntax example (requires explicit registration if used):
 # tool project_healthcheck
 
 workflow "full-capabilities" do
-  use_model "cliproxyapi/qwen3-coder-plus"
+  # Unified use attribute (new syntax)
+  use model: "cliproxyapi/qwen3-coder-plus",
+      skill: ["full-skill"],
+      tool: ["echo-json"]
 
   agent "full-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
   skill "full-skill", agent: "full-agent"

@@ -340,8 +340,46 @@ module ACD
         workflow = CogniCore::Workflow.create_workflow(bundle.id, "Loaded from #{bundle.workflow_file}")
         agent_index = {} of String => Agents::LoadedAgent
         loaded_agents.each { |agent| agent_index[agent.id] = agent }
-        last_agent_id = nil.as(String?)
 
+        # Read all lines for multi-line block parsing
+        lines = File.read_lines(bundle.workflow_file)
+
+        # Create a parsing context
+        ctx = WorkflowParserContext.new(
+          workflow: workflow,
+          agent_index: agent_index,
+          workflow_file: bundle.workflow_file,
+          workflow_root: bundle.root_path,
+          lines: lines
+        )
+
+        parse_workflow_body(ctx, 0, lines.size)
+
+        workflow.commit
+      end
+
+      # Parser context for workflow DSL
+      private struct WorkflowParserContext
+        getter workflow : CogniCore::Workflow::WorkflowDefinition
+        getter agent_index : Hash(String, Agents::LoadedAgent)
+        getter workflow_file : String
+        getter workflow_root : String
+        getter lines : Array(String)
+        property last_agent_id : String?
+
+        def initialize(
+          @workflow : CogniCore::Workflow::WorkflowDefinition,
+          @agent_index : Hash(String, Agents::LoadedAgent),
+          @workflow_file : String,
+          @workflow_root : String,
+          @lines : Array(String)
+        )
+          @last_agent_id = nil
+        end
+      end
+
+      # Parse workflow body between start_line and end_line
+      private def parse_workflow_body(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Int32
         crystal_tool_pattern = /^\s*tool\s+([a-z][a-z0-9_]*)\s*$/
         external_tool_pattern = /^\s*tool\s+"([^"]+)"\s*,\s*runtime:\s*(\{.*\})\s*$/
         skill_pattern = /^\s*skill\s+"([^"]+)"(?:\s*,\s*agent:\s*"([^"]+)")?/
@@ -350,20 +388,65 @@ module ACD
         reserved_keywords = Set{
           "workflow", "do", "end", "struct", "class", "module",
           "agent", "skill", "tool", "voice", "rag", "approve",
-          "use_model", "input_type", "output_type", "input_validate", "output_validate",
+          "use", "input_type", "output_type", "input_validate", "output_validate",
+          "parallel", "if", "elsif", "else", "while", "unless", "until",
         }
 
-        File.each_line(bundle.workflow_file) do |raw|
+        i = start_line
+        while i < end_line
+          raw = ctx.lines[i]
           line = raw.strip
+          i += 1
+
           next if line.empty? || line.starts_with?("#")
+
+          # Handle parallel do...end block
+          if line.match(/^\s*parallel\s+do\s*$/)
+            block_end = find_block_end(ctx.lines, i, end_line)
+            parse_parallel_block(ctx, i, block_end)
+            i = block_end + 1
+            next
+          end
+
+          # Handle if/elsif/else conditional blocks
+          if line.match(/^\s*if\s+/)
+            block_end = find_conditional_end(ctx.lines, i - 1, end_line)
+            parse_conditional_block(ctx, i - 1, block_end)
+            i = block_end + 1
+            next
+          end
+
+          # Handle unless conditional block
+          if line.match(/^\s*unless\s+/)
+            block_end = find_unless_end(ctx.lines, i - 1, end_line)
+            parse_unless_block(ctx, i - 1, block_end)
+            i = block_end + 1
+            next
+          end
+
+          # Handle while do...end loop
+          if line.match(/^\s*while\s+.+\s+do\s*$/)
+            block_end = find_block_end(ctx.lines, i, end_line)
+            parse_while_block(ctx, i - 1, block_end)
+            i = block_end + 1
+            next
+          end
+
+          # Handle until do...end loop
+          if line.match(/^\s*until\s+.+\s+do\s*$/)
+            block_end = find_block_end(ctx.lines, i, end_line)
+            parse_until_block(ctx, i - 1, block_end)
+            i = block_end + 1
+            next
+          end
 
           if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
             agent_id = match[1]
             tail = match[2]? || ""
-            loaded = agent_index[agent_id]?
-            params = parse_line_params(tail, bundle.workflow_file, "agent #{agent_id}")
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
             if params["custom_fn"]?
-              raise "#{bundle.workflow_file}: `custom_fn` is not supported for agent. Register a snake_case function and call it as a standalone DSL step."
+              raise "#{ctx.workflow_file}: `custom_fn` is not supported for agent. Register a snake_case function and call it as a standalone DSL step."
             end
             model = parse_optional_string(params["model"]?) || loaded.try(&.model)
             prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
@@ -371,18 +454,18 @@ module ACD
               params["input_schema"]?,
               loaded,
               kind: "input",
-              workflow_file: bundle.workflow_file,
+              workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             output_schema = resolve_agent_schema(
               params["output_schema"]?,
               loaded,
               kind: "output",
-              workflow_file: bundle.workflow_file,
+              workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
 
-            workflow.agent(
+            ctx.workflow.agent(
               agent_id,
               prompt: prompt,
               model: model,
@@ -391,49 +474,54 @@ module ACD
               input_schema: input_schema,
               output_schema: output_schema,
             )
-            last_agent_id = agent_id
+            ctx.last_agent_id = agent_id
             next
           end
-          if match = line.match(/^\s*use_model\s+"([^"]+)"/)
-            workflow.use_model(match[1])
+          # Unified use attribute: use model: "...", skill: ["..."], tool: ["..."]
+          if line.match(/^\s*use\s+/)
+            params = parse_use_params(line, ctx.workflow_file)
+            model = params[:model]
+            skill = params[:skill]
+            tool = params[:tool]
+            ctx.workflow.use(model: model, skill: skill, tool: tool)
             next
           end
           if match = line.match(skill_pattern)
-            workflow.skill(match[1], agent: match[2]?)
+            ctx.workflow.skill(match[1], agent: match[2]?)
             next
           end
           if match = line.match(/^\s*voice\s+"([^"]+)"(.*)$/)
             voice_id = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, bundle.workflow_file, "voice #{voice_id}")
+            params = parse_line_params(tail, ctx.workflow_file, "voice #{voice_id}")
 
-            inline_config = params["config"]?.try { |value| parse_runtime_object(value, bundle.workflow_file) } || ({} of String => JSON::Any)
-            requested_agent_id = parse_optional_string(params["agent"]?) || last_agent_id
-            agent_voice = requested_agent_id.try { |id| agent_index[id]?.try(&.voice_config) } || ({} of String => JSON::Any)
+            inline_config = params["config"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) } || ({} of String => JSON::Any)
+            requested_agent_id = parse_optional_string(params["agent"]?) || ctx.last_agent_id
+            agent_voice = requested_agent_id.try { |id| ctx.agent_index[id]?.try(&.voice_config) } || ({} of String => JSON::Any)
             config = agent_voice.merge(inline_config) { |_k, _left, right| right }
 
-            workflow.voice(voice_id, config: config)
+            ctx.workflow.voice(voice_id, config: config)
             next
           end
           if match = line.match(rag_pattern)
-            config = match[2]? ? parse_runtime_object(match[2], bundle.workflow_file) : ({} of String => JSON::Any)
-            workflow.rag(match[1], config: config)
+            config = match[2]? ? parse_runtime_object(match[2], ctx.workflow_file) : ({} of String => JSON::Any)
+            ctx.workflow.rag(match[1], config: config)
             next
           end
           if match = line.match(crystal_tool_pattern)
-            workflow.tool(match[1])
+            ctx.workflow.tool(match[1])
             next
           end
           if match = line.match(external_tool_pattern)
-            runtime = parse_runtime_object(match[2], bundle.workflow_file)
-            workflow.tool(match[1], runtime: runtime, workflow_root: bundle.root_path)
+            runtime = parse_runtime_object(match[2], ctx.workflow_file)
+            ctx.workflow.tool(match[1], runtime: runtime, workflow_root: ctx.workflow_root)
             next
           end
           if line.starts_with?("tool ")
-            raise "#{bundle.workflow_file}: unsupported tool syntax '#{line}'. Use `tool snake_case_fn` or `tool \"path\", runtime: { ... }`"
+            raise "#{ctx.workflow_file}: unsupported tool syntax '#{line}'. Use `tool snake_case_fn` or `tool \"path\", runtime: { ... }`"
           end
           if match = line.match(approve_pattern)
-            workflow.approve(match[1], reason: match[2]? || "human approval required")
+            ctx.workflow.approve(match[1], reason: match[2]? || "human approval required")
             next
           end
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
@@ -442,27 +530,27 @@ module ACD
             next if reserved_keywords.includes?(fn_name)
 
             unless CogniCore::Workflow.function_registry.registered?(fn_name)
-              raise "#{bundle.workflow_file}: unknown function '#{fn_name}'. Register it in CogniCore::Config::AppConfig."
+              raise "#{ctx.workflow_file}: unknown function '#{fn_name}'. Register it in CogniCore::Config::AppConfig."
             end
 
-            params = parse_line_params(tail, bundle.workflow_file, "function #{fn_name}")
+            params = parse_line_params(tail, ctx.workflow_file, "function #{fn_name}")
             schema_keys = Set{"input_schema", "output_schema"}
             fn_args_defined = params.keys.any? { |k| !schema_keys.includes?(k) }
             input_schema = if fn_args_defined
-                             compile_required_function_schema(params["input_schema"]?, bundle.workflow_file, fn_name, "input")
+                             compile_required_function_schema(params["input_schema"]?, ctx.workflow_file, fn_name, "input")
                            else
-                             compile_optional_function_schema(params["input_schema"]?, bundle.workflow_file, fn_name, "input")
+                             compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, fn_name, "input")
                            end
-            output_schema = compile_optional_function_schema(params["output_schema"]?, bundle.workflow_file, fn_name, "output")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, fn_name, "output")
             if input = input_schema
               if output = output_schema
-                ensure_output_schema_superset!(bundle.workflow_file, fn_name, input, output)
+                ensure_output_schema_superset!(ctx.workflow_file, fn_name, input, output)
               end
             end
 
-            fn_params = extract_function_args(params, bundle.workflow_file)
+            fn_params = extract_function_args(params, ctx.workflow_file)
 
-            workflow.fn(
+            ctx.workflow.fn(
               fn_name,
               params: fn_params,
               input_schema: input_schema,
@@ -472,7 +560,524 @@ module ACD
           end
         end
 
-        workflow.commit
+        i
+      end
+
+      # Find the end of a do...end block
+      private def find_block_end(lines : Array(String), start_line : Int32, max_line : Int32) : Int32
+        depth = 1
+        i = start_line
+        while i < max_line && depth > 0
+          line = lines[i].strip
+          depth += 1 if line.match(/\bdo\s*$/)
+          depth -= 1 if line == "end"
+          i += 1
+        end
+        i - 1
+      end
+
+      # Find the end of an if/elsif/else...end block
+      private def find_conditional_end(lines : Array(String), start_line : Int32, max_line : Int32) : Int32
+        depth = 1
+        i = start_line + 1
+        while i < max_line && depth > 0
+          line = lines[i].strip
+          depth += 1 if line.match(/^\s*if\s+/)
+          depth -= 1 if line == "end"
+          i += 1
+        end
+        i - 1
+      end
+
+      # Find the end of an unless...else...end block
+      private def find_unless_end(lines : Array(String), start_line : Int32, max_line : Int32) : Int32
+        depth = 1
+        i = start_line + 1
+        while i < max_line && depth > 0
+          line = lines[i].strip
+          depth += 1 if line.match(/^\s*(if|unless)\s+/)
+          depth -= 1 if line == "end"
+          i += 1
+        end
+        i - 1
+      end
+
+      # Parse a parallel do...end block
+      private def parse_parallel_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
+        # Collect nodes defined in the parallel block
+        parallel_nodes = [] of CogniCore::Workflow::WorkflowNode
+
+        i = start_line
+        while i < end_line
+          raw = ctx.lines[i]
+          line = raw.strip
+          i += 1
+
+          next if line.empty? || line.starts_with?("#")
+          next if line == "end"
+
+          # Parse agent nodes inside parallel block
+          if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
+            agent_id = match[1]
+            tail = match[2]? || ""
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            input_schema = resolve_agent_schema(
+              params["input_schema"]?,
+              loaded,
+              kind: "input",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            output_schema = resolve_agent_schema(
+              params["output_schema"]?,
+              loaded,
+              kind: "output",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+
+            node = create_agent_node(
+              agent_id,
+              prompt: prompt,
+              model: model,
+              voice_config: loaded.try(&.voice_config),
+              guardrails_config: loaded.try(&.guardrails_config),
+              input_schema: input_schema,
+              output_schema: output_schema,
+              default_model: ctx.workflow.default_model
+            )
+            parallel_nodes << node
+            next
+          end
+        end
+
+        # Add the parallel node to the workflow
+        ctx.workflow.parallel(parallel_nodes) unless parallel_nodes.empty?
+      end
+
+      # Parse if/elsif/else conditional block
+      private def parse_conditional_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
+        conditions = [] of Tuple(CogniCore::Workflow::BranchCondition, CogniCore::Workflow::WorkflowNode)
+        otherwise_node = nil.as(CogniCore::Workflow::WorkflowNode?)
+
+        i = start_line
+        current_condition = nil.as(String?)
+        current_nodes = [] of CogniCore::Workflow::WorkflowNode
+        in_else = false
+
+        while i <= end_line
+          raw = ctx.lines[i]
+          line = raw.strip
+          i += 1
+
+          next if line.empty? || line.starts_with?("#")
+
+          if match = line.match(/^\s*if\s+(.+)$/)
+            current_condition = match[1].strip
+            next
+          end
+
+          if match = line.match(/^\s*elsif\s+(.+)$/)
+            # Save previous condition
+            if current_condition && !current_nodes.empty?
+              node = wrap_nodes_in_control(current_nodes, "if-branch")
+              conditions << {current_condition, node}
+            end
+            current_condition = match[1].strip
+            current_nodes = [] of CogniCore::Workflow::WorkflowNode
+            next
+          end
+
+          if line == "else"
+            # Save previous condition
+            if current_condition && !current_nodes.empty?
+              node = wrap_nodes_in_control(current_nodes, "if-branch")
+              conditions << {current_condition, node}
+            end
+            current_condition = nil
+            current_nodes = [] of CogniCore::Workflow::WorkflowNode
+            in_else = true
+            next
+          end
+
+          if line == "end"
+            # Save final condition or else block
+            if in_else && !current_nodes.empty?
+              otherwise_node = wrap_nodes_in_control(current_nodes, "else-branch")
+            elsif current_condition && !current_nodes.empty?
+              node = wrap_nodes_in_control(current_nodes, "if-branch")
+              conditions << {current_condition, node}
+            end
+            break
+          end
+
+          # Parse agent nodes inside conditional block
+          if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
+            agent_id = match[1]
+            tail = match[2]? || ""
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            input_schema = resolve_agent_schema(
+              params["input_schema"]?,
+              loaded,
+              kind: "input",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            output_schema = resolve_agent_schema(
+              params["output_schema"]?,
+              loaded,
+              kind: "output",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+
+            node = create_agent_node(
+              agent_id,
+              prompt: prompt,
+              model: model,
+              voice_config: loaded.try(&.voice_config),
+              guardrails_config: loaded.try(&.guardrails_config),
+              input_schema: input_schema,
+              output_schema: output_schema,
+              default_model: ctx.workflow.default_model
+            )
+            current_nodes << node
+          end
+        end
+
+        # Add the branch to the workflow
+        ctx.workflow.branch(conditions, otherwise_node) unless conditions.empty?
+      end
+
+      # Parse unless...else...end conditional block
+      private def parse_unless_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
+        i = start_line
+        condition = nil.as(String?)
+        unless_nodes = [] of CogniCore::Workflow::WorkflowNode
+        else_nodes = [] of CogniCore::Workflow::WorkflowNode
+        in_else = false
+
+        while i <= end_line
+          raw = ctx.lines[i]
+          line = raw.strip
+          i += 1
+
+          next if line.empty? || line.starts_with?("#")
+
+          if match = line.match(/^\s*unless\s+(.+)$/)
+            condition = match[1].strip
+            next
+          end
+
+          if line == "else"
+            in_else = true
+            next
+          end
+
+          if line == "end"
+            break
+          end
+
+          # Parse agent nodes inside unless block
+          if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
+            agent_id = match[1]
+            tail = match[2]? || ""
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            input_schema = resolve_agent_schema(
+              params["input_schema"]?,
+              loaded,
+              kind: "input",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            output_schema = resolve_agent_schema(
+              params["output_schema"]?,
+              loaded,
+              kind: "output",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+
+            node = create_agent_node(
+              agent_id,
+              prompt: prompt,
+              model: model,
+              voice_config: loaded.try(&.voice_config),
+              guardrails_config: loaded.try(&.guardrails_config),
+              input_schema: input_schema,
+              output_schema: output_schema,
+              default_model: ctx.workflow.default_model
+            )
+
+            if in_else
+              else_nodes << node
+            else
+              unless_nodes << node
+            end
+          end
+        end
+
+        # Add the unless branch to the workflow
+        if condition && !unless_nodes.empty?
+          unless_branch_node = wrap_nodes_in_control(unless_nodes, "unless-branch")
+          else_branch_node = else_nodes.empty? ? nil : wrap_nodes_in_control(else_nodes, "else-branch")
+          ctx.workflow.unless_branch(condition, unless_branch_node, else_branch_node)
+        end
+      end
+
+      # Parse while condition do...end loop
+      private def parse_while_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
+        raw = ctx.lines[start_line]
+        line = raw.strip
+
+        # Extract condition from "while <condition> do"
+        match = line.match(/^\s*while\s+(.+)\s+do\s*$/)
+        return unless match
+        condition = match[1].strip
+
+        loop_nodes = [] of CogniCore::Workflow::WorkflowNode
+
+        i = start_line + 1
+        while i <= end_line
+          raw = ctx.lines[i]
+          line = raw.strip
+          i += 1
+
+          next if line.empty? || line.starts_with?("#")
+          next if line == "end"
+
+          # Parse agent nodes inside while block
+          if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
+            agent_id = match[1]
+            tail = match[2]? || ""
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            input_schema = resolve_agent_schema(
+              params["input_schema"]?,
+              loaded,
+              kind: "input",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            output_schema = resolve_agent_schema(
+              params["output_schema"]?,
+              loaded,
+              kind: "output",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+
+            node = create_agent_node(
+              agent_id,
+              prompt: prompt,
+              model: model,
+              voice_config: loaded.try(&.voice_config),
+              guardrails_config: loaded.try(&.guardrails_config),
+              input_schema: input_schema,
+              output_schema: output_schema,
+              default_model: ctx.workflow.default_model
+            )
+            loop_nodes << node
+          end
+        end
+
+        # Add the while loop to the workflow
+        unless loop_nodes.empty?
+          loop_body = wrap_nodes_in_control(loop_nodes, "while-body")
+          ctx.workflow.while_loop(loop_body, condition)
+        end
+      end
+
+      # Parse until condition do...end loop
+      private def parse_until_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
+        raw = ctx.lines[start_line]
+        line = raw.strip
+
+        # Extract condition from "until <condition> do"
+        match = line.match(/^\s*until\s+(.+)\s+do\s*$/)
+        return unless match
+        condition = match[1].strip
+
+        loop_nodes = [] of CogniCore::Workflow::WorkflowNode
+
+        i = start_line + 1
+        while i <= end_line
+          raw = ctx.lines[i]
+          line = raw.strip
+          i += 1
+
+          next if line.empty? || line.starts_with?("#")
+          next if line == "end"
+
+          # Parse agent nodes inside until block
+          if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
+            agent_id = match[1]
+            tail = match[2]? || ""
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            input_schema = resolve_agent_schema(
+              params["input_schema"]?,
+              loaded,
+              kind: "input",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            output_schema = resolve_agent_schema(
+              params["output_schema"]?,
+              loaded,
+              kind: "output",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+
+            node = create_agent_node(
+              agent_id,
+              prompt: prompt,
+              model: model,
+              voice_config: loaded.try(&.voice_config),
+              guardrails_config: loaded.try(&.guardrails_config),
+              input_schema: input_schema,
+              output_schema: output_schema,
+              default_model: ctx.workflow.default_model
+            )
+            loop_nodes << node
+          end
+        end
+
+        # Add the until loop to the workflow
+        unless loop_nodes.empty?
+          loop_body = wrap_nodes_in_control(loop_nodes, "until-body")
+          ctx.workflow.until_loop(loop_body, condition)
+        end
+      end
+
+      # Create an agent node (used for parallel and conditional blocks)
+      private def create_agent_node(
+        id : String,
+        prompt : String? = nil,
+        model : String? = nil,
+        voice_config : CogniCore::Workflow::AnyHash? = nil,
+        guardrails_config : CogniCore::Workflow::AnyHash? = nil,
+        input_schema : CogniCore::Schema::Validator? = nil,
+        output_schema : CogniCore::Schema::Validator? = nil,
+        default_model : String? = nil
+      ) : CogniCore::Workflow::WorkflowNode
+        CogniCore::Workflow::WorkflowNode.new(id, CogniCore::Workflow::NodeKind::Agent, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          user_prompt = build_agent_user_prompt_from_ctx(ctx)
+          CogniCore::Workflow::Guardrails.validate_input!(id, user_prompt, guardrails_config)
+
+          resolved_model = resolve_model_from_ctx(ctx, model, default_model)
+          system_prompt = prompt || "You are agent #{id}."
+          response = CogniCore::AI::Client.new.generate_text(
+            model_spec: resolved_model,
+            prompt: user_prompt,
+            system: system_prompt,
+            metadata: {
+              "workflow_id" => JSON.parse(ctx.workflow_id.to_json),
+              "run_id"      => JSON.parse(ctx.run_id.to_json),
+              "node_id"     => JSON.parse(ctx.node_id.to_json),
+              "agent_id"    => JSON.parse(id.to_json),
+            },
+          )
+          agent_result = CogniCore::Workflow::AgentResult.new(
+            agent_type: "default-agent",
+            content: response.text,
+            provider: response.provider,
+            model: "#{response.provider}/#{response.model}",
+          )
+
+          CogniCore::Workflow::Guardrails.validate_output!(id, agent_result.content, guardrails_config)
+
+          outputs = ctx.state["agent_outputs"]?.try(&.as_h?) || {} of String => JSON::Any
+          outputs = outputs.dup
+          outputs[id] = JSON.parse(agent_result.to_any_hash.to_json)
+
+          result = {
+            "agent_outputs" => JSON.parse(outputs.to_json),
+            "agent_result"  => JSON.parse(agent_result.to_any_hash.to_json),
+            "last_agent"    => JSON.parse(id.to_json),
+            "last_model"    => JSON.parse((agent_result.model || "").to_json),
+            "last_response" => JSON.parse(agent_result.content.to_json),
+            "active_agent"  => JSON.parse(id.to_json),
+          } of String => JSON::Any
+
+          if voice = voice_config
+            result["active_voice"] = JSON.parse(voice.to_json)
+          end
+
+          CogniCore::Workflow::WorkflowNodeResult.continue(result)
+        end
+      end
+
+      # Wrap multiple nodes in a single control node
+      private def wrap_nodes_in_control(nodes : Array(CogniCore::Workflow::WorkflowNode), name : String) : CogniCore::Workflow::WorkflowNode
+        CogniCore::Workflow::WorkflowNode.new(name, CogniCore::Workflow::NodeKind::Control) do |ctx|
+          merged = {} of String => JSON::Any
+          nodes.each do |node|
+            result = node.execute(CogniCore::Workflow::NodeContext.new(
+              workflow_id: ctx.workflow_id,
+              run_id: ctx.run_id,
+              node_id: node.id,
+              input_data: ctx.input_data,
+              state: ctx.state.merge(merged) { |_k, _left, right| right },
+              init_data: ctx.init_data,
+              node_results: ctx.node_results,
+              runtime_context: ctx.runtime_context,
+              request_context: ctx.request_context,
+              trigger_data: ctx.trigger_data,
+              resume_data: ctx.resume_data,
+            ))
+            if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+              return result
+            end
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+          CogniCore::Workflow::WorkflowNodeResult.continue(merged)
+        end
+      end
+
+      # Helper to build agent user prompt from context
+      private def build_agent_user_prompt_from_ctx(ctx : CogniCore::Workflow::NodeContext) : String
+        if input = ctx.input_data["input"]?
+          if as_text = input.as_s?
+            return as_text
+          end
+          if hash = input.as_h?
+            return hash["content"]?.try(&.as_s?) || hash["text"]?.try(&.as_s?) || input.to_json
+          end
+          return input.to_json
+        end
+
+        task = ctx.input_data["task"]?.try(&.as_s?) || ctx.state["task"]?.try(&.as_s?)
+        return task if task
+
+        prompt = ctx.input_data["prompt"]?.try(&.as_s?) || ctx.state["prompt"]?.try(&.as_s?)
+        return prompt if prompt
+
+        ctx.state.to_json
+      end
+
+      # Helper to resolve model from context
+      private def resolve_model_from_ctx(ctx : CogniCore::Workflow::NodeContext, agent_model : String?, default_model : String?) : String
+        request_model = ctx.input_data["model"]?.try(&.as_s?) || ctx.state["model"]?.try(&.as_s?)
+        return request_model if request_model
+        return agent_model if agent_model
+        ctx.state["workflow_model"]?.try(&.as_s?) || default_model || "openai/gpt-4.1-mini"
       end
 
       private def resolve_agent_schema(
@@ -662,6 +1267,53 @@ module ACD
         hash
       rescue ex
         raise "#{workflow_file}: invalid runtime object '#{literal}': #{ex.message}"
+      end
+
+      # Parse unified use attribute: use model: "...", skill: ["..."], tool: ["..."]
+      private def parse_use_params(line : String, workflow_file : String) : NamedTuple(model: String?, skill: (String | Array(String))?, tool: (String | Array(String))?)
+        # Extract the part after "use "
+        content = line.sub(/^\s*use\s+/, "").strip
+
+        model = nil.as(String?)
+        skill = nil.as((String | Array(String))?)
+        tool = nil.as((String | Array(String))?)
+
+        # Parse model: "..."
+        if match = content.match(/model:\s*"([^"]+)"/)
+          model = match[1]
+        end
+
+        # Parse skill: "..." or skill: ["...", "..."]
+        if match = content.match(/skill:\s*\[([^\]]*)\]/)
+          # Array syntax
+          arr_content = match[1]
+          skills = parse_string_array(arr_content)
+          skill = skills unless skills.empty?
+        elsif match = content.match(/skill:\s*"([^"]+)"/)
+          # Single string syntax
+          skill = match[1]
+        end
+
+        # Parse tool: "..." or tool: ["...", "..."]
+        if match = content.match(/tool:\s*\[([^\]]*)\]/)
+          # Array syntax
+          arr_content = match[1]
+          tools = parse_string_array(arr_content)
+          tool = tools unless tools.empty?
+        elsif match = content.match(/tool:\s*"([^"]+)"/)
+          # Single string syntax
+          tool = match[1]
+        end
+
+        {model: model, skill: skill, tool: tool}
+      end
+
+      private def parse_string_array(content : String) : Array(String)
+        result = [] of String
+        content.scan(/"([^"]+)"/) do |match|
+          result << match[1]
+        end
+        result
       end
 
       private def openapi_document : String
