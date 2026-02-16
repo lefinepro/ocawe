@@ -264,7 +264,7 @@ describe CogniCore::Workflow::Engine do
     begin
       workflow = CogniCore::Workflow.create_workflow("wf-models", "model selection")
       workflow
-        .use_model("openai/gpt-4.1-mini")
+        .use(model: "openai/gpt-4.1-mini")
         .agent("model-agent", prompt: "system", model: "openai/gpt-4.1")
         .commit
 
@@ -286,7 +286,7 @@ describe CogniCore::Workflow::Engine do
 
       workflow_default_only = CogniCore::Workflow.create_workflow("wf-model-default", "model selection default")
       workflow_default_only
-        .use_model("openai/gpt-4.1-mini")
+        .use(model: "openai/gpt-4.1-mini")
         .agent("model-agent-default", prompt: "system")
         .commit
       engine.register(workflow_default_only)

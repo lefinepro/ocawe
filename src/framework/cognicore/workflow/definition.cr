@@ -9,11 +9,107 @@ module CogniCore
       getter description : String?
       getter nodes : Array(WorkflowNode)
       getter default_model : String?
+      getter default_skills : Array(String)
+      getter default_tools : Array(String)
 
       def initialize(@id : String, @description : String? = nil)
         @nodes = [] of WorkflowNode
         @committed = false
         @default_model = nil
+        @default_skills = [] of String
+        @default_tools = [] of String
+        @resource_scope_stack = [] of ResourceScope
+      end
+
+      # Unified use attribute for model, skills, and tools
+      # Supports: use model: "...", skill: ["..."], tool: ["..."]
+      def use(
+        model : String? = nil,
+        skill : (String | Array(String))? = nil,
+        tool : (String | Array(String))? = nil
+      ) : self
+        ensure_not_committed!
+
+        if model
+          normalized = model.strip
+          raise "use requires non-empty model string" if normalized.empty?
+          @default_model = normalized
+        end
+
+        if skill
+          skills = normalize_to_array(skill)
+          skills.each do |s|
+            @default_skills << s unless @default_skills.includes?(s)
+          end
+        end
+
+        if tool
+          tools = normalize_to_array(tool)
+          tools.each do |t|
+            @default_tools << t unless @default_tools.includes?(t)
+          end
+        end
+
+        self
+      end
+
+      # Block-scoped use attribute
+      # Applies resources only within the block, then restores previous state
+      def use(
+        model : String? = nil,
+        skill : (String | Array(String))? = nil,
+        tool : (String | Array(String))? = nil,
+        &block
+      ) : self
+        ensure_not_committed!
+
+        # Save current state
+        previous_model = @default_model
+        previous_skills = @default_skills.dup
+        previous_tools = @default_tools.dup
+
+        # Push new scope
+        scope = ResourceScope.new(
+          model: model,
+          skills: skill ? normalize_to_array(skill) : nil,
+          tools: tool ? normalize_to_array(tool) : nil
+        )
+        @resource_scope_stack << scope
+
+        # Apply scoped resources
+        @default_model = model if model
+        if skill
+          normalize_to_array(skill).each do |s|
+            @default_skills << s unless @default_skills.includes?(s)
+          end
+        end
+        if tool
+          normalize_to_array(tool).each do |t|
+            @default_tools << t unless @default_tools.includes?(t)
+          end
+        end
+
+        # Execute block
+        block.call
+
+        # Restore previous state
+        @resource_scope_stack.pop
+        @default_model = previous_model
+        @default_skills = previous_skills
+        @default_tools = previous_tools
+
+        self
+      end
+
+      private def normalize_to_array(value : String | Array(String)) : Array(String)
+        case value
+        when String
+          [value]
+        when Array(String)
+          value
+        else
+          [] of String
+        end
       end
 
       def fn(
@@ -91,13 +187,6 @@ module CogniCore
         end)
       end
 
-      def use_model(model : String) : self
-        ensure_not_committed!
-        normalized = model.strip
-        raise "use_model requires non-empty model string" if normalized.empty?
-        @default_model = normalized
-        self
-      end
 
       def skill(
         id : String,
@@ -343,6 +432,87 @@ module CogniCore
         end
 
         @nodes << loop_node
+        self
+      end
+
+      # while loop - executes node while condition is true (condition checked first)
+      def while_loop(node : WorkflowNode, condition : BranchCondition) : self
+        ensure_not_committed!
+
+        loop_node = WorkflowNode.new("while-#{@nodes.size}", NodeKind::Control) do |ctx|
+          iterations = 0
+          result = WorkflowNodeResult.continue
+          merged = {} of String => JSON::Any
+
+          while evaluate_condition(condition, ctx) && iterations < 100
+            iterations += 1
+            result = node.execute(with_context_for(ctx, node))
+            break if result.action != NodeAction::Continue.to_s.downcase
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+
+          if result.action == NodeAction::Continue.to_s.downcase
+            WorkflowNodeResult.continue(merged)
+          else
+            result
+          end
+        end
+
+        @nodes << loop_node
+        self
+      end
+
+      # until loop - executes node until condition becomes true (condition checked first)
+      def until_loop(node : WorkflowNode, condition : BranchCondition) : self
+        ensure_not_committed!
+
+        loop_node = WorkflowNode.new("until-#{@nodes.size}", NodeKind::Control) do |ctx|
+          iterations = 0
+          result = WorkflowNodeResult.continue
+          merged = {} of String => JSON::Any
+
+          while !evaluate_condition(condition, ctx) && iterations < 100
+            iterations += 1
+            result = node.execute(with_context_for(ctx, node))
+            break if result.action != NodeAction::Continue.to_s.downcase
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+
+          if result.action == NodeAction::Continue.to_s.downcase
+            WorkflowNodeResult.continue(merged)
+          else
+            result
+          end
+        end
+
+        @nodes << loop_node
+        self
+      end
+
+      # unless branch - executes when condition is false
+      def unless_branch(condition : BranchCondition, node : WorkflowNode, otherwise_node : WorkflowNode? = nil) : self
+        ensure_not_committed!
+
+        branching_node = WorkflowNode.new("unless-#{@nodes.size}", NodeKind::Control) do |ctx|
+          # Execute node when condition is FALSE (inverse of if)
+          selected = if !evaluate_condition(condition, ctx)
+                       node
+                     else
+                       otherwise_node
+                     end
+
+          if selected
+            selected.execute(with_context_for(ctx, selected))
+          else
+            WorkflowNodeResult.continue
+          end
+        end
+
+        @nodes << branching_node
         self
       end
 
