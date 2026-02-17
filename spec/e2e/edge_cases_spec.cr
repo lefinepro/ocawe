@@ -17,7 +17,7 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles workflow with empty input data" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-no-input", "No input")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("echo", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("echo", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           has_input = !ctx.input_data.empty?
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"has_input" => json_bool(has_input)})
         end)
@@ -34,7 +34,7 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles deeply nested input data" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-nested", "Nested input")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("extract", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("extract", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           level3 = ctx.input_data["level1"]?
             .try(&.as_h?)
             .try(&.["level2"]?)
@@ -69,7 +69,7 @@ describe "E2E: Edge Cases and Boundary Conditions" do
 
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-infinite-guard", "Infinite guard")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("infinite", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("infinite", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           loop do
             infinite_counter += 1
             break if infinite_counter >= 100
@@ -94,7 +94,7 @@ describe "E2E: Edge Cases and Boundary Conditions" do
 
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-zero-loop", "Zero iteration")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("skip", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("skip", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           counter += 1
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"skipped" => json_bool(true)})
         end)
@@ -189,7 +189,7 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles unicode in input and output" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-unicode", "Unicode test")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("echo-unicode", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("echo-unicode", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           text = ctx.input_data["text"]?.try(&.as_s?) || "no-text"
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"echoed" => json_str(text)})
         end)
@@ -207,7 +207,7 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles special JSON characters" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-json-chars", "JSON characters")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("echo-special", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("echo-special", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           text = ctx.input_data["text"]?.try(&.as_s?) || ""
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"echoed" => json_str(text)})
         end)

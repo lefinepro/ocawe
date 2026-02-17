@@ -146,7 +146,7 @@ describe "E2E: Run and Functions" do
 
       workflow = Cogni::Workflows::Declarative.create_workflow("state-run-test", "State run test")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"setup_value" => json_str("initialized")})
         end)
         .run("state_aware_tool")

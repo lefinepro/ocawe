@@ -113,7 +113,7 @@ describe "E2E: RAG Operations" do
     it "combines RAG with approval step" do
       workflow = Cogni::Workflows::Declarative.create_workflow("rag-approval-test", "RAG with approval")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
         end)
         .rag("rag", config: {

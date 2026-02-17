@@ -80,11 +80,11 @@ describe "E2E: Voice Operations" do
     it "handles voice node in full workflow" do
       workflow = Cogni::Workflows::Declarative.create_workflow("full-voice-test", "Full voice test")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
         end)
         .voice("voice", config: {"provider" => json_str("openai")})
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("after-voice", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("after-voice", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           voice_ok = ctx.state["voice_status"]?.try(&.as_s?) == "ok"
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"voice_completed" => json_bool(voice_ok)})
         end)

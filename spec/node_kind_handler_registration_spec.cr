@@ -12,7 +12,7 @@ describe "custom node kinds and resource registrations" do
 
     workflow = Cogni::Workflows::Declarative.create_workflow("wf-custom-kind")
     workflow
-      .node_kind(Cogni::NodeKind.new("crystal_native", {
+      .step(Cogni::NodeKind.new("crystal_native", {
         "value" => json_str("from-params"),
       }))
       .commit
@@ -49,7 +49,7 @@ describe "custom node kinds and resource registrations" do
 
     workflow = Cogni::Workflows::Declarative.create_workflow("wf-handler-registration")
     workflow
-      .node_kind(Cogni::NodeKind.new("bootstrap"), id: "bootstrap-node")
+      .step(Cogni::NodeKind.new("bootstrap"), id: "bootstrap-node")
       .commit
 
     engine = Cogni::Workflows::Declarative::Engine.new

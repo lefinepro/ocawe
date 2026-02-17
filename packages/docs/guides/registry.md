@@ -18,7 +18,7 @@ end
 
 workflow = Cogni::Workflow.build("custom")
 workflow
-  .node_kind(Cogni::NodeKind.new("crystal_native", {
+  .step(Cogni::NodeKind.new("crystal_native", {
     "message" => JSON.parse("hello".to_json),
   }))
   .commit

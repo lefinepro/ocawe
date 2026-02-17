@@ -30,7 +30,7 @@ describe "E2E: Agents and Skills" do
       workflow = Cogni::Workflows::Declarative.create_workflow("agents-example-run", "Agent run test")
       workflow
         .use(model: "openai/gpt-4.1-mini")
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"task" => json_str("test task")})
         end)
         .commit
@@ -67,7 +67,7 @@ describe "E2E: Agents and Skills" do
     it "executes skill workflow with skill node" do
       workflow = Cogni::Workflows::Declarative.create_workflow("skills-example-run", "Skills run test")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("init", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("init", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"skill_data" => json_str("prepared")})
         end)
         .skill("example-skill")
@@ -101,7 +101,7 @@ describe "E2E: Agents and Skills" do
     it "validates input schema on workflow execution" do
       workflow = Cogni::Workflows::Declarative.create_workflow("workflow-schema-test", "Schema validation test")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("validate", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("validate", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           task = ctx.input_data["task"]?.try(&.as_s?) || "default"
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"validated_task" => json_str(task)})
         end)
@@ -132,7 +132,7 @@ describe "E2E: Agents and Skills" do
     it "handles agent input with task and input object" do
       workflow = Cogni::Workflows::Declarative.create_workflow("agent-input-test", "Agent input test")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("prepare", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("prepare", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           task = ctx.input_data["task"]?.try(&.as_s?) || "default-task"
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({
             "prepared_task" => json_str(task),
@@ -156,14 +156,14 @@ describe "E2E: Agents and Skills" do
     it "chains multiple agents in sequence" do
       workflow = Cogni::Workflows::Declarative.create_workflow("agent-chain-test", "Agent chain test")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("agent-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("agent-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"step" => json_str("1")})
         end)
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("agent-2", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("agent-2", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           prev = ctx.state["step"]?.try(&.as_s?) || "0"
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"step" => json_str("#{prev}->2")})
         end)
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("agent-3", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("agent-3", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           prev = ctx.state["step"]?.try(&.as_s?) || "0"
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"step" => json_str("#{prev}->3")})
         end)
