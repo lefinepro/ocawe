@@ -30,7 +30,9 @@ describe "E2E: Agents and Skills" do
       workflow = CogniCore::Workflow.create_workflow("agents-example-run", "Agent run test")
       workflow
         .use(model: "openai/gpt-4.1-mini")
-        .map("setup") { |_ctx| {"task" => json_str("test task")} }
+        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"task" => json_str("test task")})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -65,7 +67,9 @@ describe "E2E: Agents and Skills" do
     it "executes skill workflow with skill node" do
       workflow = CogniCore::Workflow.create_workflow("skills-example-run", "Skills run test")
       workflow
-        .map("init") { |_ctx| {"skill_data" => json_str("prepared")} }
+        .then(CogniCore::Workflow::WorkflowNode.new("init", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"skill_data" => json_str("prepared")})
+        end)
         .skill("example-skill")
         .commit
 
@@ -97,10 +101,10 @@ describe "E2E: Agents and Skills" do
     it "validates input schema on workflow execution" do
       workflow = CogniCore::Workflow.create_workflow("workflow-schema-test", "Schema validation test")
       workflow
-        .map("validate") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("validate", CogniCore::Workflow::NodeKind::Control) do |ctx|
           task = ctx.input_data["task"]?.try(&.as_s?) || "default"
-          {"validated_task" => json_str(task)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"validated_task" => json_str(task)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -128,13 +132,13 @@ describe "E2E: Agents and Skills" do
     it "handles agent input with task and input object" do
       workflow = CogniCore::Workflow.create_workflow("agent-input-test", "Agent input test")
       workflow
-        .map("prepare") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("prepare", CogniCore::Workflow::NodeKind::Control) do |ctx|
           task = ctx.input_data["task"]?.try(&.as_s?) || "default-task"
-          {
+          CogniCore::Workflow::WorkflowNodeResult.continue({
             "prepared_task" => json_str(task),
             "context"       => json_str("prepared"),
-          }
-        }
+          })
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -152,15 +156,17 @@ describe "E2E: Agents and Skills" do
     it "chains multiple agents in sequence" do
       workflow = CogniCore::Workflow.create_workflow("agent-chain-test", "Agent chain test")
       workflow
-        .map("agent-1") { |_ctx| {"step" => json_str("1")} }
-        .map("agent-2") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("agent-1", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"step" => json_str("1")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("agent-2", CogniCore::Workflow::NodeKind::Control) do |ctx|
           prev = ctx.state["step"]?.try(&.as_s?) || "0"
-          {"step" => json_str("#{prev}->2")}
-        }
-        .map("agent-3") { |ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"step" => json_str("#{prev}->2")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("agent-3", CogniCore::Workflow::NodeKind::Control) do |ctx|
           prev = ctx.state["step"]?.try(&.as_s?) || "0"
-          {"step" => json_str("#{prev}->3")}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"step" => json_str("#{prev}->3")})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new

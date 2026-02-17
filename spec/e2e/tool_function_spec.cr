@@ -144,7 +144,9 @@ describe "E2E: Tools and Functions" do
 
       workflow = CogniCore::Workflow.create_workflow("state-tool-test", "State tool test")
       workflow
-        .map("setup") { |_ctx| {"setup_value" => json_str("initialized")} }
+        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"setup_value" => json_str("initialized")})
+        end)
         .tool("state_aware_tool")
         .commit
 

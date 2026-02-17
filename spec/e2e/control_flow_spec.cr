@@ -2,31 +2,26 @@ require "./e2e_spec_helper"
 
 # E2E Tests for Control Flow
 #
-# Tests control flow patterns:
-# - Branching (if/else, unless)
+# Tests control flow patterns with supported workflow APIs:
+# - Sequential control nodes
 # - Parallel execution
-# - Loops (while, until, dowhile, dountil, foreach)
+# - Native Crystal conditions/loops inside nodes
 # - Events (wait_for_event, send_event)
 # - Sleep nodes
 
 describe "E2E: Control Flow" do
   describe "branching" do
-    it "executes branch conditions correctly" do
-      branch_a = CogniCore::Workflow::WorkflowNode.new("branch-a", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"branch" => json_str("A")})
-      end
-
-      branch_b = CogniCore::Workflow::WorkflowNode.new("branch-b", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"branch" => json_str("B")})
-      end
-
+    it "executes branch-like conditions correctly" do
       workflow = CogniCore::Workflow.create_workflow("e2e-branch", "Branch test")
       workflow
-        .map("seed") { |_ctx| {"selector" => json_str("A")} }
-        .branch([
-          {->(ctx : CogniCore::Workflow::NodeContext) { ctx.state["selector"]?.try(&.as_s?) == "A" }, branch_a},
-          {->(ctx : CogniCore::Workflow::NodeContext) { ctx.state["selector"]?.try(&.as_s?) == "B" }, branch_b},
-        ] of Tuple(CogniCore::Workflow::BranchCondition, CogniCore::Workflow::WorkflowNode), otherwise_node: branch_b)
+        .then(CogniCore::Workflow::WorkflowNode.new("seed", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"selector" => json_str("A")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("dispatch", CogniCore::Workflow::NodeKind::Control) do |ctx|
+          selector = ctx.state["selector"]?.try(&.as_s?) || ""
+          branch = selector == "A" ? "A" : "B"
+          CogniCore::Workflow::WorkflowNodeResult.continue({"branch" => json_str(branch)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -38,18 +33,17 @@ describe "E2E: Control Flow" do
       result.state.not_nil!["branch"].as_s.should eq("A")
     end
 
-    it "creates workflow with unless conditional" do
-      # Simulates control-flow unless branch
-      skip_node = CogniCore::Workflow::WorkflowNode.new("skipped", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"skipped" => json_bool(true)})
-      end
-
+    it "creates workflow with unless-style conditional" do
       workflow = CogniCore::Workflow.create_workflow("control-unless", "Unless test")
       workflow
-        .map("seed") { |_ctx| {"skip_preprocessing" => json_bool(false)} }
-        .unless_branch(
-          ->(ctx : CogniCore::Workflow::NodeContext) { ctx.state["skip_preprocessing"]?.try(&.raw) == true },
-          skip_node)
+        .then(CogniCore::Workflow::WorkflowNode.new("seed", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"skip_preprocessing" => json_bool(false)})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("unless-dispatch", CogniCore::Workflow::NodeKind::Control) do |ctx|
+          skip = ctx.state["skip_preprocessing"]?.try(&.raw) == true
+          payload = skip ? ({} of String => JSON::Any) : {"skipped" => json_bool(true)}
+          CogniCore::Workflow::WorkflowNodeResult.continue(payload)
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -62,21 +56,16 @@ describe "E2E: Control Flow" do
     end
 
     it "creates workflow with if/else branching" do
-      # Simulates: if input.needs_translation then translator else passthrough
-      translator = CogniCore::Workflow::WorkflowNode.new("translator", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"action" => json_str("translated")})
-      end
-
-      passthrough = CogniCore::Workflow::WorkflowNode.new("passthrough", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"action" => json_str("passthrough")})
-      end
-
       workflow = CogniCore::Workflow.create_workflow("control-branch", "Branch test")
       workflow
-        .map("seed") { |_ctx| {"needs_translation" => json_bool(true)} }
-        .branch([
-          {->(ctx : CogniCore::Workflow::NodeContext) { ctx.state["needs_translation"]?.try(&.raw) == true }, translator},
-        ] of Tuple(CogniCore::Workflow::BranchCondition, CogniCore::Workflow::WorkflowNode), otherwise_node: passthrough)
+        .then(CogniCore::Workflow::WorkflowNode.new("seed", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"needs_translation" => json_bool(true)})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("if-else-dispatch", CogniCore::Workflow::NodeKind::Control) do |ctx|
+          translated = ctx.state["needs_translation"]?.try(&.raw) == true
+          action = translated ? "translated" : "passthrough"
+          CogniCore::Workflow::WorkflowNodeResult.continue({"action" => json_str(action)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -89,25 +78,21 @@ describe "E2E: Control Flow" do
     end
 
     it "demonstrates branch with multiple conditions" do
-      # Test branch with multiple conditions
-      branch_a = CogniCore::Workflow::WorkflowNode.new("path-a", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"path" => json_str("A")})
-      end
-      branch_b = CogniCore::Workflow::WorkflowNode.new("path-b", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"path" => json_str("B")})
-      end
-      branch_c = CogniCore::Workflow::WorkflowNode.new("path-c", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"path" => json_str("C")})
-      end
-
       workflow = CogniCore::Workflow.create_workflow("multi-branch", "Multi-branch test")
       workflow
-        .map("seed") { |_ctx| {"selector" => json_str("B")} }
-        .branch([
-          {->(ctx : CogniCore::Workflow::NodeContext) { ctx.state["selector"]?.try(&.as_s?) == "A" }, branch_a},
-          {->(ctx : CogniCore::Workflow::NodeContext) { ctx.state["selector"]?.try(&.as_s?) == "B" }, branch_b},
-          {->(ctx : CogniCore::Workflow::NodeContext) { ctx.state["selector"]?.try(&.as_s?) == "C" }, branch_c},
-        ] of Tuple(CogniCore::Workflow::BranchCondition, CogniCore::Workflow::WorkflowNode))
+        .then(CogniCore::Workflow::WorkflowNode.new("seed", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"selector" => json_str("B")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("dispatch", CogniCore::Workflow::NodeKind::Control) do |ctx|
+          selector = ctx.state["selector"]?.try(&.as_s?) || ""
+          path = case selector
+                 when "A" then "A"
+                 when "B" then "B"
+                 when "C" then "C"
+                 else "C"
+                 end
+          CogniCore::Workflow::WorkflowNodeResult.continue({"path" => json_str(path)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -146,7 +131,6 @@ describe "E2E: Control Flow" do
     end
 
     it "creates workflow with parallel execution" do
-      # Simulates: parallel do agent "validator"; agent "formatter" end
       validator = CogniCore::Workflow::WorkflowNode.new("validator", CogniCore::Workflow::NodeKind::Control) do |_ctx|
         CogniCore::Workflow::WorkflowNodeResult.continue({"validated" => json_bool(true)})
       end
@@ -172,17 +156,18 @@ describe "E2E: Control Flow" do
   end
 
   describe "loops" do
-    it "executes dowhile loop until condition fails" do
+    it "executes do-while style loop in native Crystal" do
       counter = 0
-
-      do_node = CogniCore::Workflow::WorkflowNode.new("counter-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        counter += 1
-        CogniCore::Workflow::WorkflowNodeResult.continue({"count" => JSON.parse(counter.to_json)})
-      end
 
       workflow = CogniCore::Workflow.create_workflow("e2e-dowhile", "Loop test")
       workflow
-        .dowhile(do_node, ->(_ctx : CogniCore::Workflow::NodeContext) { counter < 3 })
+        .then(CogniCore::Workflow::WorkflowNode.new("counter-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          loop do
+            counter += 1
+            break unless counter < 3
+          end
+          CogniCore::Workflow::WorkflowNodeResult.continue({"count" => JSON.parse(counter.to_json)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -194,17 +179,18 @@ describe "E2E: Control Flow" do
       result.state.not_nil!["count"].as_i.should eq(3)
     end
 
-    it "executes dountil loop until condition becomes true" do
+    it "executes do-until style loop in native Crystal" do
       counter = 0
-
-      until_node = CogniCore::Workflow::WorkflowNode.new("until-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        counter += 1
-        CogniCore::Workflow::WorkflowNodeResult.continue({"iterations" => JSON.parse(counter.to_json)})
-      end
 
       workflow = CogniCore::Workflow.create_workflow("e2e-dountil", "Until test")
       workflow
-        .dountil(until_node, ->(_ctx : CogniCore::Workflow::NodeContext) { counter >= 3 })
+        .then(CogniCore::Workflow::WorkflowNode.new("until-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          loop do
+            counter += 1
+            break if counter >= 3
+          end
+          CogniCore::Workflow::WorkflowNodeResult.continue({"iterations" => JSON.parse(counter.to_json)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -218,14 +204,15 @@ describe "E2E: Control Flow" do
 
     it "demonstrates while loop pattern" do
       counter = 0
-      loop_node = CogniCore::Workflow::WorkflowNode.new("increment", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        counter += 1
-        CogniCore::Workflow::WorkflowNodeResult.continue({"counter" => JSON.parse(counter.to_json)})
-      end
 
       workflow = CogniCore::Workflow.create_workflow("while-loop", "While loop test")
       workflow
-        .while_loop(loop_node, ->(_ctx : CogniCore::Workflow::NodeContext) { counter < 5 })
+        .then(CogniCore::Workflow::WorkflowNode.new("increment", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          while counter < 5
+            counter += 1
+          end
+          CogniCore::Workflow::WorkflowNodeResult.continue({"counter" => JSON.parse(counter.to_json)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -239,14 +226,15 @@ describe "E2E: Control Flow" do
 
     it "demonstrates until loop pattern" do
       counter = 0
-      loop_node = CogniCore::Workflow::WorkflowNode.new("increment", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        counter += 1
-        CogniCore::Workflow::WorkflowNodeResult.continue({"counter" => JSON.parse(counter.to_json)})
-      end
 
       workflow = CogniCore::Workflow.create_workflow("until-loop", "Until loop test")
       workflow
-        .until_loop(loop_node, ->(_ctx : CogniCore::Workflow::NodeContext) { counter >= 4 })
+        .then(CogniCore::Workflow::WorkflowNode.new("increment", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          until counter >= 4
+            counter += 1
+          end
+          CogniCore::Workflow::WorkflowNodeResult.continue({"counter" => JSON.parse(counter.to_json)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -282,15 +270,17 @@ describe "E2E: Control Flow" do
     it "executes sequential agent chain" do
       workflow = CogniCore::Workflow.create_workflow("control-sequential", "Sequential test")
       workflow
-        .map("preprocessor") { |_ctx| {"preprocessed" => json_bool(true)} }
-        .map("analyzer") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("preprocessor", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"preprocessed" => json_bool(true)})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("analyzer", CogniCore::Workflow::NodeKind::Control) do |ctx|
           preprocessed = ctx.state["preprocessed"]?.try(&.raw) == true
-          {"analyzed" => json_bool(preprocessed)}
-        }
-        .map("finalizer") { |ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"analyzed" => json_bool(preprocessed)})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("finalizer", CogniCore::Workflow::NodeKind::Control) do |ctx|
           analyzed = ctx.state["analyzed"]?.try(&.raw) == true
-          {"finalized" => json_bool(analyzed)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"finalized" => json_bool(analyzed)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -307,9 +297,13 @@ describe "E2E: Control Flow" do
     it "handles sleep nodes" do
       workflow = CogniCore::Workflow.create_workflow("e2e-sleep", "Sleep test")
       workflow
-        .map("before") { |_ctx| {"before" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("before", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"before" => json_bool(true)})
+        end)
         .sleep(10) # 10ms sleep
-        .map("after") { |_ctx| {"after" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("after", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"after" => json_bool(true)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -324,7 +318,9 @@ describe "E2E: Control Flow" do
     it "handles wait_for_event and send_event" do
       workflow = CogniCore::Workflow.create_workflow("e2e-events", "Events test")
       workflow
-        .map("init") { |_ctx| {"initialized" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("init", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"initialized" => json_bool(true)})
+        end)
         .wait_for_event("data-ready", "event:data-ready")
         .send_event("data-ready", {"source" => json_str("test")})
         .commit

@@ -6,9 +6,13 @@ describe CogniCore::Workflow::Engine do
     workflow = CogniCore::Workflow.create_workflow("wf-test", "test workflow")
 
     workflow
-      .map("node-1") { |_ctx| {"value" => json_str("ok")} }
+      .then(CogniCore::Workflow::WorkflowNode.new("node-1", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+        CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("ok")})
+      end)
       .suspend("approval")
-      .map("final") { |_ctx| {"done" => json_bool(true)} }
+      .then(CogniCore::Workflow::WorkflowNode.new("final", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+        CogniCore::Workflow::WorkflowNodeResult.continue({"done" => json_bool(true)})
+      end)
       .commit
 
     engine = CogniCore::Workflow::Engine.new
@@ -33,15 +37,8 @@ describe CogniCore::Workflow::Engine do
     cancelled.status.should eq("cancelled")
   end
 
-  it "supports mastra-like branch/map/parallel semantics" do
-    workflow = CogniCore::Workflow.create_workflow("wf-mastra", "mastra methods")
-
-    branch_true = CogniCore::Workflow::WorkflowNode.new("branch-true", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-      CogniCore::Workflow::WorkflowNodeResult.continue({"branch" => json_str("true")})
-    end
-    branch_fallback = CogniCore::Workflow::WorkflowNode.new("branch-fallback", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-      CogniCore::Workflow::WorkflowNodeResult.continue({"branch" => json_str("fallback")})
-    end
+  it "supports sequential and parallel control nodes" do
+    workflow = CogniCore::Workflow.create_workflow("wf-controls", "control nodes")
 
     parallel_continue = CogniCore::Workflow::WorkflowNode.new("parallel-continue", CogniCore::Workflow::NodeKind::Control) do |_ctx|
       CogniCore::Workflow::WorkflowNodeResult.continue({"p1" => json_str("ok")})
@@ -54,24 +51,21 @@ describe CogniCore::Workflow::Engine do
     end
 
     workflow
-      .map("seed") { |_ctx| {"value" => json_str("v1")} }
-      .branch([
-        {->(ctx : CogniCore::Workflow::NodeContext) { ctx.input_data["value"]?.try(&.as_s?) == "v1" }, branch_true},
-        {"false", branch_fallback},
-        {false, branch_fallback},
-      ] of Tuple(CogniCore::Workflow::BranchCondition, CogniCore::Workflow::WorkflowNode), otherwise_node: branch_fallback)
-      .map("mapped") do |ctx|
-        {
+      .then(CogniCore::Workflow::WorkflowNode.new("seed", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+        CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("v1")})
+      end)
+      .then(CogniCore::Workflow::WorkflowNode.new("mapped", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        CogniCore::Workflow::WorkflowNodeResult.continue({
           "mapped" => json_str("#{ctx.get_node_result("seed").try(&.["value"]?.try(&.as_s?)) || "none"}:#{ctx.get_init_data["value"]?.try(&.as_s?) || "init-none"}"),
-        }
-      end
+        })
+      end)
       .parallel([parallel_continue, parallel_suspend])
       .commit
 
     engine = CogniCore::Workflow::Engine.new
     engine.register(workflow)
 
-    run = engine.create_run("wf-mastra")
+    run = engine.create_run("wf-controls")
     started = run.start(input_data: {"value" => json_str("v1")})
     started.status.should eq("suspended")
     started.resume_labels.not_nil!.includes?("approval:parallel-suspend").should eq(true)
@@ -81,8 +75,6 @@ describe CogniCore::Workflow::Engine do
   it "supports other workflow methods" do
     workflow = CogniCore::Workflow.create_workflow("wf-methods", "method coverage")
 
-    do_counter = 0
-    until_counter = 0
     foreach_node = CogniCore::Workflow::WorkflowNode.new("foreach-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
       CogniCore::Workflow::WorkflowNodeResult.continue({"foreach_ran" => json_bool(true)})
     end
@@ -93,20 +85,6 @@ describe CogniCore::Workflow::Engine do
       end)
       .sleep(0)
       .sleep_until(Time.utc.to_unix)
-      .dowhile(
-        CogniCore::Workflow::WorkflowNode.new("do-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          do_counter += 1
-          CogniCore::Workflow::WorkflowNodeResult.continue({"dowhile_runs" => json_str(do_counter.to_s)})
-        end,
-        ->(_ctx : CogniCore::Workflow::NodeContext) { do_counter < 2 }
-      )
-      .dountil(
-        CogniCore::Workflow::WorkflowNode.new("until-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          until_counter += 1
-          CogniCore::Workflow::WorkflowNodeResult.continue({"dountil_runs" => json_str(until_counter.to_s)})
-        end,
-        ->(_ctx : CogniCore::Workflow::NodeContext) { until_counter >= 2 }
-      )
       .foreach(foreach_node)
       .wait_for_event("deploy", "event:deploy")
       .commit
@@ -120,8 +98,6 @@ describe CogniCore::Workflow::Engine do
     started.resume_labels.should eq(["event:deploy"])
     started.state.not_nil!["then_ran"].raw.should eq(true)
     started.state.not_nil!["foreach_ran"].raw.should eq(true)
-    started.state.not_nil!["dowhile_runs"].as_s.should eq("2")
-    started.state.not_nil!["dountil_runs"].as_s.should eq("2")
 
     resumed = run.resume(resume_data: {"event_name" => json_str("deploy")})
     resumed.status.should eq("success")

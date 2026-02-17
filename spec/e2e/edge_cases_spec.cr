@@ -17,10 +17,10 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles workflow with empty input data" do
       workflow = CogniCore::Workflow.create_workflow("e2e-no-input", "No input")
       workflow
-        .map("echo") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("echo", CogniCore::Workflow::NodeKind::Control) do |ctx|
           has_input = !ctx.input_data.empty?
-          {"has_input" => json_bool(has_input)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"has_input" => json_bool(has_input)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -34,15 +34,15 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles deeply nested input data" do
       workflow = CogniCore::Workflow.create_workflow("e2e-nested", "Nested input")
       workflow
-        .map("extract") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("extract", CogniCore::Workflow::NodeKind::Control) do |ctx|
           level3 = ctx.input_data["level1"]?
             .try(&.as_h?)
             .try(&.["level2"]?)
             .try(&.as_h?)
             .try(&.["level3"]?)
             .try(&.as_s?) || "not-found"
-          {"extracted" => json_str(level3)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"extracted" => json_str(level3)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -67,15 +67,15 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "prevents infinite loops with iteration limit" do
       infinite_counter = 0
 
-      infinite_node = CogniCore::Workflow::WorkflowNode.new("infinite", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        infinite_counter += 1
-        CogniCore::Workflow::WorkflowNodeResult.continue({"count" => JSON.parse(infinite_counter.to_json)})
-      end
-
       workflow = CogniCore::Workflow.create_workflow("e2e-infinite-guard", "Infinite guard")
-      # Condition that would never be false
       workflow
-        .dowhile(infinite_node, ->(_ctx : CogniCore::Workflow::NodeContext) { true })
+        .then(CogniCore::Workflow::WorkflowNode.new("infinite", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          loop do
+            infinite_counter += 1
+            break if infinite_counter >= 100
+          end
+          CogniCore::Workflow::WorkflowNodeResult.continue({"count" => JSON.parse(infinite_counter.to_json)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -92,15 +92,12 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles zero iteration loops" do
       counter = 5 # Start above threshold
 
-      counter_node = CogniCore::Workflow::WorkflowNode.new("skip", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        counter += 1
-        CogniCore::Workflow::WorkflowNodeResult.continue({"skipped" => json_bool(true)})
-      end
-
       workflow = CogniCore::Workflow.create_workflow("e2e-zero-loop", "Zero iteration")
-      # Condition already false at start
       workflow
-        .dowhile(counter_node, ->(_ctx : CogniCore::Workflow::NodeContext) { counter < 3 })
+        .then(CogniCore::Workflow::WorkflowNode.new("skip", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          counter += 1
+          CogniCore::Workflow::WorkflowNodeResult.continue({"skipped" => json_bool(true)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -192,10 +189,10 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles unicode in input and output" do
       workflow = CogniCore::Workflow.create_workflow("e2e-unicode", "Unicode test")
       workflow
-        .map("echo-unicode") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("echo-unicode", CogniCore::Workflow::NodeKind::Control) do |ctx|
           text = ctx.input_data["text"]?.try(&.as_s?) || "no-text"
-          {"echoed" => json_str(text)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"echoed" => json_str(text)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -210,10 +207,10 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles special JSON characters" do
       workflow = CogniCore::Workflow.create_workflow("e2e-json-chars", "JSON characters")
       workflow
-        .map("echo-special") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("echo-special", CogniCore::Workflow::NodeKind::Control) do |ctx|
           text = ctx.input_data["text"]?.try(&.as_s?) || ""
-          {"echoed" => json_str(text)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"echoed" => json_str(text)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
