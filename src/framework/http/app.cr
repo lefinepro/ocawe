@@ -488,18 +488,18 @@ module ACD
           end
           # Resource allocation annotation: @[Resources(model: "...", skill: ["..."], tool: ["..."])]
           if line.match(/^\s*@\[Resources\(/)
-            annotation = line
-            unless annotation.includes?(")]")
+            resources_annotation = line
+            unless resources_annotation.includes?(")]")
               while i < end_line
                 continuation = ctx.lines[i].strip
-                annotation = "#{annotation} #{continuation}"
+                resources_annotation = "#{resources_annotation} #{continuation}"
                 i += 1
                 break if continuation.includes?(")]")
               end
             end
 
-            match = annotation.match(/^\s*@\[Resources\((.*)\)\]\s*$/)
-            raise "#{ctx.workflow_file}: invalid Resources annotation syntax '#{annotation}'" unless match
+            match = resources_annotation.match(/^\s*@\[Resources\((.*)\)\]\s*$/)
+            raise "#{ctx.workflow_file}: invalid Resources annotation syntax '#{resources_annotation}'" unless match
 
             params = parse_resources_annotation_params(match[1])
             model = params[:model]
