@@ -5,6 +5,7 @@ require "./framework/cognicore/config/app_config"
 require "./framework/cognicore/schema/types"
 require "./framework/cognicore/schema/crystal_dsl"
 require "./framework/cognicore/workflow/run"
+require "./framework/cogni/public_api"
 require "./framework/http/app"
 
 module CogniCore

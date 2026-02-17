@@ -110,18 +110,24 @@ module CogniCore
         end
       end
 
-      def fn(
-        name : String,
+      def run(
+        ref : String,
+        runtime : AnyHash? = nil,
+        env : AnyHash? = nil,
+        workflow_root : String? = nil,
         params : AnyHash? = nil,
         input_schema : Schema::Validator? = nil,
         output_schema : Schema::Validator? = nil
       ) : self
         metadata = {} of String => JSON::Any
+        metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
+        metadata["env"] = JSON.parse(env.to_json) if env
+        metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
         metadata["params"] = JSON.parse(params.to_json) if params
 
-        append_node(WorkflowNode.new(name, NodeKind::Fn, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          result = Workflow.function_registry.call(name, ctx)
-          WorkflowNodeResult.continue(result.to_any_hash)
+        executor = RunExecutor.new
+        append_node(WorkflowNode.new(ref, NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          WorkflowNodeResult.continue(executor.run(ref, ctx, runtime: runtime, env: env, workflow_root: workflow_root))
         end)
       end
 
@@ -201,31 +207,6 @@ module CogniCore
         selected_agent = agent || agent_id
         meta["agent_id"] = JSON.parse(selected_agent.to_json) if selected_agent
         append_node(WorkflowNode.new(id, NodeKind::Skill, metadata: meta, input_schema: input_schema, output_schema: output_schema) { |_ctx| WorkflowNodeResult.continue })
-      end
-
-      def tool(
-        ref : String,
-        runtime : AnyHash? = nil,
-        workflow_root : String? = nil,
-        input_schema : Schema::Validator? = nil,
-        output_schema : Schema::Validator? = nil
-      ) : self
-        if runtime.nil? && !snake_case_identifier?(ref)
-          raise "tool '#{ref}' must be a snake_case crystal function name when runtime is not provided"
-        end
-
-        metadata = {} of String => JSON::Any
-        metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
-        metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
-
-        executor = ToolExecutor.new
-        append_node(WorkflowNode.new(ref, NodeKind::Tool, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(executor.run(ref, ctx, runtime: runtime, workflow_root: workflow_root))
-        end)
-      end
-
-      private def snake_case_identifier?(value : String) : Bool
-        !!(value =~ /\A[a-z][a-z0-9_]*\z/)
       end
 
       # Voice node implemented as first-class DSL behavior.
@@ -360,6 +341,69 @@ module CogniCore
         append_node(node)
       end
 
+      def while_do(condition : String, nodes : Array(WorkflowNode), max_iterations : Int32 = 100) : self
+        ensure_not_committed!
+        body = wrap_nodes_in_control(nodes, "while-body")
+        append_node(WorkflowNode.new("while-#{@nodes.size}", NodeKind::Control) do |ctx|
+          iterations = 0
+          merged = {} of String => JSON::Any
+          result = WorkflowNodeResult.continue
+
+          while evaluate_condition(condition, with_state(ctx, merged)) && iterations < max_iterations
+            iterations += 1
+            result = body.execute(with_state(ctx, merged))
+            break if result.action != NodeAction::Continue.to_s.downcase
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+
+          result.action == NodeAction::Continue.to_s.downcase ? WorkflowNodeResult.continue(merged) : result
+        end)
+      end
+
+      def until_do(condition : String, nodes : Array(WorkflowNode), max_iterations : Int32 = 100) : self
+        ensure_not_committed!
+        body = wrap_nodes_in_control(nodes, "until-body")
+        append_node(WorkflowNode.new("until-#{@nodes.size}", NodeKind::Control) do |ctx|
+          iterations = 0
+          merged = {} of String => JSON::Any
+          result = WorkflowNodeResult.continue
+
+          while !evaluate_condition(condition, with_state(ctx, merged)) && iterations < max_iterations
+            iterations += 1
+            result = body.execute(with_state(ctx, merged))
+            break if result.action != NodeAction::Continue.to_s.downcase
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+
+          result.action == NodeAction::Continue.to_s.downcase ? WorkflowNodeResult.continue(merged) : result
+        end)
+      end
+
+      def loop_do(nodes : Array(WorkflowNode), max_iterations : Int32 = 100) : self
+        ensure_not_committed!
+        body = wrap_nodes_in_control(nodes, "loop-body")
+        append_node(WorkflowNode.new("loop-#{@nodes.size}", NodeKind::Control) do |ctx|
+          iterations = 0
+          merged = {} of String => JSON::Any
+          result = WorkflowNodeResult.continue
+
+          while iterations < max_iterations
+            iterations += 1
+            result = body.execute(with_state(ctx, merged))
+            break if result.action != NodeAction::Continue.to_s.downcase
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+
+          result.action == NodeAction::Continue.to_s.downcase ? WorkflowNodeResult.continue(merged) : result
+        end)
+      end
+
       def wait_for_event(event_name : String, resume_label : String? = nil) : self
         ensure_not_committed!
 
@@ -452,6 +496,73 @@ module CogniCore
           trigger_data: ctx.trigger_data,
           resume_data: ctx.resume_data,
         )
+      end
+
+      private def wrap_nodes_in_control(nodes : Array(WorkflowNode), name : String) : WorkflowNode
+        WorkflowNode.new(name, NodeKind::Control) do |ctx|
+          merged = {} of String => JSON::Any
+          failed = nil.as(WorkflowNodeResult?)
+          nodes.each do |node|
+            result = node.execute(with_state(ctx, merged, node.id))
+            if result.action != NodeAction::Continue.to_s.downcase
+              failed = result
+              break
+            end
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+          failed || WorkflowNodeResult.continue(merged)
+        end
+      end
+
+      private def with_state(ctx : NodeContext, additions : AnyHash, node_id : String? = nil) : NodeContext
+        NodeContext.new(
+          workflow_id: ctx.workflow_id,
+          run_id: ctx.run_id,
+          node_id: node_id || ctx.node_id,
+          input_data: ctx.input_data,
+          state: ctx.state.merge(additions) { |_k, _left, right| right },
+          init_data: ctx.init_data,
+          node_results: ctx.node_results,
+          runtime_context: ctx.runtime_context,
+          request_context: ctx.request_context,
+          trigger_data: ctx.trigger_data,
+          resume_data: ctx.resume_data,
+        )
+      end
+
+      private def evaluate_condition(expression : String, ctx : NodeContext) : Bool
+        normalized = expression.strip
+        return true if normalized == "true"
+        return false if normalized == "false"
+
+        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)\s*==\s*"([^"]*)"$/)
+          actual = ctx.input_data[match[1]]?.try(&.as_s?) || ctx.state[match[1]]?.try(&.as_s?)
+          return actual == match[2]
+        end
+        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)\s*!=\s*"([^"]*)"$/)
+          actual = ctx.input_data[match[1]]?.try(&.as_s?) || ctx.state[match[1]]?.try(&.as_s?)
+          return actual != match[2]
+        end
+        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)\s*==\s*"([^"]*)"$/)
+          actual = ctx.state[match[1]]?.try(&.as_s?)
+          return actual == match[2]
+        end
+        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)\s*!=\s*"([^"]*)"$/)
+          actual = ctx.state[match[1]]?.try(&.as_s?)
+          return actual != match[2]
+        end
+
+        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)$/)
+          value = ctx.input_data[match[1]]? || ctx.state[match[1]]?
+          return value.try(&.raw) == true
+        end
+        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)$/)
+          return ctx.state[match[1]]?.try(&.raw) == true
+        end
+
+        false
       end
 
       private def resolve_model(ctx : NodeContext, agent_model : String?) : String

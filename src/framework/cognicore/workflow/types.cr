@@ -21,9 +21,8 @@ module CogniCore
     enum NodeKind
       Agent
       Skill
-      Tool
+      Run
       Suspend
-      Fn
       Voice
       Rag
       Control
