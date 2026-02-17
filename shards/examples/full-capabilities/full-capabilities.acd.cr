@@ -4,10 +4,8 @@
 # tool project_healthcheck
 
 workflow "full-capabilities" do
-  # Unified use attribute (new syntax)
-  use model: "cliproxyapi/qwen3-coder-plus",
-      skill: ["full-skill"],
-      tool: ["echo-json"]
+  # Unified resources annotation
+  @[Resources(model: "cliproxyapi/qwen3-coder-plus", skill: ["full-skill"], tool: ["echo-json"])]
 
   agent "full-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
   skill "full-skill", agent: "full-agent"
@@ -21,5 +19,5 @@ workflow "full-capabilities" do
 
   voice "voice-step", config: {provider: "openai", speaker: "alloy"}
   rag "rag-step", config: {operation: "query", vectorStoreName: "memory", indexName: "full-capabilities-index", topK: 3}
-  approve "manual-approval", reason: "Confirm run output"
+  suspend "manual-approval", reason: "Confirm run output"
 end

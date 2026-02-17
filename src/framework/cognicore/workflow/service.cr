@@ -9,6 +9,7 @@ module CogniCore
         run_id : String? = nil,
         resource_id : String? = nil,
         input_data : AnyHash = {} of String => JSON::Any,
+        resources : AnyHash? = nil,
         request_context : AnyHash? = nil,
         output_options : WorkflowOutputOptions = WorkflowOutputOptions.new,
         runtime_context : AnyHash? = nil,
@@ -17,6 +18,7 @@ module CogniCore
         run = @engine.create_run(workflow_id, WorkflowRunOptions.new(run_id, resource_id))
         result = run.start(
           input_data: input_data,
+          resources: resources,
           request_context: request_context,
           output_options: output_options,
           runtime_context: runtime_context,
@@ -30,6 +32,7 @@ module CogniCore
         workflow_id : String,
         run_id : String,
         resume_data : AnyHash = {} of String => JSON::Any,
+        resources : AnyHash? = nil,
         node : String | Array(String) | Nil = nil,
         request_context : AnyHash? = nil,
         output_options : WorkflowOutputOptions = WorkflowOutputOptions.new,
@@ -40,6 +43,7 @@ module CogniCore
         run = hydrate_run(workflow_id, run_id)
         result = run.resume(
           resume_data: resume_data,
+          resources: resources,
           node: node,
           request_context: request_context,
           output_options: output_options,

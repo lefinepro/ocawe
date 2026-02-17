@@ -4,12 +4,10 @@ This example demonstrates the unified resource management features introduced in
 
 ## Features Demonstrated
 
-### 1. Unified `use` Attribute
+### 1. `@[Resources(...)]` Annotation
 
 ```crystal
-use model: "openai/gpt-4.1",
-    skill: ["translation", "summarization"],
-    tool: ["http-client"]
+@[Resources(model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"])]
 ```
 
 This provides a unified approach that supports:

@@ -4,6 +4,8 @@ OpenAPI snapshot is stored in `docs/api/openapi.json`.
 
 Key endpoints:
 - `GET /v1/workflows`
+- `POST /v1/workflows/{workflowId}/runs`
+- `POST /v1/workflows/{workflowId}/runs/{runId}/resume`
 - `GET /v1/tools`
 - `GET /v1/skills`
 - `GET /v1/agents`
@@ -19,3 +21,5 @@ Notes:
 - RAG DSL supports Mastra-compatible request keys: `vectorStoreName`, `indexName`, `queryText`, `topK`, `filter`, `operation`.
 - Agent frontmatter supports `voice` and `guardrails`; guardrail violations fail workflow runs with `422` (`workflow_error` envelope).
 - Agent schema validation can be configured from workflow DSL params (`input_schema`/`output_schema`) and markdown `crystal` schema blocks via `schema_ref("input"|"output")`.
+- Resume validation supports `resume_schema` and `schema_ref("resume")`.
+- Runs API supports inline `resources` object in both `POST /runs` and `POST /resume`; runtime merges it into `state["resources"]`.

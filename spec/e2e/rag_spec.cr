@@ -119,7 +119,7 @@ describe "E2E: RAG Operations" do
           "vectorStoreName" => json_str("memory"),
           "indexName"       => json_str("test-index"),
         })
-        .approve("confirm", reason: "Confirm RAG results")
+        .suspend("confirm", reason: "Confirm RAG results")
         .commit
 
       engine = CogniCore::Workflow::Engine.new

@@ -384,12 +384,13 @@ module ACD
         external_tool_pattern = /^\s*tool\s+"([^"]+)"\s*,\s*runtime:\s*(\{.*\})\s*$/
         skill_pattern = /^\s*skill\s+"([^"]+)"(?:\s*,\s*agent:\s*"([^"]+)")?/
         rag_pattern = /^\s*rag\s+"([^"]+)"(?:\s*,\s*config:\s*(\{.*\}))?/
-        approve_pattern = /^\s*approve\s+"([^"]+)"(?:\s*,\s*reason:\s*"([^"]+)")?/
+        suspend_pattern = /^\s*suspend\s+"([^"]+)"(.*)$/
         reserved_keywords = Set{
           "workflow", "do", "end", "struct", "class", "module",
-          "agent", "skill", "tool", "voice", "rag", "approve",
-          "use", "input_type", "output_type", "input_validate", "output_validate",
+          "agent", "skill", "tool", "voice", "rag", "suspend",
+          "input_type", "output_type", "input_validate", "output_validate",
           "parallel", "if", "elsif", "else", "while", "unless", "until",
+          "branch", "dowhile", "dountil", "map",
         }
 
         i = start_line
@@ -464,11 +465,19 @@ module ACD
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
 
             ctx.workflow.agent(
               agent_id,
               prompt: prompt,
               model: model,
+              resume_schema: resume_schema,
               voice_config: loaded.try(&.voice_config),
               guardrails_config: loaded.try(&.guardrails_config),
               input_schema: input_schema,
@@ -477,14 +486,33 @@ module ACD
             ctx.last_agent_id = agent_id
             next
           end
-          # Unified use attribute: use model: "...", skill: ["..."], tool: ["..."]
-          if line.match(/^\s*use\s+/)
-            params = parse_use_params(line, ctx.workflow_file)
+          # Resource allocation annotation: @[Resources(model: "...", skill: ["..."], tool: ["..."])]
+          if line.match(/^\s*@\[Resources\(/)
+            annotation = line
+            unless annotation.includes?(")]")
+              while i < end_line
+                continuation = ctx.lines[i].strip
+                annotation = "#{annotation} #{continuation}"
+                i += 1
+                break if continuation.includes?(")]")
+              end
+            end
+
+            match = annotation.match(/^\s*@\[Resources\((.*)\)\]\s*$/)
+            raise "#{ctx.workflow_file}: invalid Resources annotation syntax '#{annotation}'" unless match
+
+            params = parse_resources_annotation_params(match[1])
             model = params[:model]
             skill = params[:skill]
             tool = params[:tool]
             ctx.workflow.use(model: model, skill: skill, tool: tool)
             next
+          end
+          if line.match(/^\s*@resources\s+/)
+            raise "#{ctx.workflow_file}: `@resources` is not a Crystal annotation. Use `@[Resources(model: \"...\", skill: [...], tool: [...])]`."
+          end
+          if line.match(/^\s*use\s+/)
+            raise "#{ctx.workflow_file}: `use` keyword is deprecated. Use `@[Resources(model: \"...\", skill: [...], tool: [...])]`."
           end
           if match = line.match(skill_pattern)
             ctx.workflow.skill(match[1], agent: match[2]?)
@@ -520,9 +548,25 @@ module ACD
           if line.starts_with?("tool ")
             raise "#{ctx.workflow_file}: unsupported tool syntax '#{line}'. Use `tool snake_case_fn` or `tool \"path\", runtime: { ... }`"
           end
-          if match = line.match(approve_pattern)
-            ctx.workflow.approve(match[1], reason: match[2]? || "human approval required")
+          if match = line.match(suspend_pattern)
+            suspend_id = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "suspend #{suspend_id}")
+            reason = parse_optional_string(params["reason"]?) || "human input required"
+            resume_schema = resolve_suspend_resume_schema(
+              params["resume_schema"]?,
+              ctx: ctx,
+              suspend_id: suspend_id
+            )
+            ctx.workflow.suspend(suspend_id, reason: reason, resume_schema: resume_schema)
             next
+          end
+          if line.match(/^\s*approve\s+/)
+            raise "#{ctx.workflow_file}: `approve` is deprecated. Use `suspend \"id\", reason: \"...\", resume_schema: ...`."
+            next
+          end
+          if line.match(/^\s*(branch|dowhile|dountil|map)\b/)
+            raise "#{ctx.workflow_file}: legacy control-flow API (`branch|dowhile|dountil|map`) is removed from DSL. Use native Crystal flow (`if/unless/while/until`) and `parallel`."
           end
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             fn_name = match[1]
@@ -638,11 +682,19 @@ module ACD
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
 
             node = create_agent_node(
               agent_id,
               prompt: prompt,
               model: model,
+              resume_schema: resume_schema,
               voice_config: loaded.try(&.voice_config),
               guardrails_config: loaded.try(&.guardrails_config),
               input_schema: input_schema,
@@ -660,7 +712,7 @@ module ACD
 
       # Parse if/elsif/else conditional block
       private def parse_conditional_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
-        conditions = [] of Tuple(CogniCore::Workflow::BranchCondition, CogniCore::Workflow::WorkflowNode)
+        conditions = [] of Tuple(String, CogniCore::Workflow::WorkflowNode)
         otherwise_node = nil.as(CogniCore::Workflow::WorkflowNode?)
 
         i = start_line
@@ -736,11 +788,19 @@ module ACD
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
 
             node = create_agent_node(
               agent_id,
               prompt: prompt,
               model: model,
+              resume_schema: resume_schema,
               voice_config: loaded.try(&.voice_config),
               guardrails_config: loaded.try(&.guardrails_config),
               input_schema: input_schema,
@@ -751,8 +811,17 @@ module ACD
           end
         end
 
-        # Add the branch to the workflow
-        ctx.workflow.branch(conditions, otherwise_node) unless conditions.empty?
+        return if conditions.empty? && otherwise_node.nil?
+
+        conditional_node = CogniCore::Workflow::WorkflowNode.new("if-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+          selected = conditions.find { |(condition, _)| evaluate_dsl_condition(condition, node_ctx) }.try(&.[1]) || otherwise_node
+          if selected
+            selected.execute(node_ctx)
+          else
+            CogniCore::Workflow::WorkflowNodeResult.continue
+          end
+        end
+        ctx.workflow.then(conditional_node)
       end
 
       # Parse unless...else...end conditional block
@@ -806,11 +875,19 @@ module ACD
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
 
             node = create_agent_node(
               agent_id,
               prompt: prompt,
               model: model,
+              resume_schema: resume_schema,
               voice_config: loaded.try(&.voice_config),
               guardrails_config: loaded.try(&.guardrails_config),
               input_schema: input_schema,
@@ -826,12 +903,19 @@ module ACD
           end
         end
 
-        # Add the unless branch to the workflow
-        if condition && !unless_nodes.empty?
-          unless_branch_node = wrap_nodes_in_control(unless_nodes, "unless-branch")
-          else_branch_node = else_nodes.empty? ? nil : wrap_nodes_in_control(else_nodes, "else-branch")
-          ctx.workflow.unless_branch(condition, unless_branch_node, else_branch_node)
+        return unless condition && !unless_nodes.empty?
+
+        unless_branch_node = wrap_nodes_in_control(unless_nodes, "unless-branch")
+        else_branch_node = else_nodes.empty? ? nil : wrap_nodes_in_control(else_nodes, "else-branch")
+        control_node = CogniCore::Workflow::WorkflowNode.new("unless-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+          selected = evaluate_dsl_condition(condition, node_ctx) ? else_branch_node : unless_branch_node
+          if selected
+            selected.execute(node_ctx)
+          else
+            CogniCore::Workflow::WorkflowNodeResult.continue
+          end
         end
+        ctx.workflow.then(control_node)
       end
 
       # Parse while condition do...end loop
@@ -877,11 +961,19 @@ module ACD
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
 
             node = create_agent_node(
               agent_id,
               prompt: prompt,
               model: model,
+              resume_schema: resume_schema,
               voice_config: loaded.try(&.voice_config),
               guardrails_config: loaded.try(&.guardrails_config),
               input_schema: input_schema,
@@ -892,11 +984,30 @@ module ACD
           end
         end
 
-        # Add the while loop to the workflow
-        unless loop_nodes.empty?
-          loop_body = wrap_nodes_in_control(loop_nodes, "while-body")
-          ctx.workflow.while_loop(loop_body, condition)
+        return if loop_nodes.empty?
+
+        loop_body = wrap_nodes_in_control(loop_nodes, "while-body")
+        control_node = CogniCore::Workflow::WorkflowNode.new("while-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+          iterations = 0
+          merged = {} of String => JSON::Any
+          result = CogniCore::Workflow::WorkflowNodeResult.continue
+
+          while evaluate_dsl_condition(condition, with_state(node_ctx, merged)) && iterations < 100
+            iterations += 1
+            result = loop_body.execute(with_state(node_ctx, merged))
+            break if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+
+          if result.action == CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            CogniCore::Workflow::WorkflowNodeResult.continue(merged)
+          else
+            result
+          end
         end
+        ctx.workflow.then(control_node)
       end
 
       # Parse until condition do...end loop
@@ -942,11 +1053,19 @@ module ACD
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
 
             node = create_agent_node(
               agent_id,
               prompt: prompt,
               model: model,
+              resume_schema: resume_schema,
               voice_config: loaded.try(&.voice_config),
               guardrails_config: loaded.try(&.guardrails_config),
               input_schema: input_schema,
@@ -957,11 +1076,30 @@ module ACD
           end
         end
 
-        # Add the until loop to the workflow
-        unless loop_nodes.empty?
-          loop_body = wrap_nodes_in_control(loop_nodes, "until-body")
-          ctx.workflow.until_loop(loop_body, condition)
+        return if loop_nodes.empty?
+
+        loop_body = wrap_nodes_in_control(loop_nodes, "until-body")
+        control_node = CogniCore::Workflow::WorkflowNode.new("until-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+          iterations = 0
+          merged = {} of String => JSON::Any
+          result = CogniCore::Workflow::WorkflowNodeResult.continue
+
+          while !evaluate_dsl_condition(condition, with_state(node_ctx, merged)) && iterations < 100
+            iterations += 1
+            result = loop_body.execute(with_state(node_ctx, merged))
+            break if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+
+          if result.action == CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            CogniCore::Workflow::WorkflowNodeResult.continue(merged)
+          else
+            result
+          end
         end
+        ctx.workflow.then(control_node)
       end
 
       # Create an agent node (used for parallel and conditional blocks)
@@ -969,13 +1107,17 @@ module ACD
         id : String,
         prompt : String? = nil,
         model : String? = nil,
+        resume_schema : CogniCore::Schema::Validator? = nil,
         voice_config : CogniCore::Workflow::AnyHash? = nil,
         guardrails_config : CogniCore::Workflow::AnyHash? = nil,
         input_schema : CogniCore::Schema::Validator? = nil,
         output_schema : CogniCore::Schema::Validator? = nil,
         default_model : String? = nil
       ) : CogniCore::Workflow::WorkflowNode
-        CogniCore::Workflow::WorkflowNode.new(id, CogniCore::Workflow::NodeKind::Agent, input_schema: input_schema, output_schema: output_schema) do |ctx|
+        metadata = {} of String => JSON::Any
+        metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema
+
+        CogniCore::Workflow::WorkflowNode.new(id, CogniCore::Workflow::NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           user_prompt = build_agent_user_prompt_from_ctx(ctx)
           CogniCore::Workflow::Guardrails.validate_input!(id, user_prompt, guardrails_config)
 
@@ -1051,6 +1193,65 @@ module ACD
         end
       end
 
+      private def with_state(ctx : CogniCore::Workflow::NodeContext, additions : Hash(String, JSON::Any)) : CogniCore::Workflow::NodeContext
+        CogniCore::Workflow::NodeContext.new(
+          workflow_id: ctx.workflow_id,
+          run_id: ctx.run_id,
+          node_id: ctx.node_id,
+          input_data: ctx.input_data,
+          state: ctx.state.merge(additions) { |_k, _left, right| right },
+          init_data: ctx.init_data,
+          node_results: ctx.node_results,
+          runtime_context: ctx.runtime_context,
+          request_context: ctx.request_context,
+          trigger_data: ctx.trigger_data,
+          resume_data: ctx.resume_data,
+        )
+      end
+
+      private def evaluate_dsl_condition(expression : String, ctx : CogniCore::Workflow::NodeContext) : Bool
+        normalized = expression.strip
+        return true if normalized == "true"
+        return false if normalized == "false"
+
+        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)\s*==\s*"([^"]*)"$/)
+          actual = ctx.input_data[match[1]]?.try(&.as_s?) || ctx.state[match[1]]?.try(&.as_s?)
+          return actual == match[2]
+        end
+        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)\s*!=\s*"([^"]*)"$/)
+          actual = ctx.input_data[match[1]]?.try(&.as_s?) || ctx.state[match[1]]?.try(&.as_s?)
+          return actual != match[2]
+        end
+        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)\s*==\s*"([^"]*)"$/)
+          actual = ctx.state[match[1]]?.try(&.as_s?)
+          return actual == match[2]
+        end
+        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)\s*!=\s*"([^"]*)"$/)
+          actual = ctx.state[match[1]]?.try(&.as_s?)
+          return actual != match[2]
+        end
+        if match = normalized.match(/^(input|state)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|<=|>|<)\s*([0-9]+(?:\.[0-9]+)?)$/)
+          source = match[1] == "input" ? ctx.input_data : ctx.state
+          actual = source[match[2]]?.try(&.as_f?) || source[match[2]]?.try(&.as_i?).try(&.to_f)
+          return false unless actual
+          target = match[4].to_f
+          op = match[3]
+          return actual >= target if op == ">="
+          return actual <= target if op == "<="
+          return actual > target if op == ">"
+          return actual < target if op == "<"
+        end
+        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)$/)
+          value = ctx.input_data[match[1]]? || ctx.state[match[1]]?
+          return value.try(&.raw) == true
+        end
+        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)$/)
+          return ctx.state[match[1]]?.try(&.raw) == true
+        end
+
+        false
+      end
+
       # Helper to build agent user prompt from context
       private def build_agent_user_prompt_from_ctx(ctx : CogniCore::Workflow::NodeContext) : String
         if input = ctx.input_data["input"]?
@@ -1096,6 +1297,8 @@ module ACD
                               loaded.try(&.input_schema_dsl)
                             when "output"
                               loaded.try(&.output_schema_dsl)
+                            when "resume"
+                              loaded.try(&.resume_schema_dsl)
                             else
                               raise "#{workflow_file}: unknown schema_ref(\"#{ref_name}\") for agent #{agent_id}"
                             end
@@ -1106,9 +1309,43 @@ module ACD
           return CogniCore::Schema::CrystalDSL.compile(stripped, "#{workflow_file}: agent #{agent_id} #{kind} schema")
         end
 
-        fallback = kind == "input" ? loaded.try(&.input_schema_dsl) : loaded.try(&.output_schema_dsl)
+        fallback = case kind
+                   when "input"
+                     loaded.try(&.input_schema_dsl)
+                   when "output"
+                     loaded.try(&.output_schema_dsl)
+                   when "resume"
+                     loaded.try(&.resume_schema_dsl)
+                   else
+                     nil
+                   end
         return nil unless fallback
         CogniCore::Schema::CrystalDSL.compile(fallback, "#{workflow_file}: agent #{agent_id} #{kind} markdown schema")
+      end
+
+      private def resolve_suspend_resume_schema(
+        literal : String?,
+        ctx : WorkflowParserContext,
+        suspend_id : String
+      ) : CogniCore::Schema::Validator?
+        return nil unless literal
+        stripped = literal.strip
+
+        if match = stripped.match(/^schema_ref\("([^"]+)"\)$/)
+          ref_name = match[1]
+          raise "#{ctx.workflow_file}: suspend #{suspend_id} only supports schema_ref(\"resume\")" unless ref_name == "resume"
+
+          agent_id = ctx.last_agent_id
+          raise "#{ctx.workflow_file}: suspend #{suspend_id} schema_ref(\"resume\") requires a preceding agent node" unless agent_id
+
+          loaded = ctx.agent_index[agent_id]?
+          schema_source = loaded.try(&.resume_schema_dsl)
+          raise "#{ctx.workflow_file}: schema_ref(\"resume\") missing in agent #{agent_id} markdown" unless schema_source
+
+          return CogniCore::Schema::CrystalDSL.compile(schema_source, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema_ref")
+        end
+
+        CogniCore::Schema::CrystalDSL.compile(stripped, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema")
       end
 
       private def parse_line_params(tail : String, workflow_file : String, context : String) : Hash(String, String)
@@ -1269,10 +1506,8 @@ module ACD
         raise "#{workflow_file}: invalid runtime object '#{literal}': #{ex.message}"
       end
 
-      # Parse unified use attribute: use model: "...", skill: ["..."], tool: ["..."]
-      private def parse_use_params(line : String, workflow_file : String) : NamedTuple(model: String?, skill: (String | Array(String))?, tool: (String | Array(String))?)
-        # Extract the part after "use "
-        content = line.sub(/^\s*use\s+/, "").strip
+      # Parse Resources annotation body: model: "...", skill: ["..."], tool: ["..."]
+      private def parse_resources_annotation_params(content : String) : NamedTuple(model: String?, skill: (String | Array(String))?, tool: (String | Array(String))?)
 
         model = nil.as(String?)
         skill = nil.as((String | Array(String))?)

@@ -10,7 +10,7 @@ describe "E2E: Agents and Skills" do
   describe "agents-example" do
     it "creates workflow with model configuration and agent" do
       # Simulates: workflow "agents-example" do
-      #   use model: "cliproxyapi/qwen3-coder-plus"
+      #   @[Resources(model: "cliproxyapi/qwen3-coder-plus")]
       #   agent "simple-agent"
       # end
       workflow = CogniCore::Workflow.create_workflow("agents-example", "Agent example test")

@@ -7,7 +7,7 @@ describe CogniCore::Workflow::Engine do
 
     workflow
       .map("node-1") { |_ctx| {"value" => json_str("ok")} }
-      .approve("approval")
+      .suspend("approval")
       .map("final") { |_ctx| {"done" => json_bool(true)} }
       .commit
 

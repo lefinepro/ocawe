@@ -6,35 +6,33 @@ Example:
 
 ```crystal
 workflow "agents-example" do
-  use model: "cliproxyapi/qwen3-coder-plus"
+  @[Resources(model: "cliproxyapi/qwen3-coder-plus")]
   agent "simple-agent"
 end
 ```
 
 ## Resource Management
 
-### Unified `use` Attribute
+### `@[Resources(...)]` Annotation
 
-The `use` attribute provides a unified way to declare models, skills, and tools:
+The `@[Resources(...)]` annotation provides a unified way to declare models, skills, and tools:
 
 ```crystal
 workflow "example" do
   # Single model
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   # Single skill
-  use skill: "translation"
+  @[Resources(skill: "translation")]
 
   # Multiple skills (array syntax)
-  use skill: ["translation", "summarization"]
+  @[Resources(skill: ["translation", "summarization"])]
 
   # Multiple tools
-  use tool: ["http-client", "file-reader"]
+  @[Resources(tool: ["http-client", "file-reader"])]
 
   # Combined declaration
-  use model: "openai/gpt-4.1",
-      skill: ["translation", "summarization"],
-      tool: ["http-client"]
+  @[Resources(model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"])]
 
   agent "my-agent"
 end
@@ -48,7 +46,7 @@ Execute multiple agents concurrently using `parallel do...end`:
 
 ```crystal
 workflow "parallel-workflow" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   parallel do
     agent "analyzer-1"
@@ -66,7 +64,7 @@ Use Crystal-native `if/elsif/else` for conditional branching:
 
 ```crystal
 workflow "conditional-workflow" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   if input.task == "translate"
     agent "translator-agent"
@@ -88,7 +86,7 @@ Use `unless` for inverted conditional logic (execute when condition is false):
 
 ```crystal
 workflow "unless-workflow" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   unless input.language == "en"
     agent "translator"
@@ -104,7 +102,7 @@ Use `while condition do...end` to repeat execution while condition is true:
 
 ```crystal
 workflow "while-workflow" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   while state.needs_refinement do
     agent "refiner"
@@ -118,7 +116,7 @@ Use `until condition do...end` to repeat execution until condition becomes true:
 
 ```crystal
 workflow "until-workflow" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   until state.quality_score > 0.9 do
     agent "improver"
@@ -132,16 +130,16 @@ end
 
 | Directive | Description |
 |-----------|-------------|
-| `use model: "..."` | Set default model for workflow |
-| `use skill: "..."` or `use skill: [...]` | Declare skills |
-| `use tool: "..."` or `use tool: [...]` | Declare tools |
+| `@[Resources(model: "...")]` | Set default model for workflow |
+| `@[Resources(skill: "...")]` or `@[Resources(skill: [...])]` | Declare skills |
+| `@[Resources(tool: "...")]` or `@[Resources(tool: [...])]` | Declare tools |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
 | `tool snake_case` | Crystal tool function |
 | `tool "path", runtime: {...}` | External tool |
 | `voice "..."` | Voice node |
 | `rag "..."` | RAG node |
-| `approve "..."` | Human approval node |
+| `suspend "..."` | Suspend-and-resume node (`reason`, `resume_schema`) |
 
 ### Agent Options
 
@@ -150,7 +148,8 @@ agent "my-agent",
   model: "openai/gpt-4.1",
   prompt: "Custom system prompt",
   input_schema: schema_ref("input"),
-  output_schema: schema_ref("output")
+  output_schema: schema_ref("output"),
+  resume_schema: schema_ref("resume")
 ```
 
 ### Control Flow
@@ -166,10 +165,13 @@ agent "my-agent",
 ## Agent Schema References
 
 ```crystal
-agent "workflow-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
+agent "workflow-agent",
+  input_schema: schema_ref("input"),
+  output_schema: schema_ref("output"),
+  resume_schema: schema_ref("resume")
 ```
 
-`schema_ref("input")` / `schema_ref("output")` resolve markdown `crystal` schema blocks from the agent file.
+`schema_ref("input")` / `schema_ref("output")` / `schema_ref("resume")` resolve markdown `crystal` schema blocks from the agent file.
 
 For `agent` and bare `snake_case` function nodes, runtime passes a chained input envelope:
 
@@ -185,7 +187,7 @@ If function params are defined in DSL, runtime includes these params as flat fie
 
 ```crystal
 workflow "basic" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
   agent "assistant"
 end
 ```
@@ -194,7 +196,7 @@ end
 
 ```crystal
 workflow "pipeline" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   agent "researcher"
   agent "analyzer"
@@ -206,7 +208,7 @@ end
 
 ```crystal
 workflow "parallel-analysis" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   parallel do
     agent "sentiment-analyzer"
@@ -222,7 +224,7 @@ end
 
 ```crystal
 workflow "smart-router" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   if input.language != "en"
     agent "translator"
@@ -244,6 +246,5 @@ See `shards/examples/full-capabilities/full-capabilities.acd.cr`.
 
 ## Programmatic Control-Flow
 
-Methods like `branch`, `parallel`, `dowhile`, `dountil`, `while_loop`, `until_loop`, `unless_branch`,
-`wait_for_event`, and `send_event` are also available via programmatic workflow DSL in
+`parallel`, `then`, `wait_for_event`, and `send_event` remain available via programmatic workflow DSL in
 `shards/examples/src/control_flow_workflow_example.cr`.

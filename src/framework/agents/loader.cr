@@ -14,6 +14,7 @@ module ACD
       getter guardrails_config : Hash(String, JSON::Any)?
       getter input_schema_dsl : String?
       getter output_schema_dsl : String?
+      getter resume_schema_dsl : String?
 
       def initialize(
         @id : String,
@@ -25,7 +26,8 @@ module ACD
         @voice_config : Hash(String, JSON::Any)? = nil,
         @guardrails_config : Hash(String, JSON::Any)? = nil,
         @input_schema_dsl : String? = nil,
-        @output_schema_dsl : String? = nil
+        @output_schema_dsl : String? = nil,
+        @resume_schema_dsl : String? = nil
       )
       end
     end
@@ -58,6 +60,7 @@ module ACD
             guardrails_config: guardrails_config,
             input_schema_dsl: schema_blocks[:input_schema_dsl],
             output_schema_dsl: schema_blocks[:output_schema_dsl],
+            resume_schema_dsl: schema_blocks[:resume_schema_dsl],
           )
         end
       end
@@ -83,10 +86,11 @@ module ACD
         end
       end
 
-      private def extract_schema_blocks(body : String) : NamedTuple(prompt: String, input_schema_dsl: String?, output_schema_dsl: String?)
+      private def extract_schema_blocks(body : String) : NamedTuple(prompt: String, input_schema_dsl: String?, output_schema_dsl: String?, resume_schema_dsl: String?)
         prompt_lines = [] of String
         input_schema_dsl = nil.as(String?)
         output_schema_dsl = nil.as(String?)
+        resume_schema_dsl = nil.as(String?)
 
         in_schema_block = false
         schema_kind = nil.as(String?)
@@ -94,7 +98,7 @@ module ACD
 
         body.each_line do |line|
           if !in_schema_block
-            if match = line.match(/^\s*```crystal\s+schema:(input|output)\s*$/)
+            if match = line.match(/^\s*```crystal\s+schema:(input|output|resume)\s*$/)
               in_schema_block = true
               schema_kind = match[1]
               buffer.clear
@@ -112,6 +116,8 @@ module ACD
                 input_schema_dsl = snippet
               elsif schema_kind == "output" && output_schema_dsl.nil?
                 output_schema_dsl = snippet
+              elsif schema_kind == "resume" && resume_schema_dsl.nil?
+                resume_schema_dsl = snippet
               end
             end
 
@@ -133,6 +139,7 @@ module ACD
           prompt: prompt_lines.join.strip,
           input_schema_dsl: input_schema_dsl,
           output_schema_dsl: output_schema_dsl,
+          resume_schema_dsl: resume_schema_dsl,
         }
       end
     end

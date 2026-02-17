@@ -38,7 +38,7 @@ describe "E2E: Workflow Lifecycle" do
 
       workflow
         .map("setup") { |_ctx| {"prepared" => json_bool(true)} }
-        .approve("human-review", reason: "Confirm data processing")
+        .suspend("human-review", reason: "Confirm data processing")
         .map("finalize") { |_ctx| {"completed" => json_bool(true)} }
         .commit
 
@@ -72,7 +72,7 @@ describe "E2E: Workflow Lifecycle" do
       workflow
         .map("node-a") { |_ctx| {"a" => json_str("value-a")} }
         .map("node-b") { |ctx| {"b" => json_str("#{ctx.state["a"]?.try(&.as_s?) || "none"}-b")} }
-        .approve("checkpoint")
+        .suspend("checkpoint")
         .map("node-c") { |_ctx| {"c" => json_str("final")} }
         .commit
 
@@ -96,7 +96,7 @@ describe "E2E: Workflow Lifecycle" do
 
       workflow
         .map("start") { |_ctx| {"started" => json_bool(true)} }
-        .approve("wait-forever")
+        .suspend("wait-forever")
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -120,7 +120,7 @@ describe "E2E: Workflow Lifecycle" do
         .agent("e2e-processor",
           input_schema: CogniCore::Schema::Types.object({"task" => CogniCore::Schema::Types.of(String)}, strict: false),
           output_schema: CogniCore::Schema::Types.object({"result" => CogniCore::Schema::Types.of(String)}, strict: false))
-        .approve("e2e-approval", reason: "Review E2E test output")
+        .suspend("e2e-approval", reason: "Review E2E test output")
         .rag("e2e-rag-step", config: {
           "operation"       => json_str("query"),
           "vectorStoreName" => json_str("memory"),

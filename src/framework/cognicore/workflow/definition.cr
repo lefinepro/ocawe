@@ -2,8 +2,6 @@ require "../ai/client"
 
 module CogniCore
   module Workflow
-    alias BranchCondition = Proc(NodeContext, Bool) | String | Bool
-
     class WorkflowDefinition
       getter id : String
       getter description : String?
@@ -21,8 +19,8 @@ module CogniCore
         @resource_scope_stack = [] of ResourceScope
       end
 
-      # Unified use attribute for model, skills, and tools
-      # Supports: use model: "...", skill: ["..."], tool: ["..."]
+      # Unified resource defaults for model, skills, and tools
+      # Supports: model: "...", skill: ["..."], tool: ["..."]
       def use(
         model : String? = nil,
         skill : (String | Array(String))? = nil,
@@ -53,7 +51,7 @@ module CogniCore
         self
       end
 
-      # Block-scoped use attribute
+      # Block-scoped resource defaults
       # Applies resources only within the block, then restores previous state
       def use(
         model : String? = nil,
@@ -135,12 +133,16 @@ module CogniCore
         id : String,
         prompt : String? = nil,
         model : String? = nil,
+        resume_schema : Schema::Validator? = nil,
         voice_config : AnyHash? = nil,
         guardrails_config : AnyHash? = nil,
         input_schema : Schema::Validator? = nil,
         output_schema : Schema::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(id, NodeKind::Agent, input_schema: input_schema, output_schema: output_schema) do |ctx|
+        metadata = {} of String => JSON::Any
+        metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema
+
+        append_node(WorkflowNode.new(id, NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           user_prompt = build_agent_user_prompt(ctx)
           Guardrails.validate_input!(id, user_prompt, guardrails_config)
 
@@ -258,60 +260,37 @@ module CogniCore
         end)
       end
 
-      def approve(
+      def suspend(
         id : String,
-        reason : String = "human approval required",
+        reason : String = "human input required",
+        resume_schema : Schema::Validator? = nil,
         input_schema : Schema::Validator? = nil,
         output_schema : Schema::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(id, NodeKind::Approve, metadata: {
+        append_node(WorkflowNode.new(id, NodeKind::Suspend, metadata: {
           "reason" => JSON.parse(reason.to_json),
         } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
           resume = ctx.resume_data || {} of String => JSON::Any
 
-          approved = resume["approved"]?.try(&.as_bool?)
-          comment = resume["comment"]?.try(&.as_s?)
-
-          if !approved.nil? && comment
-            WorkflowNodeResult.continue({
-              "approved" => JSON.parse(approved.to_json),
-              "comment" => JSON.parse(comment.to_json),
-            })
-          else
-            WorkflowNodeResult.suspend(
+          if resume.empty?
+            next WorkflowNodeResult.suspend(
               {
-                "type" => JSON.parse("human_approval".to_json),
+                "type" => JSON.parse("suspend".to_json),
                 "node_id" => JSON.parse(id.to_json),
                 "reason" => JSON.parse(reason.to_json),
               },
               id,
             )
           end
+
+          if schema = resume_schema
+            schema.validate(JSON.parse(resume.to_json), "$.resume")
+          end
+
+          WorkflowNodeResult.continue({
+            "resume_data" => JSON.parse(resume.to_json),
+          })
         end)
-      end
-
-      def branch(conditions : Array(Tuple(BranchCondition, WorkflowNode)), otherwise_node : WorkflowNode? = nil) : self
-        ensure_not_committed!
-
-        branching_node = WorkflowNode.new("branch-#{@nodes.size}", NodeKind::Control) do |ctx|
-          selected = nil.as(WorkflowNode?)
-          conditions.each do |(condition, node)|
-            if evaluate_condition(condition, ctx)
-              selected = node
-              break
-            end
-          end
-          selected ||= otherwise_node
-
-          if selected
-            selected.execute(with_context_for(ctx, selected.not_nil!))
-          else
-            WorkflowNodeResult.continue
-          end
-        end
-
-        @nodes << branching_node
-        self
       end
 
       def parallel(parallel_nodes : Array(WorkflowNode)) : self
@@ -377,143 +356,8 @@ module CogniCore
         self
       end
 
-      def map(node : WorkflowNode) : self
-        append_node(node)
-      end
-
-      def map(&block : NodeContext -> AnyHash) : self
-        map("map-#{@nodes.size}", &block)
-      end
-
-      def map(id : String, &block : NodeContext -> AnyHash) : self
-        append_node(WorkflowNode.new(id, NodeKind::Control) do |ctx|
-          WorkflowNodeResult.continue(block.call(ctx))
-        end)
-      end
-
       def foreach(node : WorkflowNode) : self
         append_node(node)
-      end
-
-      def dowhile(node : WorkflowNode, condition : BranchCondition) : self
-        ensure_not_committed!
-
-        loop_node = WorkflowNode.new("dowhile-#{@nodes.size}", NodeKind::Control) do |ctx|
-          iterations = 0
-          result = WorkflowNodeResult.continue
-          loop do
-            iterations += 1
-            result = node.execute(with_context_for(ctx, node))
-            break if result.action != NodeAction::Continue.to_s.downcase
-            break unless evaluate_condition(condition, ctx)
-            break if iterations >= 100
-          end
-          result
-        end
-
-        @nodes << loop_node
-        self
-      end
-
-      def dountil(node : WorkflowNode, condition : BranchCondition) : self
-        ensure_not_committed!
-
-        loop_node = WorkflowNode.new("dountil-#{@nodes.size}", NodeKind::Control) do |ctx|
-          iterations = 0
-          result = WorkflowNodeResult.continue
-          loop do
-            iterations += 1
-            result = node.execute(with_context_for(ctx, node))
-            break if result.action != NodeAction::Continue.to_s.downcase
-            break if evaluate_condition(condition, ctx)
-            break if iterations >= 100
-          end
-          result
-        end
-
-        @nodes << loop_node
-        self
-      end
-
-      # while loop - executes node while condition is true (condition checked first)
-      def while_loop(node : WorkflowNode, condition : BranchCondition) : self
-        ensure_not_committed!
-
-        loop_node = WorkflowNode.new("while-#{@nodes.size}", NodeKind::Control) do |ctx|
-          iterations = 0
-          result = WorkflowNodeResult.continue
-          merged = {} of String => JSON::Any
-
-          while evaluate_condition(condition, ctx) && iterations < 100
-            iterations += 1
-            result = node.execute(with_context_for(ctx, node))
-            break if result.action != NodeAction::Continue.to_s.downcase
-            if data = result.data
-              data.each { |k, v| merged[k] = v }
-            end
-          end
-
-          if result.action == NodeAction::Continue.to_s.downcase
-            WorkflowNodeResult.continue(merged)
-          else
-            result
-          end
-        end
-
-        @nodes << loop_node
-        self
-      end
-
-      # until loop - executes node until condition becomes true (condition checked first)
-      def until_loop(node : WorkflowNode, condition : BranchCondition) : self
-        ensure_not_committed!
-
-        loop_node = WorkflowNode.new("until-#{@nodes.size}", NodeKind::Control) do |ctx|
-          iterations = 0
-          result = WorkflowNodeResult.continue
-          merged = {} of String => JSON::Any
-
-          while !evaluate_condition(condition, ctx) && iterations < 100
-            iterations += 1
-            result = node.execute(with_context_for(ctx, node))
-            break if result.action != NodeAction::Continue.to_s.downcase
-            if data = result.data
-              data.each { |k, v| merged[k] = v }
-            end
-          end
-
-          if result.action == NodeAction::Continue.to_s.downcase
-            WorkflowNodeResult.continue(merged)
-          else
-            result
-          end
-        end
-
-        @nodes << loop_node
-        self
-      end
-
-      # unless branch - executes when condition is false
-      def unless_branch(condition : BranchCondition, node : WorkflowNode, otherwise_node : WorkflowNode? = nil) : self
-        ensure_not_committed!
-
-        branching_node = WorkflowNode.new("unless-#{@nodes.size}", NodeKind::Control) do |ctx|
-          # Execute node when condition is FALSE (inverse of if)
-          selected = if !evaluate_condition(condition, ctx)
-                       node
-                     else
-                       otherwise_node
-                     end
-
-          if selected
-            selected.execute(with_context_for(ctx, selected))
-          else
-            WorkflowNodeResult.continue
-          end
-        end
-
-        @nodes << branching_node
-        self
       end
 
       def wait_for_event(event_name : String, resume_label : String? = nil) : self
@@ -608,34 +452,6 @@ module CogniCore
           trigger_data: ctx.trigger_data,
           resume_data: ctx.resume_data,
         )
-      end
-
-      private def evaluate_condition(condition : BranchCondition, ctx : NodeContext) : Bool
-        if condition.is_a?(String)
-          evaluate_expression(condition, ctx)
-        elsif condition.is_a?(Bool)
-          condition
-        else
-          condition.as(Proc(NodeContext, Bool)).call(ctx)
-        end
-      end
-
-      private def evaluate_expression(expression : String, ctx : NodeContext) : Bool
-        normalized = expression.strip.downcase
-        return true if normalized == "true"
-        return false if normalized == "false"
-
-        if normalized == "artifacts.present?"
-          value = ctx.input_data["artifacts"]?
-          return !value.nil? && !value.to_json.empty?
-        end
-
-        if normalized == "sandbox_exists == false"
-          value = ctx.state["sandbox_exists"]?
-          return value.try(&.raw) == false
-        end
-
-        false
       end
 
       private def resolve_model(ctx : NodeContext, agent_model : String?) : String

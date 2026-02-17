@@ -22,7 +22,7 @@ module CogniCore
       Agent
       Skill
       Tool
-      Approve
+      Suspend
       Fn
       Voice
       Rag
@@ -223,7 +223,7 @@ module CogniCore
       end
     end
 
-    # Represents a scoped resource context for the unified use attribute
+    # Represents a scoped resource context for workflow resource defaults
     struct ResourceScope
       getter model : String?
       getter skills : Array(String)?
