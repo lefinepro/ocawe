@@ -113,7 +113,9 @@ describe "E2E: RAG Operations" do
     it "combines RAG with approval step" do
       workflow = CogniCore::Workflow.create_workflow("rag-approval-test", "RAG with approval")
       workflow
-        .map("setup") { |_ctx| {"prepared" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        end)
         .rag("rag", config: {
           "operation"       => json_str("query"),
           "vectorStoreName" => json_str("memory"),

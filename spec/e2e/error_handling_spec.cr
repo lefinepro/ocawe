@@ -142,11 +142,15 @@ describe "E2E: Error Handling Cases" do
     it "rejects modifications to committed workflow" do
       workflow = CogniCore::Workflow.create_workflow("e2e-committed", "Committed workflow")
       workflow
-        .map("node") { |_ctx| {"done" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"done" => json_bool(true)})
+        end)
         .commit
 
       expect_raises(Exception, /committed/) do
-        workflow.map("after-commit") { |_ctx| {"error" => json_bool(true)} }
+        workflow.then(CogniCore::Workflow::WorkflowNode.new("after-commit", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"error" => json_bool(true)})
+        end)
       end
     end
   end

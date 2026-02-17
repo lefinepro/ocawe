@@ -29,12 +29,12 @@ describe "E2E: Resources and Configuration" do
       workflow = CogniCore::Workflow.create_workflow("model-resolution-test", "Model resolution test")
       workflow
         .use(model: "clipproxyapi/qwen3-coder-plus")
-        .map("check-model") { |ctx|
-          {
+        .then(CogniCore::Workflow::WorkflowNode.new("check-model", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({
             "workflow_model" => json_str("clipproxyapi/qwen3-coder-plus"),
             "resolved"       => json_bool(true),
-          }
-        }
+          })
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -50,7 +50,9 @@ describe "E2E: Resources and Configuration" do
       workflow = CogniCore::Workflow.create_workflow("model-priority-test", "Model priority test")
       workflow
         .use(model: "default-model")
-        .map("check") { |_ctx| {"checked" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("check", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"checked" => json_bool(true)})
+        end)
         .commit
 
       workflow.default_model.should eq("default-model")
@@ -107,14 +109,18 @@ describe "E2E: Resources and Configuration" do
       workflow = CogniCore::Workflow.create_workflow("unified-pipeline", "Unified pipeline test")
       workflow
         .use(model: "openai/gpt-4.1")
-        .map("analyzer") { |_ctx| {"analyzed" => json_bool(true)} }
-        .map("processor") { |_ctx| {"processed" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("analyzer", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"analyzed" => json_bool(true)})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("processor", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"processed" => json_bool(true)})
+        end)
         .parallel([translator, summarizer])
-        .map("synthesizer") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("synthesizer", CogniCore::Workflow::NodeKind::Control) do |ctx|
           translated = ctx.state["translated"]?.try(&.raw) == true
           summarized = ctx.state["summarized"]?.try(&.raw) == true
-          {"synthesized" => json_bool(translated && summarized)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"synthesized" => json_bool(translated && summarized)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -157,7 +163,9 @@ describe "E2E: Resources and Configuration" do
     it "executes full workflow up to approval suspension" do
       workflow = CogniCore::Workflow.create_workflow("full-approval-test", "Full approval test")
       workflow
-        .map("setup") { |_ctx| {"prepared" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        end)
         .voice("voice", config: {"provider" => json_str("openai")})
         .rag("rag", config: {
           "operation"       => json_str("query"),

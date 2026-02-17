@@ -10,15 +10,17 @@ require "./e2e_spec_helper"
 
 describe "E2E: Workflow Lifecycle" do
   describe "basic workflow operations" do
-    it "creates and runs a simple workflow with map nodes" do
+    it "creates and runs a simple workflow with control nodes" do
       workflow = CogniCore::Workflow.create_workflow("e2e-simple", "Simple workflow test")
 
       workflow
-        .map("step-1") { |_ctx| {"value" => json_str("initialized")} }
-        .map("step-2") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("step-1", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("initialized")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("step-2", CogniCore::Workflow::NodeKind::Control) do |ctx|
           prev = ctx.state["value"]?.try(&.as_s?) || "none"
-          {"value" => json_str("#{prev}:processed")}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("#{prev}:processed")})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -37,9 +39,13 @@ describe "E2E: Workflow Lifecycle" do
       workflow = CogniCore::Workflow.create_workflow("e2e-approval", "Approval workflow")
 
       workflow
-        .map("setup") { |_ctx| {"prepared" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        end)
         .suspend("human-review", reason: "Confirm data processing")
-        .map("finalize") { |_ctx| {"completed" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("finalize", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"completed" => json_bool(true)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -60,7 +66,7 @@ describe "E2E: Workflow Lifecycle" do
       })
       resumed.status.should eq("success")
       resumed.state.not_nil!["completed"].raw.should eq(true)
-      resumed.state.not_nil!["approved"].raw.should eq(true)
+      resumed.state.not_nil!["resume_data"].as_h["approved"].raw.should eq(true)
     end
 
   end
@@ -70,10 +76,16 @@ describe "E2E: Workflow Lifecycle" do
       workflow = CogniCore::Workflow.create_workflow("e2e-timetravel", "Time travel test")
 
       workflow
-        .map("node-a") { |_ctx| {"a" => json_str("value-a")} }
-        .map("node-b") { |ctx| {"b" => json_str("#{ctx.state["a"]?.try(&.as_s?) || "none"}-b")} }
+        .then(CogniCore::Workflow::WorkflowNode.new("node-a", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"a" => json_str("value-a")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("node-b", CogniCore::Workflow::NodeKind::Control) do |ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"b" => json_str("#{ctx.state["a"]?.try(&.as_s?) || "none"}-b")})
+        end)
         .suspend("checkpoint")
-        .map("node-c") { |_ctx| {"c" => json_str("final")} }
+        .then(CogniCore::Workflow::WorkflowNode.new("node-c", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"c" => json_str("final")})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -95,7 +107,9 @@ describe "E2E: Workflow Lifecycle" do
       workflow = CogniCore::Workflow.create_workflow("e2e-cancel", "Cancel test")
 
       workflow
-        .map("start") { |_ctx| {"started" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("start", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"started" => json_bool(true)})
+        end)
         .suspend("wait-forever")
         .commit
 

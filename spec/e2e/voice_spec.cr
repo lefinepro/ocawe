@@ -80,12 +80,14 @@ describe "E2E: Voice Operations" do
     it "handles voice node in full workflow" do
       workflow = CogniCore::Workflow.create_workflow("full-voice-test", "Full voice test")
       workflow
-        .map("setup") { |_ctx| {"prepared" => json_bool(true)} }
+        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        end)
         .voice("voice", config: {"provider" => json_str("openai")})
-        .map("after-voice") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("after-voice", CogniCore::Workflow::NodeKind::Control) do |ctx|
           voice_ok = ctx.state["voice_status"]?.try(&.as_s?) == "ok"
-          {"voice_completed" => json_bool(voice_ok)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"voice_completed" => json_bool(voice_ok)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new

@@ -5,16 +5,18 @@ describe "E2E: Data Persistence and State" do
     it "accumulates state across multiple nodes" do
       workflow = CogniCore::Workflow.create_workflow("e2e-state-accum", "State accumulation")
       workflow
-        .map("step-1") { |_ctx| {"value_1" => json_str("one")} }
-        .map("step-2") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("step-1", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"value_1" => json_str("one")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("step-2", CogniCore::Workflow::NodeKind::Control) do |ctx|
           prev = ctx.state["value_1"]?.try(&.as_s?) || "none"
-          {"value_2" => json_str("two:#{prev}")}
-        }
-        .map("step-3") { |ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"value_2" => json_str("two:#{prev}")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("step-3", CogniCore::Workflow::NodeKind::Control) do |ctx|
           v1 = ctx.state["value_1"]?.try(&.as_s?) || "none"
           v2 = ctx.state["value_2"]?.try(&.as_s?) || "none"
-          {"final" => json_str("#{v1}|#{v2}")}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"final" => json_str("#{v1}|#{v2}")})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -33,12 +35,14 @@ describe "E2E: Data Persistence and State" do
     it "provides access to previous node results" do
       workflow = CogniCore::Workflow.create_workflow("e2e-node-results", "Node results")
       workflow
-        .map("producer") { |_ctx| {"produced" => json_str("data-from-producer")} }
-        .map("consumer") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("producer", CogniCore::Workflow::NodeKind::Control) do |_ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue({"produced" => json_str("data-from-producer")})
+        end)
+        .then(CogniCore::Workflow::WorkflowNode.new("consumer", CogniCore::Workflow::NodeKind::Control) do |ctx|
           prev_result = ctx.get_node_result("producer")
           consumed = prev_result.try(&.["produced"]?.try(&.as_s?)) || "nothing"
-          {"consumed" => json_str(consumed)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"consumed" => json_str(consumed)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -55,10 +59,10 @@ describe "E2E: Data Persistence and State" do
     it "preserves init data throughout workflow" do
       workflow = CogniCore::Workflow.create_workflow("e2e-init-data", "Init data")
       workflow
-        .map("check-init") { |ctx|
+        .then(CogniCore::Workflow::WorkflowNode.new("check-init", CogniCore::Workflow::NodeKind::Control) do |ctx|
           init_value = ctx.get_init_data["init_param"]?.try(&.as_s?) || "missing"
-          {"init_preserved" => json_str(init_value)}
-        }
+          CogniCore::Workflow::WorkflowNodeResult.continue({"init_preserved" => json_str(init_value)})
+        end)
         .commit
 
       engine = CogniCore::Workflow::Engine.new
