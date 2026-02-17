@@ -878,7 +878,7 @@ module ACD
             Cogni::Workflows::Declarative::WorkflowNodeResult.continue
           end
         end
-        ctx.workflow.then(conditional_node)
+        ctx.workflow.step(conditional_node)
       end
 
       # Parse unless...else...end conditional block
@@ -1000,7 +1000,7 @@ module ACD
             Cogni::Workflows::Declarative::WorkflowNodeResult.continue
           end
         end
-        ctx.workflow.then(control_node)
+        ctx.workflow.step(control_node)
       end
 
       # Parse while condition do...end loop
@@ -1114,7 +1114,7 @@ module ACD
             result
           end
         end
-        ctx.workflow.then(control_node)
+        ctx.workflow.step(control_node)
       end
 
       # Parse until condition do...end loop
@@ -1228,7 +1228,7 @@ module ACD
             result
           end
         end
-        ctx.workflow.then(control_node)
+        ctx.workflow.step(control_node)
       end
 
       # Parse loop do...end block
@@ -1333,7 +1333,7 @@ module ACD
             result
           end
         end
-        ctx.workflow.then(control_node)
+        ctx.workflow.step(control_node)
       end
 
       # Create an agent node (used for parallel and conditional blocks)

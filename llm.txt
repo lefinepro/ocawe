@@ -1,0 +1,28 @@
+Cogni usage quick guide
+
+1) Register a custom node kind:
+Cogni::Registry.node_kind("my_kind") do |_ctx, parameters|
+  {
+    "status" => JSON.parse("ok".to_json),
+    "value" => parameters["value"]? || JSON.parse("none".to_json),
+  }
+end
+
+2) Register a resource handler:
+Cogni::Registry.resource("my_resource") do |_ctx, payload|
+  {
+    "resource_value" => JSON.parse((payload["input"]?.try(&.as_s?) || "").to_json),
+  }
+end
+
+3) Build workflow with declarative API:
+workflow = Cogni::Workflow.build("example")
+workflow
+  .step(Cogni::NodeKind.new("my_kind", {"value" => JSON.parse("hello".to_json)}), id: "step-1")
+  .commit
+
+4) Run through engine/service as usual.
+
+Notes:
+- Use `step(...)` directly for custom steps.
+- Registry API surface is intentionally minimal: node_kind + resource.

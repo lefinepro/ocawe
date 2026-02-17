@@ -132,7 +132,8 @@ module Cogni
         end)
       end
 
-      def then(node : WorkflowNode) : self
+      # Low-level chaining for explicit workflow nodes (used by control-flow internals).
+      def step(node : WorkflowNode) : self
         append_node(node)
       end
 
@@ -196,7 +197,7 @@ module Cogni
         end)
       end
 
-      def node_kind(
+      def step(
         kind : Cogni::NodeKind,
         id : String? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,

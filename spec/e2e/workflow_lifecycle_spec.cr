@@ -14,10 +14,10 @@ describe "E2E: Workflow Lifecycle" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-simple", "Simple workflow test")
 
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("step-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("step-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value" => json_str("initialized")})
         end)
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("step-2", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("step-2", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           prev = ctx.state["value"]?.try(&.as_s?) || "none"
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value" => json_str("#{prev}:processed")})
         end)
@@ -39,11 +39,11 @@ describe "E2E: Workflow Lifecycle" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-approval", "Approval workflow")
 
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
         end)
         .suspend("human-review", reason: "Confirm data processing")
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("finalize", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("finalize", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"completed" => json_bool(true)})
         end)
         .commit
@@ -76,14 +76,14 @@ describe "E2E: Workflow Lifecycle" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-timetravel", "Time travel test")
 
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("node-a", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("node-a", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"a" => json_str("value-a")})
         end)
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("node-b", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("node-b", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"b" => json_str("#{ctx.state["a"]?.try(&.as_s?) || "none"}-b")})
         end)
         .suspend("checkpoint")
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("node-c", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("node-c", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"c" => json_str("final")})
         end)
         .commit
@@ -107,7 +107,7 @@ describe "E2E: Workflow Lifecycle" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-cancel", "Cancel test")
 
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("start", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("start", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"started" => json_bool(true)})
         end)
         .suspend("wait-forever")

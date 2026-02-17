@@ -29,7 +29,7 @@ describe "E2E: Resources and Configuration" do
       workflow = Cogni::Workflows::Declarative.create_workflow("model-resolution-test", "Model resolution test")
       workflow
         .use(model: "clipproxyapi/qwen3-coder-plus")
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("check-model", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("check-model", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({
             "workflow_model" => json_str("clipproxyapi/qwen3-coder-plus"),
             "resolved"       => json_bool(true),
@@ -50,7 +50,7 @@ describe "E2E: Resources and Configuration" do
       workflow = Cogni::Workflows::Declarative.create_workflow("model-priority-test", "Model priority test")
       workflow
         .use(model: "default-model")
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("check", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("check", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"checked" => json_bool(true)})
         end)
         .commit
@@ -109,14 +109,14 @@ describe "E2E: Resources and Configuration" do
       workflow = Cogni::Workflows::Declarative.create_workflow("unified-pipeline", "Unified pipeline test")
       workflow
         .use(model: "openai/gpt-4.1")
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("analyzer", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("analyzer", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"analyzed" => json_bool(true)})
         end)
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("processor", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("processor", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"processed" => json_bool(true)})
         end)
         .parallel([translator, summarizer])
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("synthesizer", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("synthesizer", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           translated = ctx.state["translated"]?.try(&.raw) == true
           summarized = ctx.state["summarized"]?.try(&.raw) == true
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"synthesized" => json_bool(translated && summarized)})
@@ -163,7 +163,7 @@ describe "E2E: Resources and Configuration" do
     it "executes full workflow up to approval suspension" do
       workflow = Cogni::Workflows::Declarative.create_workflow("full-approval-test", "Full approval test")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
         end)
         .voice("voice", config: {"provider" => json_str("openai")})

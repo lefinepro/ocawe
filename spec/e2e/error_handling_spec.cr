@@ -148,13 +148,13 @@ describe "E2E: Error Handling Cases" do
     it "rejects modifications to committed workflow" do
       workflow = Cogni::Workflows::Declarative.create_workflow("e2e-committed", "Committed workflow")
       workflow
-        .then(Cogni::Workflows::Declarative::WorkflowNode.new("node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflows::Declarative::WorkflowNode.new("node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"done" => json_bool(true)})
         end)
         .commit
 
       expect_raises(Exception, /committed/) do
-        workflow.then(Cogni::Workflows::Declarative::WorkflowNode.new("after-commit", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        workflow.step(Cogni::Workflows::Declarative::WorkflowNode.new("after-commit", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
           Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"error" => json_bool(true)})
         end)
       end

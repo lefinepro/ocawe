@@ -6,11 +6,11 @@ describe Cogni::Workflows::Declarative::Engine do
     workflow = Cogni::Workflows::Declarative.create_workflow("wf-test", "test workflow")
 
     workflow
-      .then(Cogni::Workflows::Declarative::WorkflowNode.new("node-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+      .step(Cogni::Workflows::Declarative::WorkflowNode.new("node-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
         Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value" => json_str("ok")})
       end)
       .suspend("approval")
-      .then(Cogni::Workflows::Declarative::WorkflowNode.new("final", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+      .step(Cogni::Workflows::Declarative::WorkflowNode.new("final", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
         Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"done" => json_bool(true)})
       end)
       .commit
@@ -51,10 +51,10 @@ describe Cogni::Workflows::Declarative::Engine do
     end
 
     workflow
-      .then(Cogni::Workflows::Declarative::WorkflowNode.new("seed", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+      .step(Cogni::Workflows::Declarative::WorkflowNode.new("seed", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
         Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value" => json_str("v1")})
       end)
-      .then(Cogni::Workflows::Declarative::WorkflowNode.new("mapped", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+      .step(Cogni::Workflows::Declarative::WorkflowNode.new("mapped", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
         Cogni::Workflows::Declarative::WorkflowNodeResult.continue({
           "mapped" => json_str("#{ctx.get_node_result("seed").try(&.["value"]?.try(&.as_s?)) || "none"}:#{ctx.get_init_data["value"]?.try(&.as_s?) || "init-none"}"),
         })
@@ -80,7 +80,7 @@ describe Cogni::Workflows::Declarative::Engine do
     end
 
     workflow
-      .then(Cogni::Workflows::Declarative::WorkflowNode.new("then-node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+      .step(Cogni::Workflows::Declarative::WorkflowNode.new("then-node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
         Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"then_ran" => json_bool(true)})
       end)
       .sleep(0)

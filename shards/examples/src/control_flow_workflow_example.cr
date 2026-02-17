@@ -26,9 +26,9 @@ module CogniExamples
       end
 
       Cogni::Workflows::Declarative.create_workflow("control-flow-branch-parallel", "Control-flow API example with schemas")
-        .then(seed)
+        .step(seed)
         .parallel([parallel_left, parallel_right])
-        .then(then_node)
+        .step(then_node)
         .wait_for_event("deploy", "event:deploy")
         .send_event("deploy", {"source" => JSON.parse("example".to_json)})
         .commit
