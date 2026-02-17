@@ -1,21 +1,21 @@
 require "./spec_helper"
 
 
-describe CogniCore::Workflow::Engine do
+describe Cogni::Workflows::Declarative::Engine do
   it "runs start/resume/cancel/time_travel lifecycle" do
-    workflow = CogniCore::Workflow.create_workflow("wf-test", "test workflow")
+    workflow = Cogni::Workflows::Declarative.create_workflow("wf-test", "test workflow")
 
     workflow
-      .then(CogniCore::Workflow::WorkflowNode.new("node-1", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("ok")})
+      .then(Cogni::Workflows::Declarative::WorkflowNode.new("node-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value" => json_str("ok")})
       end)
       .suspend("approval")
-      .then(CogniCore::Workflow::WorkflowNode.new("final", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"done" => json_bool(true)})
+      .then(Cogni::Workflows::Declarative::WorkflowNode.new("final", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"done" => json_bool(true)})
       end)
       .commit
 
-    engine = CogniCore::Workflow::Engine.new
+    engine = Cogni::Workflows::Declarative::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("wf-test")
@@ -38,31 +38,31 @@ describe CogniCore::Workflow::Engine do
   end
 
   it "supports sequential and parallel control nodes" do
-    workflow = CogniCore::Workflow.create_workflow("wf-controls", "control nodes")
+    workflow = Cogni::Workflows::Declarative.create_workflow("wf-controls", "control nodes")
 
-    parallel_continue = CogniCore::Workflow::WorkflowNode.new("parallel-continue", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-      CogniCore::Workflow::WorkflowNodeResult.continue({"p1" => json_str("ok")})
+    parallel_continue = Cogni::Workflows::Declarative::WorkflowNode.new("parallel-continue", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+      Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"p1" => json_str("ok")})
     end
-    parallel_suspend = CogniCore::Workflow::WorkflowNode.new("parallel-suspend", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-      CogniCore::Workflow::WorkflowNodeResult.suspend(
+    parallel_suspend = Cogni::Workflows::Declarative::WorkflowNode.new("parallel-suspend", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+      Cogni::Workflows::Declarative::WorkflowNodeResult.suspend(
         {"type" => json_str("human_approval")},
         resume_label: "approval:parallel-suspend",
       )
     end
 
     workflow
-      .then(CogniCore::Workflow::WorkflowNode.new("seed", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("v1")})
+      .then(Cogni::Workflows::Declarative::WorkflowNode.new("seed", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value" => json_str("v1")})
       end)
-      .then(CogniCore::Workflow::WorkflowNode.new("mapped", CogniCore::Workflow::NodeKind::Control) do |ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({
+      .then(Cogni::Workflows::Declarative::WorkflowNode.new("mapped", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({
           "mapped" => json_str("#{ctx.get_node_result("seed").try(&.["value"]?.try(&.as_s?)) || "none"}:#{ctx.get_init_data["value"]?.try(&.as_s?) || "init-none"}"),
         })
       end)
       .parallel([parallel_continue, parallel_suspend])
       .commit
 
-    engine = CogniCore::Workflow::Engine.new
+    engine = Cogni::Workflows::Declarative::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("wf-controls")
@@ -73,15 +73,15 @@ describe CogniCore::Workflow::Engine do
   end
 
   it "supports other workflow methods" do
-    workflow = CogniCore::Workflow.create_workflow("wf-methods", "method coverage")
+    workflow = Cogni::Workflows::Declarative.create_workflow("wf-methods", "method coverage")
 
-    foreach_node = CogniCore::Workflow::WorkflowNode.new("foreach-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-      CogniCore::Workflow::WorkflowNodeResult.continue({"foreach_ran" => json_bool(true)})
+    foreach_node = Cogni::Workflows::Declarative::WorkflowNode.new("foreach-node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+      Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"foreach_ran" => json_bool(true)})
     end
 
     workflow
-      .then(CogniCore::Workflow::WorkflowNode.new("then-node", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"then_ran" => json_bool(true)})
+      .then(Cogni::Workflows::Declarative::WorkflowNode.new("then-node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"then_ran" => json_bool(true)})
       end)
       .sleep(0)
       .sleep_until(Time.utc.to_unix)
@@ -89,7 +89,7 @@ describe CogniCore::Workflow::Engine do
       .wait_for_event("deploy", "event:deploy")
       .commit
 
-    engine = CogniCore::Workflow::Engine.new
+    engine = Cogni::Workflows::Declarative::Engine.new
     engine.register(workflow)
 
     run = workflow.create_run_async
@@ -104,19 +104,19 @@ describe CogniCore::Workflow::Engine do
   end
 
   it "runs function nodes through run API" do
-    CogniCore::Workflow.register_function("create-sandbox") do |_ctx|
+    Cogni::Workflows::Declarative.register_function("create-sandbox") do |_ctx|
       {
         "tool" => json_any("create-sandbox"),
         "status" => json_any("ok"),
       }
     end
 
-    workflow = CogniCore::Workflow.create_workflow("wf-runs", "run dispatch")
+    workflow = Cogni::Workflows::Declarative.create_workflow("wf-runs", "run dispatch")
     workflow
       .run("create-sandbox")
       .commit
 
-    engine = CogniCore::Workflow::Engine.new
+    engine = Cogni::Workflows::Declarative::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("wf-runs")
@@ -126,21 +126,21 @@ describe CogniCore::Workflow::Engine do
   end
 
   it "supports function aliases when names collide with system functions" do
-    CogniCore::Workflow.register_system_function("conflict-fn") do |_ctx|
+    Cogni::Workflows::Declarative.register_system_function("conflict-fn") do |_ctx|
       {"which" => json_any("system")}
     end
-    user_alias = CogniCore::Workflow.register_function("conflict-fn") do |_ctx|
+    user_alias = Cogni::Workflows::Declarative.register_function("conflict-fn") do |_ctx|
       {"which" => json_any("user")}
     end
     user_alias.should eq("conflict-fn:1")
 
-    workflow = CogniCore::Workflow.create_workflow("wf-fn-collision", "function collision")
+    workflow = Cogni::Workflows::Declarative.create_workflow("wf-fn-collision", "function collision")
     workflow
       .run("conflict-fn")
       .run("conflict-fn:1")
       .commit
 
-    engine = CogniCore::Workflow::Engine.new
+    engine = Cogni::Workflows::Declarative::Engine.new
     engine.register(workflow)
 
     result = engine.create_run("wf-fn-collision").start
@@ -149,7 +149,7 @@ describe CogniCore::Workflow::Engine do
   end
 
   it "supports mastra-compatible rag keys and output shape" do
-    workflow = CogniCore::Workflow.create_workflow("wf-rag", "rag compatibility")
+    workflow = Cogni::Workflows::Declarative.create_workflow("wf-rag", "rag compatibility")
     workflow
       .rag("rag-ingest", config: {
         "operation"       => json_str("upsert"),
@@ -164,7 +164,7 @@ describe CogniCore::Workflow::Engine do
       })
       .commit
 
-    engine = CogniCore::Workflow::Engine.new
+    engine = Cogni::Workflows::Declarative::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("wf-rag")
@@ -189,7 +189,7 @@ describe CogniCore::Workflow::Engine do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      workflow = CogniCore::Workflow.create_workflow("wf-guardrails", "guardrails")
+      workflow = Cogni::Workflows::Declarative.create_workflow("wf-guardrails", "guardrails")
       workflow
         .agent(
           "guarded-agent",
@@ -203,7 +203,7 @@ describe CogniCore::Workflow::Engine do
         )
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       blocked = engine.create_run("wf-guardrails").start(input_data: {"task" => json_str("this is forbidden input")})
@@ -221,12 +221,12 @@ describe CogniCore::Workflow::Engine do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      input_schema = CogniCore::Schema::CrystalDSL.compile(
+      input_schema = Cogni::Workflows::DSL::CrystalDSL.compile(
         "Schema::Types.object({\"input\" => Schema::Types.object({\"task\" => Schema::Types.of(String)})}, strict: false)",
         "wf-schema-input"
       )
 
-      workflow = CogniCore::Workflow.create_workflow("wf-schema", "schema")
+      workflow = Cogni::Workflows::Declarative.create_workflow("wf-schema", "schema")
       workflow
         .agent(
           "schema-agent",
@@ -236,7 +236,7 @@ describe CogniCore::Workflow::Engine do
         )
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       invalid = engine.create_run("wf-schema").start(input_data: {"query" => json_str("missing task")})
@@ -254,13 +254,13 @@ describe CogniCore::Workflow::Engine do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      workflow = CogniCore::Workflow.create_workflow("wf-models", "model selection")
+      workflow = Cogni::Workflows::Declarative.create_workflow("wf-models", "model selection")
       workflow
         .use(model: "openai/gpt-4.1-mini")
         .agent("model-agent", prompt: "system", model: "openai/gpt-4.1")
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run_agent_model = engine.create_run("wf-models")
@@ -276,7 +276,7 @@ describe CogniCore::Workflow::Engine do
       result_request_model.status.should eq("success")
       result_request_model.state.not_nil!["last_model"].as_s.should eq("openai/gpt-4.1-nano")
 
-      workflow_default_only = CogniCore::Workflow.create_workflow("wf-model-default", "model selection default")
+      workflow_default_only = Cogni::Workflows::Declarative.create_workflow("wf-model-default", "model selection default")
       workflow_default_only
         .use(model: "openai/gpt-4.1-mini")
         .agent("model-agent-default", prompt: "system")
@@ -293,29 +293,29 @@ describe CogniCore::Workflow::Engine do
   end
 
   it "passes previous function output as input envelope for next function" do
-    CogniCore::Workflow.register_function("agent_step_one") do |_ctx|
-      CogniCore::Workflow::AgentResult.new(
+    Cogni::Workflows::Declarative.register_function("agent_step_one") do |_ctx|
+      Cogni::Workflows::Declarative::AgentResult.new(
         agent_type: "fn-agent",
         content: "step-one-output",
       )
     end
 
-    CogniCore::Workflow.register_function("agent_step_two") do |ctx|
+    Cogni::Workflows::Declarative.register_function("agent_step_two") do |ctx|
       previous = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
       received = previous["content"]?.try(&.as_s?) || "missing"
-      CogniCore::Workflow::AgentResult.new(
+      Cogni::Workflows::Declarative::AgentResult.new(
         agent_type: "fn-agent",
         content: "seen:#{received}",
       )
     end
 
-    workflow = CogniCore::Workflow.create_workflow("wf-run-chain", "function chaining")
+    workflow = Cogni::Workflows::Declarative.create_workflow("wf-run-chain", "function chaining")
     workflow
       .run("agent_step_one")
       .run("agent_step_two")
       .commit
 
-    engine = CogniCore::Workflow::Engine.new
+    engine = Cogni::Workflows::Declarative::Engine.new
     engine.register(workflow)
 
     result = engine.create_run("wf-run-chain").start(input_data: {"task" => json_str("demo")})

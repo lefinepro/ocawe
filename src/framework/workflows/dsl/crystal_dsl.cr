@@ -1,7 +1,8 @@
 require "./types"
 
-module CogniCore
-  module Schema
+module Cogni
+  module Workflows
+    module DSL
     module CrystalDSL
       class ParseError < Exception
       end
@@ -222,5 +223,6 @@ module CogniCore
         end
       end
     end
+  end
   end
 end

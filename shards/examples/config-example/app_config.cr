@@ -1,42 +1,18 @@
-module CogniCore
-  module Config
-    # Example: Crystal-native framework config
-    class AppConfig
-      WORKFLOW_PREFERRED_ROOT = "./shards/examples/full-capabilities"
-      WORKFLOW_FALLBACK_ROOT = "./shards/examples"
-
-      def self.settings : Settings
-        Settings.new(
-          workflows: WorkflowSettings.new(
-            preferred_workflows_root: WORKFLOW_PREFERRED_ROOT,
-            fallback_workflows_root: WORKFLOW_FALLBACK_ROOT
-          ),
-          functions: {
-            "agent_opencode" => DefaultFunctionHandlers.agent_opencode,
-            "agent_codex" => DefaultFunctionHandlers.agent_codex,
-            "agent_cliproxy" => DefaultFunctionHandlers.agent_cliproxy,
-          } of String => CogniCore::Workflow::FunctionHandler,
-        )
-      end
-
-      struct WorkflowSettings
-        getter preferred_workflows_root : String
-        getter fallback_workflows_root : String
-
-        def initialize(@preferred_workflows_root : String, @fallback_workflows_root : String)
-        end
-      end
-
-      struct Settings
-        getter workflows : WorkflowSettings
-        getter functions : Hash(String, CogniCore::Workflow::FunctionHandler)
-
-        def initialize(
-          @workflows : WorkflowSettings,
-          @functions : Hash(String, CogniCore::Workflow::FunctionHandler),
-        )
-        end
-      end
+module Cogni
+  module ExampleConfig
+    def self.settings : Cogni::Config::Settings
+      Cogni::Config::Settings.new(
+        workflows: Cogni::Config::WorkflowSettings.new(
+          preferred_workflows_root: "./shards/examples/full-capabilities",
+          fallback_workflows_root: "./shards/examples"
+        ),
+        node_kinds: Cogni::Config::NodeKindSettings.new(enabled: ["run", "agent", "skill", "voice", "rag", "suspend", "control"]),
+        functions: {
+          "agent_opencode" => Cogni::Config::DefaultFunctionHandlers.agent_opencode,
+          "agent_codex" => Cogni::Config::DefaultFunctionHandlers.agent_codex,
+          "agent_cliproxy" => Cogni::Config::DefaultFunctionHandlers.agent_cliproxy,
+        } of String => Cogni::Workflows::Declarative::FunctionHandler,
+      )
     end
   end
 end

@@ -1,7 +1,8 @@
 require "json"
 
-module CogniCore
-  module Workflow
+module Cogni
+  module Workflows
+    module Declarative
     alias AnyHash = Hash(String, JSON::Any)
 
     enum RunStatus
@@ -26,6 +27,7 @@ module CogniCore
       Voice
       Rag
       Control
+      Custom
     end
 
     struct AgentResult
@@ -235,5 +237,6 @@ module CogniCore
       )
       end
     end
+  end
   end
 end

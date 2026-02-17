@@ -1,13 +1,7 @@
 require "http/client"
-require "../cognicore/workflow/run"
+require "../workflows/declarative/run"
 
 module Cogni
-  class Workflow < CogniCore::Workflow::WorkflowDefinition
-    def self.build(id : String, description : String? = nil) : self
-      new(id, description)
-    end
-  end
-
   class Trigger
     @base_url : String
 
@@ -38,7 +32,7 @@ module Cogni
       def initialize(@base_url : String, @kind : String, @id : String)
       end
 
-      def run(payload : CogniCore::Workflow::AnyHash = {} of String => JSON::Any) : JSON::Any
+      def run(payload : Cogni::Workflows::Declarative::AnyHash = {} of String => JSON::Any) : JSON::Any
         url = "#{trimmed_base_url}/v1/triggers/#{@kind}/#{@id}"
         response = HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: payload.to_json)
         JSON.parse(response.body)

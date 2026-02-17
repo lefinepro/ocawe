@@ -13,7 +13,7 @@ describe "E2E: Agents and Skills" do
       #   @[Resources(model: "cliproxyapi/qwen3-coder-plus")]
       #   agent "simple-agent"
       # end
-      workflow = CogniCore::Workflow.create_workflow("agents-example", "Agent example test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("agents-example", "Agent example test")
       workflow
         .use(model: "clipproxyapi/qwen3-coder-plus")
         .agent("simple-agent")
@@ -23,19 +23,19 @@ describe "E2E: Agents and Skills" do
       workflow.default_model.should eq("clipproxyapi/qwen3-coder-plus")
       workflow.nodes.size.should eq(1)
       workflow.nodes[0].id.should eq("simple-agent")
-      workflow.nodes[0].kind.should eq(CogniCore::Workflow::NodeKind::Agent)
+      workflow.nodes[0].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Agent)
     end
 
     it "executes agent workflow with task input" do
-      workflow = CogniCore::Workflow.create_workflow("agents-example-run", "Agent run test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("agents-example-run", "Agent run test")
       workflow
         .use(model: "openai/gpt-4.1-mini")
-        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"task" => json_str("test task")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"task" => json_str("test task")})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("agents-example-run")
@@ -51,7 +51,7 @@ describe "E2E: Agents and Skills" do
       #   agent "skills-agent"
       #   skill "example-skill"
       # end
-      workflow = CogniCore::Workflow.create_workflow("skills-example", "Skills example test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("skills-example", "Skills example test")
       workflow
         .agent("skills-agent")
         .skill("example-skill")
@@ -59,21 +59,21 @@ describe "E2E: Agents and Skills" do
 
       workflow.nodes.size.should eq(2)
       workflow.nodes[0].id.should eq("skills-agent")
-      workflow.nodes[0].kind.should eq(CogniCore::Workflow::NodeKind::Agent)
+      workflow.nodes[0].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Agent)
       workflow.nodes[1].id.should eq("example-skill")
-      workflow.nodes[1].kind.should eq(CogniCore::Workflow::NodeKind::Skill)
+      workflow.nodes[1].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Skill)
     end
 
     it "executes skill workflow with skill node" do
-      workflow = CogniCore::Workflow.create_workflow("skills-example-run", "Skills run test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("skills-example-run", "Skills run test")
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("init", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"skill_data" => json_str("prepared")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("init", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"skill_data" => json_str("prepared")})
         end)
         .skill("example-skill")
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("skills-example-run")
@@ -86,28 +86,28 @@ describe "E2E: Agents and Skills" do
   describe "workflow-example" do
     it "creates workflow with typed schemas and multiple agent functions" do
       # Simulates: workflow "workflow-example" with typed input/output schemas
-      workflow = CogniCore::Workflow.create_workflow("workflow-example", "Workflow composition test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("workflow-example", "Workflow composition test")
       workflow
         .agent("workflow-agent",
-          input_schema: CogniCore::Schema::Types.object({"task" => CogniCore::Schema::Types.of(String)}),
-          output_schema: CogniCore::Schema::Types.object({"last_response" => CogniCore::Schema::Types.of(String)}, strict: false))
+          input_schema: Cogni::Workflows::DSL::Types.object({"task" => Cogni::Workflows::DSL::Types.of(String)}),
+          output_schema: Cogni::Workflows::DSL::Types.object({"last_response" => Cogni::Workflows::DSL::Types.of(String)}, strict: false))
         .commit
 
       workflow.nodes.size.should eq(1)
       workflow.nodes[0].id.should eq("workflow-agent")
-      workflow.nodes[0].kind.should eq(CogniCore::Workflow::NodeKind::Agent)
+      workflow.nodes[0].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Agent)
     end
 
     it "validates input schema on workflow execution" do
-      workflow = CogniCore::Workflow.create_workflow("workflow-schema-test", "Schema validation test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("workflow-schema-test", "Schema validation test")
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("validate", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("validate", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           task = ctx.input_data["task"]?.try(&.as_s?) || "default"
-          CogniCore::Workflow::WorkflowNodeResult.continue({"validated_task" => json_str(task)})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"validated_task" => json_str(task)})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("workflow-schema-test")
@@ -119,29 +119,29 @@ describe "E2E: Agents and Skills" do
 
   describe "agent interaction" do
     it "handles agent with voice configuration" do
-      workflow = CogniCore::Workflow.create_workflow("voice-agent-test", "Voice agent test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("voice-agent-test", "Voice agent test")
       workflow
         .agent("voice-enabled-agent",
           voice_config: {"provider" => json_str("openai"), "speaker" => json_str("alloy")})
         .commit
 
       workflow.nodes.size.should eq(1)
-      workflow.nodes[0].kind.should eq(CogniCore::Workflow::NodeKind::Agent)
+      workflow.nodes[0].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Agent)
     end
 
     it "handles agent input with task and input object" do
-      workflow = CogniCore::Workflow.create_workflow("agent-input-test", "Agent input test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("agent-input-test", "Agent input test")
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("prepare", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("prepare", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           task = ctx.input_data["task"]?.try(&.as_s?) || "default-task"
-          CogniCore::Workflow::WorkflowNodeResult.continue({
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({
             "prepared_task" => json_str(task),
             "context"       => json_str("prepared"),
           })
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("agent-input-test")
@@ -154,22 +154,22 @@ describe "E2E: Agents and Skills" do
     end
 
     it "chains multiple agents in sequence" do
-      workflow = CogniCore::Workflow.create_workflow("agent-chain-test", "Agent chain test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("agent-chain-test", "Agent chain test")
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("agent-1", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"step" => json_str("1")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("agent-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"step" => json_str("1")})
         end)
-        .then(CogniCore::Workflow::WorkflowNode.new("agent-2", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("agent-2", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           prev = ctx.state["step"]?.try(&.as_s?) || "0"
-          CogniCore::Workflow::WorkflowNodeResult.continue({"step" => json_str("#{prev}->2")})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"step" => json_str("#{prev}->2")})
         end)
-        .then(CogniCore::Workflow::WorkflowNode.new("agent-3", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("agent-3", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           prev = ctx.state["step"]?.try(&.as_s?) || "0"
-          CogniCore::Workflow::WorkflowNodeResult.continue({"step" => json_str("#{prev}->3")})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"step" => json_str("#{prev}->3")})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("agent-chain-test")
@@ -179,7 +179,7 @@ describe "E2E: Agents and Skills" do
     end
 
     it "executes multi-agent workflow" do
-      workflow = CogniCore::Workflow.create_workflow("multi-agent-test", "Multi-agent test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("multi-agent-test", "Multi-agent test")
       workflow
         .agent("analyzer")
         .agent("processor")

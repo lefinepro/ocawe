@@ -17,7 +17,7 @@ module ACD
           if result_or_error.is_a?(String)
             next result_or_error
           end
-          run_result = result_or_error.as(CogniCore::Workflow::WorkflowRunResult)
+          run_result = result_or_error.as(Cogni::Workflows::Declarative::WorkflowRunResult)
 
           env.response.status_code = 201
           env.response.content_type = "application/json"

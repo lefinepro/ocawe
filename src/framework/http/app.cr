@@ -5,9 +5,9 @@ require "../discovery/workflow_locator"
 require "../agents/loader"
 require "../skills/loader"
 require "../cognicore/version"
-require "../cognicore/config/app_config"
-require "../cognicore/schema/crystal_dsl"
-require "../cognicore/workflow/run"
+require "../workflows/dsl/crystal_dsl"
+require "../workflows/declarative/run"
+require "../config/settings"
 require "./endpoints/health"
 require "./endpoints/docs"
 require "./endpoints/workflows"
@@ -24,15 +24,20 @@ module ACD
     class App
       RELOAD_INTERVAL_SECONDS = 2.0
 
-      def initialize(@port : Int32, workflows_root : String? = nil, fallback_workflows_root : String? = nil)
-        config = CogniCore::Config::AppConfig.settings.workflows
+      def initialize(
+        @port : Int32,
+        workflows_root : String? = nil,
+        fallback_workflows_root : String? = nil,
+        @settings : Cogni::Config::Settings = Cogni::Config::Settings.default
+      )
+        config = @settings.workflows
         preferred_root = workflows_root || config.preferred_workflows_root
         fallback_root = fallback_workflows_root || config.fallback_workflows_root
         @locator = Discovery::WorkflowLocator.new(preferred_root, fallback_root)
         @agent_loader = Agents::Loader.new
         @skill_loader = Skills::Loader.new
-        @workflow_engine = CogniCore::Workflow::Engine.new
-        @workflow_service = CogniCore::Workflow::Service.new(@workflow_engine)
+        @workflow_engine = Cogni::Workflows::Declarative::Engine.new
+        @workflow_service = Cogni::Workflows::Declarative::Service.new(@workflow_engine)
         @workflow_ids = [] of String
         @workflow_index = {} of String => NamedTuple(
           source_root_type: String,
@@ -107,7 +112,7 @@ module ACD
 
       private def reload_cache!
         bundles = @locator.list_workflows
-        rebuilt_engine = CogniCore::Workflow::Engine.new
+        rebuilt_engine = Cogni::Workflows::Declarative::Engine.new
         ids = [] of String
         index = {} of String => NamedTuple(
           source_root_type: String,
@@ -150,7 +155,7 @@ module ACD
           tool_ids = [] of String
           definition.default_tools.each { |id| tool_ids << id unless tool_ids.includes?(id) }
           definition.nodes.each do |node|
-            next unless node.kind == CogniCore::Workflow::NodeKind::Run
+            next unless node.kind == Cogni::Workflows::Declarative::NodeKind::Run
             next unless node.metadata["runtime"]?
             tool_ids << node.id unless tool_ids.includes?(node.id)
           end
@@ -204,7 +209,7 @@ module ACD
           @agents_index = agents_index
           @tools_index = tools_index
           @workflow_engine = rebuilt_engine
-          @workflow_service = CogniCore::Workflow::Service.new(@workflow_engine)
+          @workflow_service = Cogni::Workflows::Declarative::Service.new(@workflow_engine)
         end
       end
 
@@ -247,11 +252,13 @@ module ACD
       end
 
       private def register_configured_functions! : Nil
-        config = CogniCore::Config::AppConfig.settings
-        CogniCore::Workflow.reset_function_registry!
+        config = @settings
+        Cogni::Workflows::Declarative.reset_node_kind_registry!
+        Cogni::Workflows::Declarative.reset_resource_registry!
+        Cogni::Workflows::Declarative.reset_function_registry!
 
         config.functions.each do |name, handler|
-          CogniCore::Workflow.register_system_function(name, &handler)
+          Cogni::Workflows::Declarative.register_system_function(name, &handler)
         end
       end
 
@@ -304,7 +311,7 @@ module ACD
         {error: {type: "not_implemented", message: message}}.to_json
       end
 
-      private def json_body(env) : CogniCore::Workflow::AnyHash
+      private def json_body(env) : Cogni::Workflows::Declarative::AnyHash
         raw = env.request.body.try(&.gets_to_end).to_s
         return {} of String => JSON::Any if raw.strip.empty?
         parsed = JSON.parse(raw)
@@ -343,8 +350,8 @@ module ACD
         return {error: {type: "workflow_error", message: message}}.to_json
       end
 
-      private def load_workflow_definition(bundle : Discovery::WorkflowBundle, loaded_agents : Array(Agents::LoadedAgent)) : CogniCore::Workflow::WorkflowDefinition
-        workflow = CogniCore::Workflow.create_workflow(bundle.id, "Loaded from #{bundle.workflow_file}")
+      private def load_workflow_definition(bundle : Discovery::WorkflowBundle, loaded_agents : Array(Agents::LoadedAgent)) : Cogni::Workflows::Declarative::WorkflowDefinition
+        workflow = Cogni::Workflows::Declarative.create_workflow(bundle.id, "Loaded from #{bundle.workflow_file}")
         agent_index = {} of String => Agents::LoadedAgent
         loaded_agents.each { |agent| agent_index[agent.id] = agent }
 
@@ -363,11 +370,26 @@ module ACD
         parse_workflow_body(ctx, 0, lines.size)
 
         workflow.commit
+        enforce_enabled_node_kinds!(workflow, bundle.workflow_file)
+        workflow
+      end
+
+      private def enforce_enabled_node_kinds!(workflow : Cogni::Workflows::Declarative::WorkflowDefinition, workflow_file : String) : Nil
+        enabled = @settings.node_kinds.enabled
+        return if enabled.empty?
+
+        allowed = enabled.map(&.strip.downcase).to_set
+        workflow.nodes.each do |node|
+          key = node.kind.to_s.downcase
+          unless allowed.includes?(key)
+            raise "#{workflow_file}: node kind '#{key}' is disabled by config"
+          end
+        end
       end
 
       # Parser context for workflow DSL
       private struct WorkflowParserContext
-        getter workflow : CogniCore::Workflow::WorkflowDefinition
+        getter workflow : Cogni::Workflows::Declarative::WorkflowDefinition
         getter agent_index : Hash(String, Agents::LoadedAgent)
         getter workflow_file : String
         getter workflow_root : String
@@ -375,7 +397,7 @@ module ACD
         property last_agent_id : String?
 
         def initialize(
-          @workflow : CogniCore::Workflow::WorkflowDefinition,
+          @workflow : Cogni::Workflows::Declarative::WorkflowDefinition,
           @agent_index : Hash(String, Agents::LoadedAgent),
           @workflow_file : String,
           @workflow_root : String,
@@ -642,7 +664,7 @@ module ACD
       # Parse a parallel do...end block
       private def parse_parallel_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
         # Collect nodes defined in the parallel block
-        parallel_nodes = [] of CogniCore::Workflow::WorkflowNode
+        parallel_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
 
         i = start_line
         while i < end_line
@@ -726,12 +748,12 @@ module ACD
 
       # Parse if/elsif/else conditional block
       private def parse_conditional_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
-        conditions = [] of Tuple(String, CogniCore::Workflow::WorkflowNode)
-        otherwise_node = nil.as(CogniCore::Workflow::WorkflowNode?)
+        conditions = [] of Tuple(String, Cogni::Workflows::Declarative::WorkflowNode)
+        otherwise_node = nil.as(Cogni::Workflows::Declarative::WorkflowNode?)
 
         i = start_line
         current_condition = nil.as(String?)
-        current_nodes = [] of CogniCore::Workflow::WorkflowNode
+        current_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
         in_else = false
 
         while i <= end_line
@@ -753,7 +775,7 @@ module ACD
               conditions << {current_condition, node}
             end
             current_condition = match[1].strip
-            current_nodes = [] of CogniCore::Workflow::WorkflowNode
+            current_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
             next
           end
 
@@ -764,7 +786,7 @@ module ACD
               conditions << {current_condition, node}
             end
             current_condition = nil
-            current_nodes = [] of CogniCore::Workflow::WorkflowNode
+            current_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
             in_else = true
             next
           end
@@ -848,12 +870,12 @@ module ACD
 
         return if conditions.empty? && otherwise_node.nil?
 
-        conditional_node = CogniCore::Workflow::WorkflowNode.new("if-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+        conditional_node = Cogni::Workflows::Declarative::WorkflowNode.new("if-#{start_line}", Cogni::Workflows::Declarative::NodeKind::Control) do |node_ctx|
           selected = conditions.find { |(condition, _)| evaluate_dsl_condition(condition, node_ctx) }.try(&.[1]) || otherwise_node
           if selected
             selected.execute(node_ctx)
           else
-            CogniCore::Workflow::WorkflowNodeResult.continue
+            Cogni::Workflows::Declarative::WorkflowNodeResult.continue
           end
         end
         ctx.workflow.then(conditional_node)
@@ -863,8 +885,8 @@ module ACD
       private def parse_unless_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
         i = start_line
         condition = nil.as(String?)
-        unless_nodes = [] of CogniCore::Workflow::WorkflowNode
-        else_nodes = [] of CogniCore::Workflow::WorkflowNode
+        unless_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
+        else_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
         in_else = false
 
         while i <= end_line
@@ -970,12 +992,12 @@ module ACD
 
         unless_branch_node = wrap_nodes_in_control(unless_nodes, "unless-branch")
         else_branch_node = else_nodes.empty? ? nil : wrap_nodes_in_control(else_nodes, "else-branch")
-        control_node = CogniCore::Workflow::WorkflowNode.new("unless-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+        control_node = Cogni::Workflows::Declarative::WorkflowNode.new("unless-#{start_line}", Cogni::Workflows::Declarative::NodeKind::Control) do |node_ctx|
           selected = evaluate_dsl_condition(condition, node_ctx) ? else_branch_node : unless_branch_node
           if selected
             selected.execute(node_ctx)
           else
-            CogniCore::Workflow::WorkflowNodeResult.continue
+            Cogni::Workflows::Declarative::WorkflowNodeResult.continue
           end
         end
         ctx.workflow.then(control_node)
@@ -991,7 +1013,7 @@ module ACD
         return unless match
         condition = match[1].strip
 
-        loop_nodes = [] of CogniCore::Workflow::WorkflowNode
+        loop_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
 
         i = start_line + 1
         while i <= end_line
@@ -1072,22 +1094,22 @@ module ACD
         return if loop_nodes.empty?
 
         loop_body = wrap_nodes_in_control(loop_nodes, "while-body")
-        control_node = CogniCore::Workflow::WorkflowNode.new("while-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+        control_node = Cogni::Workflows::Declarative::WorkflowNode.new("while-#{start_line}", Cogni::Workflows::Declarative::NodeKind::Control) do |node_ctx|
           iterations = 0
           merged = {} of String => JSON::Any
-          result = CogniCore::Workflow::WorkflowNodeResult.continue
+          result = Cogni::Workflows::Declarative::WorkflowNodeResult.continue
 
           while evaluate_dsl_condition(condition, with_state(node_ctx, merged)) && iterations < 100
             iterations += 1
             result = loop_body.execute(with_state(node_ctx, merged))
-            break if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            break if result.action != Cogni::Workflows::Declarative::NodeAction::Continue.to_s.downcase
             if data = result.data
               data.each { |k, v| merged[k] = v }
             end
           end
 
-          if result.action == CogniCore::Workflow::NodeAction::Continue.to_s.downcase
-            CogniCore::Workflow::WorkflowNodeResult.continue(merged)
+          if result.action == Cogni::Workflows::Declarative::NodeAction::Continue.to_s.downcase
+            Cogni::Workflows::Declarative::WorkflowNodeResult.continue(merged)
           else
             result
           end
@@ -1105,7 +1127,7 @@ module ACD
         return unless match
         condition = match[1].strip
 
-        loop_nodes = [] of CogniCore::Workflow::WorkflowNode
+        loop_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
 
         i = start_line + 1
         while i <= end_line
@@ -1186,22 +1208,22 @@ module ACD
         return if loop_nodes.empty?
 
         loop_body = wrap_nodes_in_control(loop_nodes, "until-body")
-        control_node = CogniCore::Workflow::WorkflowNode.new("until-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+        control_node = Cogni::Workflows::Declarative::WorkflowNode.new("until-#{start_line}", Cogni::Workflows::Declarative::NodeKind::Control) do |node_ctx|
           iterations = 0
           merged = {} of String => JSON::Any
-          result = CogniCore::Workflow::WorkflowNodeResult.continue
+          result = Cogni::Workflows::Declarative::WorkflowNodeResult.continue
 
           while !evaluate_dsl_condition(condition, with_state(node_ctx, merged)) && iterations < 100
             iterations += 1
             result = loop_body.execute(with_state(node_ctx, merged))
-            break if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            break if result.action != Cogni::Workflows::Declarative::NodeAction::Continue.to_s.downcase
             if data = result.data
               data.each { |k, v| merged[k] = v }
             end
           end
 
-          if result.action == CogniCore::Workflow::NodeAction::Continue.to_s.downcase
-            CogniCore::Workflow::WorkflowNodeResult.continue(merged)
+          if result.action == Cogni::Workflows::Declarative::NodeAction::Continue.to_s.downcase
+            Cogni::Workflows::Declarative::WorkflowNodeResult.continue(merged)
           else
             result
           end
@@ -1211,7 +1233,7 @@ module ACD
 
       # Parse loop do...end block
       private def parse_loop_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
-        loop_nodes = [] of CogniCore::Workflow::WorkflowNode
+        loop_nodes = [] of Cogni::Workflows::Declarative::WorkflowNode
 
         i = start_line + 1
         while i <= end_line
@@ -1291,22 +1313,22 @@ module ACD
         return if loop_nodes.empty?
 
         loop_body = wrap_nodes_in_control(loop_nodes, "loop-body")
-        control_node = CogniCore::Workflow::WorkflowNode.new("loop-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+        control_node = Cogni::Workflows::Declarative::WorkflowNode.new("loop-#{start_line}", Cogni::Workflows::Declarative::NodeKind::Control) do |node_ctx|
           iterations = 0
           merged = {} of String => JSON::Any
-          result = CogniCore::Workflow::WorkflowNodeResult.continue
+          result = Cogni::Workflows::Declarative::WorkflowNodeResult.continue
 
           while iterations < 100
             iterations += 1
             result = loop_body.execute(with_state(node_ctx, merged))
-            break if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            break if result.action != Cogni::Workflows::Declarative::NodeAction::Continue.to_s.downcase
             if data = result.data
               data.each { |k, v| merged[k] = v }
             end
           end
 
-          if result.action == CogniCore::Workflow::NodeAction::Continue.to_s.downcase
-            CogniCore::Workflow::WorkflowNodeResult.continue(merged)
+          if result.action == Cogni::Workflows::Declarative::NodeAction::Continue.to_s.downcase
+            Cogni::Workflows::Declarative::WorkflowNodeResult.continue(merged)
           else
             result
           end
@@ -1319,19 +1341,19 @@ module ACD
         id : String,
         prompt : String? = nil,
         model : String? = nil,
-        resume_schema : CogniCore::Schema::Validator? = nil,
-        voice_config : CogniCore::Workflow::AnyHash? = nil,
-        guardrails_config : CogniCore::Workflow::AnyHash? = nil,
-        input_schema : CogniCore::Schema::Validator? = nil,
-        output_schema : CogniCore::Schema::Validator? = nil,
+        resume_schema : Cogni::Workflows::DSL::Validator? = nil,
+        voice_config : Cogni::Workflows::Declarative::AnyHash? = nil,
+        guardrails_config : Cogni::Workflows::Declarative::AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil,
         default_model : String? = nil
-      ) : CogniCore::Workflow::WorkflowNode
+      ) : Cogni::Workflows::Declarative::WorkflowNode
         metadata = {} of String => JSON::Any
         metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema
 
-        CogniCore::Workflow::WorkflowNode.new(id, CogniCore::Workflow::NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+        Cogni::Workflows::Declarative::WorkflowNode.new(id, Cogni::Workflows::Declarative::NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           user_prompt = build_agent_user_prompt_from_ctx(ctx)
-          CogniCore::Workflow::Guardrails.validate_input!(id, user_prompt, guardrails_config)
+          Cogni::Workflows::Declarative::Guardrails.validate_input!(id, user_prompt, guardrails_config)
 
           resolved_model = resolve_model_from_ctx(ctx, model, default_model)
           system_prompt = prompt || "You are agent #{id}."
@@ -1346,14 +1368,14 @@ module ACD
               "agent_id"    => JSON.parse(id.to_json),
             },
           )
-          agent_result = CogniCore::Workflow::AgentResult.new(
+          agent_result = Cogni::Workflows::Declarative::AgentResult.new(
             agent_type: "default-agent",
             content: response.text,
             provider: response.provider,
             model: "#{response.provider}/#{response.model}",
           )
 
-          CogniCore::Workflow::Guardrails.validate_output!(id, agent_result.content, guardrails_config)
+          Cogni::Workflows::Declarative::Guardrails.validate_output!(id, agent_result.content, guardrails_config)
 
           outputs = ctx.state["agent_outputs"]?.try(&.as_h?) || {} of String => JSON::Any
           outputs = outputs.dup
@@ -1372,39 +1394,39 @@ module ACD
             result["active_voice"] = JSON.parse(voice.to_json)
           end
 
-          CogniCore::Workflow::WorkflowNodeResult.continue(result)
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue(result)
         end
       end
 
       private def create_run_node(
         ref : String,
-        runtime : CogniCore::Workflow::AnyHash? = nil,
-        env : CogniCore::Workflow::AnyHash? = nil,
-        params : CogniCore::Workflow::AnyHash? = nil,
-        input_schema : CogniCore::Schema::Validator? = nil,
-        output_schema : CogniCore::Schema::Validator? = nil,
+        runtime : Cogni::Workflows::Declarative::AnyHash? = nil,
+        env : Cogni::Workflows::Declarative::AnyHash? = nil,
+        params : Cogni::Workflows::Declarative::AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil,
         workflow_root : String? = nil
-      ) : CogniCore::Workflow::WorkflowNode
+      ) : Cogni::Workflows::Declarative::WorkflowNode
         metadata = {} of String => JSON::Any
         metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
         metadata["env"] = JSON.parse(env.to_json) if env
         metadata["params"] = JSON.parse(params.to_json) if params
         metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
 
-        executor = CogniCore::Workflow::RunExecutor.new
-        CogniCore::Workflow::WorkflowNode.new(ref, CogniCore::Workflow::NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue(
+        executor = Cogni::Workflows::Declarative::RunExecutor.new
+        Cogni::Workflows::Declarative::WorkflowNode.new(ref, Cogni::Workflows::Declarative::NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue(
             executor.run(ref, ctx, runtime: runtime, env: env, workflow_root: workflow_root)
           )
         end
       end
 
       # Wrap multiple nodes in a single control node
-      private def wrap_nodes_in_control(nodes : Array(CogniCore::Workflow::WorkflowNode), name : String) : CogniCore::Workflow::WorkflowNode
-        CogniCore::Workflow::WorkflowNode.new(name, CogniCore::Workflow::NodeKind::Control) do |ctx|
+      private def wrap_nodes_in_control(nodes : Array(Cogni::Workflows::Declarative::WorkflowNode), name : String) : Cogni::Workflows::Declarative::WorkflowNode
+        Cogni::Workflows::Declarative::WorkflowNode.new(name, Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           merged = {} of String => JSON::Any
           nodes.each do |node|
-            result = node.execute(CogniCore::Workflow::NodeContext.new(
+            result = node.execute(Cogni::Workflows::Declarative::NodeContext.new(
               workflow_id: ctx.workflow_id,
               run_id: ctx.run_id,
               node_id: node.id,
@@ -1417,19 +1439,19 @@ module ACD
               trigger_data: ctx.trigger_data,
               resume_data: ctx.resume_data,
             ))
-            if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            if result.action != Cogni::Workflows::Declarative::NodeAction::Continue.to_s.downcase
               return result
             end
             if data = result.data
               data.each { |k, v| merged[k] = v }
             end
           end
-          CogniCore::Workflow::WorkflowNodeResult.continue(merged)
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue(merged)
         end
       end
 
-      private def with_state(ctx : CogniCore::Workflow::NodeContext, additions : Hash(String, JSON::Any)) : CogniCore::Workflow::NodeContext
-        CogniCore::Workflow::NodeContext.new(
+      private def with_state(ctx : Cogni::Workflows::Declarative::NodeContext, additions : Hash(String, JSON::Any)) : Cogni::Workflows::Declarative::NodeContext
+        Cogni::Workflows::Declarative::NodeContext.new(
           workflow_id: ctx.workflow_id,
           run_id: ctx.run_id,
           node_id: ctx.node_id,
@@ -1444,7 +1466,7 @@ module ACD
         )
       end
 
-      private def evaluate_dsl_condition(expression : String, ctx : CogniCore::Workflow::NodeContext) : Bool
+      private def evaluate_dsl_condition(expression : String, ctx : Cogni::Workflows::Declarative::NodeContext) : Bool
         normalized = expression.strip
         return true if normalized == "true"
         return false if normalized == "false"
@@ -1488,7 +1510,7 @@ module ACD
       end
 
       # Helper to build agent user prompt from context
-      private def build_agent_user_prompt_from_ctx(ctx : CogniCore::Workflow::NodeContext) : String
+      private def build_agent_user_prompt_from_ctx(ctx : Cogni::Workflows::Declarative::NodeContext) : String
         if input = ctx.input_data["input"]?
           if as_text = input.as_s?
             return as_text
@@ -1509,7 +1531,7 @@ module ACD
       end
 
       # Helper to resolve model from context
-      private def resolve_model_from_ctx(ctx : CogniCore::Workflow::NodeContext, agent_model : String?, default_model : String?) : String
+      private def resolve_model_from_ctx(ctx : Cogni::Workflows::Declarative::NodeContext, agent_model : String?, default_model : String?) : String
         request_model = ctx.input_data["model"]?.try(&.as_s?) || ctx.state["model"]?.try(&.as_s?)
         return request_model if request_model
         return agent_model if agent_model
@@ -1522,7 +1544,7 @@ module ACD
         kind : String,
         workflow_file : String,
         agent_id : String
-      ) : CogniCore::Schema::Validator?
+      ) : Cogni::Workflows::DSL::Validator?
         if literal
           stripped = literal.strip
           if match = stripped.match(/^schema_ref\("([^"]+)"\)$/)
@@ -1538,10 +1560,10 @@ module ACD
                               raise "#{workflow_file}: unknown schema_ref(\"#{ref_name}\") for agent #{agent_id}"
                             end
             raise "#{workflow_file}: schema_ref(\"#{ref_name}\") missing in agent #{agent_id} markdown" unless schema_source
-            return CogniCore::Schema::CrystalDSL.compile(schema_source, "#{workflow_file}: agent #{agent_id} #{kind} schema_ref")
+            return Cogni::Workflows::DSL::CrystalDSL.compile(schema_source, "#{workflow_file}: agent #{agent_id} #{kind} schema_ref")
           end
 
-          return CogniCore::Schema::CrystalDSL.compile(stripped, "#{workflow_file}: agent #{agent_id} #{kind} schema")
+          return Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: agent #{agent_id} #{kind} schema")
         end
 
         fallback = case kind
@@ -1555,14 +1577,14 @@ module ACD
                      nil
                    end
         return nil unless fallback
-        CogniCore::Schema::CrystalDSL.compile(fallback, "#{workflow_file}: agent #{agent_id} #{kind} markdown schema")
+        Cogni::Workflows::DSL::CrystalDSL.compile(fallback, "#{workflow_file}: agent #{agent_id} #{kind} markdown schema")
       end
 
       private def resolve_suspend_resume_schema(
         literal : String?,
         ctx : WorkflowParserContext,
         suspend_id : String
-      ) : CogniCore::Schema::Validator?
+      ) : Cogni::Workflows::DSL::Validator?
         return nil unless literal
         stripped = literal.strip
 
@@ -1577,10 +1599,10 @@ module ACD
           schema_source = loaded.try(&.resume_schema_dsl)
           raise "#{ctx.workflow_file}: schema_ref(\"resume\") missing in agent #{agent_id} markdown" unless schema_source
 
-          return CogniCore::Schema::CrystalDSL.compile(schema_source, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema_ref")
+          return Cogni::Workflows::DSL::CrystalDSL.compile(schema_source, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema_ref")
         end
 
-        CogniCore::Schema::CrystalDSL.compile(stripped, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema")
+        Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema")
       end
 
       private def parse_line_params(tail : String, workflow_file : String, context : String) : Hash(String, String)
@@ -1603,7 +1625,7 @@ module ACD
         params
       end
 
-      private def extract_named_args(params : Hash(String, String), skip_keys : Set(String), workflow_file : String) : CogniCore::Workflow::AnyHash?
+      private def extract_named_args(params : Hash(String, String), skip_keys : Set(String), workflow_file : String) : Cogni::Workflows::Declarative::AnyHash?
         args = {} of String => JSON::Any
         params.each do |key, value|
           next if skip_keys.includes?(key)
@@ -1636,10 +1658,10 @@ module ACD
         workflow_file : String,
         fn_name : String,
         kind : String
-      ) : CogniCore::Schema::Validator
+      ) : Cogni::Workflows::DSL::Validator
         raise "#{workflow_file}: function #{fn_name} requires #{kind}_schema" unless literal
         stripped = literal.strip
-        CogniCore::Schema::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
+        Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
       end
 
       private def compile_optional_function_schema(
@@ -1647,20 +1669,20 @@ module ACD
         workflow_file : String,
         fn_name : String,
         kind : String
-      ) : CogniCore::Schema::Validator?
+      ) : Cogni::Workflows::DSL::Validator?
         return nil unless literal
         stripped = literal.strip
-        CogniCore::Schema::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
+        Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
       end
 
       private def ensure_output_schema_superset!(
         workflow_file : String,
         fn_name : String,
-        input_schema : CogniCore::Schema::Validator,
-        output_schema : CogniCore::Schema::Validator
+        input_schema : Cogni::Workflows::DSL::Validator,
+        output_schema : Cogni::Workflows::DSL::Validator
       )
-        CogniCore::Schema::Compatibility.ensure_output_superset!(input_schema, output_schema)
-      rescue ex : CogniCore::Schema::ValidationError
+        Cogni::Workflows::DSL::Compatibility.ensure_output_superset!(input_schema, output_schema)
+      rescue ex : Cogni::Workflows::DSL::ValidationError
         raise "#{workflow_file}: function #{fn_name} output_schema must cover input_schema: #{ex.message}"
       end
 
@@ -1732,7 +1754,7 @@ module ACD
         literal[1, literal.size - 2]
       end
 
-      private def parse_runtime_object(literal : String, workflow_file : String) : CogniCore::Workflow::AnyHash
+      private def parse_runtime_object(literal : String, workflow_file : String) : Cogni::Workflows::Declarative::AnyHash
         parsed = YAML.parse(literal)
         hash = JSON.parse(parsed.to_json).as_h?
         raise "#{workflow_file}: runtime must be an object: #{literal}" unless hash

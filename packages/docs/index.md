@@ -33,6 +33,7 @@ Open docs and playground route:
 
 - Tutorial: `/guides/tutorial`
 - Workflow format: `/guides/workflow-format`
+- Registry API: `/guides/registry`
 - API reference: `/api/reference`
 - Workflow API spec: `/api/workflow-api-spec`
 - Trigger API spec: `/api/trigger-api-spec`

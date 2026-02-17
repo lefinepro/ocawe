@@ -11,19 +11,19 @@ require "./e2e_spec_helper"
 describe "E2E: Workflow Lifecycle" do
   describe "basic workflow operations" do
     it "creates and runs a simple workflow with control nodes" do
-      workflow = CogniCore::Workflow.create_workflow("e2e-simple", "Simple workflow test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-simple", "Simple workflow test")
 
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("step-1", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("initialized")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("step-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value" => json_str("initialized")})
         end)
-        .then(CogniCore::Workflow::WorkflowNode.new("step-2", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("step-2", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           prev = ctx.state["value"]?.try(&.as_s?) || "none"
-          CogniCore::Workflow::WorkflowNodeResult.continue({"value" => json_str("#{prev}:processed")})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value" => json_str("#{prev}:processed")})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-simple")
@@ -36,19 +36,19 @@ describe "E2E: Workflow Lifecycle" do
 
   describe "suspend and resume" do
     it "runs workflow with suspend and resume" do
-      workflow = CogniCore::Workflow.create_workflow("e2e-approval", "Approval workflow")
+      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-approval", "Approval workflow")
 
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
         end)
         .suspend("human-review", reason: "Confirm data processing")
-        .then(CogniCore::Workflow::WorkflowNode.new("finalize", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"completed" => json_bool(true)})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("finalize", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"completed" => json_bool(true)})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-approval")
@@ -73,22 +73,22 @@ describe "E2E: Workflow Lifecycle" do
 
   describe "time travel" do
     it "runs workflow with time travel to replay from specific node" do
-      workflow = CogniCore::Workflow.create_workflow("e2e-timetravel", "Time travel test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-timetravel", "Time travel test")
 
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("node-a", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"a" => json_str("value-a")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("node-a", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"a" => json_str("value-a")})
         end)
-        .then(CogniCore::Workflow::WorkflowNode.new("node-b", CogniCore::Workflow::NodeKind::Control) do |ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"b" => json_str("#{ctx.state["a"]?.try(&.as_s?) || "none"}-b")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("node-b", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"b" => json_str("#{ctx.state["a"]?.try(&.as_s?) || "none"}-b")})
         end)
         .suspend("checkpoint")
-        .then(CogniCore::Workflow::WorkflowNode.new("node-c", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"c" => json_str("final")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("node-c", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"c" => json_str("final")})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-timetravel")
@@ -104,16 +104,16 @@ describe "E2E: Workflow Lifecycle" do
 
   describe "cancel" do
     it "runs workflow with cancel operation" do
-      workflow = CogniCore::Workflow.create_workflow("e2e-cancel", "Cancel test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-cancel", "Cancel test")
 
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("start", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"started" => json_bool(true)})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("start", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"started" => json_bool(true)})
         end)
         .suspend("wait-forever")
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-cancel")
@@ -128,12 +128,12 @@ describe "E2E: Workflow Lifecycle" do
   describe "e2e-test example workflow" do
     it "creates workflow with agent, approval, rag, and voice nodes" do
       # Simulates e2e-test workflow from shards/examples/e2e-test
-      workflow = CogniCore::Workflow.create_workflow("e2e-test", "E2E test workflow")
+      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-test", "E2E test workflow")
       workflow
         .use(model: "clipproxyapi/qwen3-coder-model")
         .agent("e2e-processor",
-          input_schema: CogniCore::Schema::Types.object({"task" => CogniCore::Schema::Types.of(String)}, strict: false),
-          output_schema: CogniCore::Schema::Types.object({"result" => CogniCore::Schema::Types.of(String)}, strict: false))
+          input_schema: Cogni::Workflows::DSL::Types.object({"task" => Cogni::Workflows::DSL::Types.of(String)}, strict: false),
+          output_schema: Cogni::Workflows::DSL::Types.object({"result" => Cogni::Workflows::DSL::Types.of(String)}, strict: false))
         .suspend("e2e-approval", reason: "Review E2E test output")
         .rag("e2e-rag-step", config: {
           "operation"       => json_str("query"),

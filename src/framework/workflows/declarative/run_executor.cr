@@ -1,11 +1,12 @@
-module CogniCore
-  module Workflow
+module Cogni
+  module Workflows
+    module Declarative
     class RunExecutor
       def run(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil) : AnyHash
         if runtime
           run_external(ref, ctx, runtime, env, workflow_root)
         else
-          Workflow.function_registry.call(ref, ctx)
+          Cogni::Workflows::Declarative.function_registry.call(ref, ctx)
         end
       end
 
@@ -113,5 +114,6 @@ module CogniCore
         end
       end
     end
+  end
   end
 end

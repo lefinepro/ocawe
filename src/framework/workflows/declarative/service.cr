@@ -1,5 +1,6 @@
-module CogniCore
-  module Workflow
+module Cogni
+  module Workflows
+    module Declarative
     class Service
       def initialize(@engine : Engine)
       end
@@ -141,5 +142,6 @@ module CogniCore
         run
       end
     end
+  end
   end
 end

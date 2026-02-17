@@ -2,17 +2,17 @@ require "./spec_helper"
 require "file_utils"
 
 
-describe CogniCore::Workflow::RunExecutor do
+describe Cogni::Workflows::Declarative::RunExecutor do
   it "runs registered functions directly by name" do
-    CogniCore::Workflow.register_function("create_sandbox") do |_ctx|
+    Cogni::Workflows::Declarative.register_function("create_sandbox") do |_ctx|
       {
         "tool" => json_any("create-sandbox"),
         "status" => json_any("ok"),
       }
     end
 
-    executor = CogniCore::Workflow::RunExecutor.new
-    ctx = CogniCore::Workflow::NodeContext.new(
+    executor = Cogni::Workflows::Declarative::RunExecutor.new
+    ctx = Cogni::Workflows::Declarative::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_1",
       node_id: "create_sandbox",
@@ -26,8 +26,8 @@ describe CogniCore::Workflow::RunExecutor do
   end
 
   it "runs external scripts with runtime metadata" do
-    executor = CogniCore::Workflow::RunExecutor.new
-    ctx = CogniCore::Workflow::NodeContext.new(
+    executor = Cogni::Workflows::Declarative::RunExecutor.new
+    ctx = Cogni::Workflows::Declarative::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_2",
       node_id: "external-tool",
@@ -52,8 +52,8 @@ describe CogniCore::Workflow::RunExecutor do
     File.write(script, "#!/usr/bin/env bash\nset -euo pipefail\necho not-json\n")
     File.chmod(script, 0o755)
 
-    executor = CogniCore::Workflow::RunExecutor.new
-    ctx = CogniCore::Workflow::NodeContext.new(
+    executor = Cogni::Workflows::Declarative::RunExecutor.new
+    ctx = Cogni::Workflows::Declarative::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_3",
       node_id: "external-invalid",
@@ -68,7 +68,7 @@ describe CogniCore::Workflow::RunExecutor do
   end
 
   it "runs registered ai generate function by direct name" do
-    CogniCore::Workflow.register_function("ai_generate_text") do |ctx|
+    Cogni::Workflows::Declarative.register_function("ai_generate_text") do |ctx|
       {
         "tool" => json_any("ai-generate-text"),
         "model" => json_any(ctx.state["workflow_model"]?.try(&.as_s?) || "missing"),
@@ -76,8 +76,8 @@ describe CogniCore::Workflow::RunExecutor do
       }
     end
 
-    executor = CogniCore::Workflow::RunExecutor.new
-    ctx = CogniCore::Workflow::NodeContext.new(
+    executor = Cogni::Workflows::Declarative::RunExecutor.new
+    ctx = Cogni::Workflows::Declarative::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_4",
       node_id: "ai_generate_text",

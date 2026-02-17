@@ -3,23 +3,23 @@ require "./e2e_spec_helper"
 describe "E2E: Data Persistence and State" do
   describe "state accumulation" do
     it "accumulates state across multiple nodes" do
-      workflow = CogniCore::Workflow.create_workflow("e2e-state-accum", "State accumulation")
+      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-state-accum", "State accumulation")
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("step-1", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"value_1" => json_str("one")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("step-1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value_1" => json_str("one")})
         end)
-        .then(CogniCore::Workflow::WorkflowNode.new("step-2", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("step-2", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           prev = ctx.state["value_1"]?.try(&.as_s?) || "none"
-          CogniCore::Workflow::WorkflowNodeResult.continue({"value_2" => json_str("two:#{prev}")})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"value_2" => json_str("two:#{prev}")})
         end)
-        .then(CogniCore::Workflow::WorkflowNode.new("step-3", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("step-3", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           v1 = ctx.state["value_1"]?.try(&.as_s?) || "none"
           v2 = ctx.state["value_2"]?.try(&.as_s?) || "none"
-          CogniCore::Workflow::WorkflowNodeResult.continue({"final" => json_str("#{v1}|#{v2}")})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"final" => json_str("#{v1}|#{v2}")})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-state-accum")
@@ -33,19 +33,19 @@ describe "E2E: Data Persistence and State" do
 
   describe "node results access" do
     it "provides access to previous node results" do
-      workflow = CogniCore::Workflow.create_workflow("e2e-node-results", "Node results")
+      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-node-results", "Node results")
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("producer", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"produced" => json_str("data-from-producer")})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("producer", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"produced" => json_str("data-from-producer")})
         end)
-        .then(CogniCore::Workflow::WorkflowNode.new("consumer", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("consumer", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           prev_result = ctx.get_node_result("producer")
           consumed = prev_result.try(&.["produced"]?.try(&.as_s?)) || "nothing"
-          CogniCore::Workflow::WorkflowNodeResult.continue({"consumed" => json_str(consumed)})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"consumed" => json_str(consumed)})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-node-results")
@@ -57,15 +57,15 @@ describe "E2E: Data Persistence and State" do
 
   describe "init data preservation" do
     it "preserves init data throughout workflow" do
-      workflow = CogniCore::Workflow.create_workflow("e2e-init-data", "Init data")
+      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-init-data", "Init data")
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("check-init", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("check-init", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           init_value = ctx.get_init_data["init_param"]?.try(&.as_s?) || "missing"
-          CogniCore::Workflow::WorkflowNodeResult.continue({"init_preserved" => json_str(init_value)})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"init_preserved" => json_str(init_value)})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-init-data")
