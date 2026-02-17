@@ -26,10 +26,10 @@ Example bundles are in `shards/examples`:
 - `rag-playground`
 - `simple-model-test`
 
-## 4) Register a custom node kind
+## 4) Register a node kind
 
 ```crystal
-Cogni::Registry.node_kind("crystal_native") do |_ctx, parameters|
+Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, parameters|
   {
     "status" => JSON.parse("ok".to_json),
     "message" => parameters["message"]? || JSON.parse("none".to_json),

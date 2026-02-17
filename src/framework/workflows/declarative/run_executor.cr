@@ -6,7 +6,7 @@ module Cogni
         if runtime
           run_external(ref, ctx, runtime, env, workflow_root)
         else
-          Cogni::Workflows::Declarative.function_registry.call(ref, ctx)
+          Cogni::RegistryApi.call_function(ref, ctx)
         end
       end
 

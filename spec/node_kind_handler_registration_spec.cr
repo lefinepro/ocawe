@@ -3,7 +3,7 @@ require "./spec_helper"
 describe "custom node kinds and resource registrations" do
   it "executes custom node kind from declarative API" do
     Cogni::Workflows::Declarative.reset_node_kind_registry!
-    Cogni::Registry.node_kind("crystal_native") do |_ctx, parameters|
+    Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, parameters|
       {
         "kind" => json_str("ok"),
         "value" => parameters["value"]? || json_str("missing"),
@@ -30,8 +30,8 @@ describe "custom node kinds and resource registrations" do
     Cogni::Workflows::Declarative.reset_node_kind_registry!
     Cogni::Workflows::Declarative.reset_resource_registry!
 
-    Cogni::Registry.node_kind("bootstrap") do |ctx, _parameters|
-      Cogni::Registry.resource("resource_ping") do |_resource_ctx, payload|
+    Cogni::RegistryApi.node_kind("bootstrap") do |ctx, _parameters|
+      Cogni::RegistryApi.resource("resource_ping") do |_resource_ctx, payload|
         {
           "resource_task" => json_str(payload["task"]?.try(&.as_s?) || "none"),
         }

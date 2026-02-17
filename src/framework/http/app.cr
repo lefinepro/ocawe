@@ -253,12 +253,10 @@ module ACD
 
       private def register_configured_functions! : Nil
         config = @settings
-        Cogni::Workflows::Declarative.reset_node_kind_registry!
-        Cogni::Workflows::Declarative.reset_resource_registry!
-        Cogni::Workflows::Declarative.reset_function_registry!
+        Cogni::RegistryApi.reset_all!
 
         config.functions.each do |name, handler|
-          Cogni::Workflows::Declarative.register_system_function(name, &handler)
+          Cogni::RegistryApi.register_system_function(name, &handler)
         end
       end
 
@@ -1348,54 +1346,20 @@ module ACD
         output_schema : Cogni::Workflows::DSL::Validator? = nil,
         default_model : String? = nil
       ) : Cogni::Workflows::Declarative::WorkflowNode
-        metadata = {} of String => JSON::Any
-        metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema
-
-        Cogni::Workflows::Declarative::WorkflowNode.new(id, Cogni::Workflows::Declarative::NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          user_prompt = build_agent_user_prompt_from_ctx(ctx)
-          Cogni::Workflows::Declarative::Guardrails.validate_input!(id, user_prompt, guardrails_config)
-
-          resolved_model = resolve_model_from_ctx(ctx, model, default_model)
-          system_prompt = prompt || "You are agent #{id}."
-          response = CogniCore::AI::Client.new.generate_text(
-            model_spec: resolved_model,
-            prompt: user_prompt,
-            system: system_prompt,
-            metadata: {
-              "workflow_id" => JSON.parse(ctx.workflow_id.to_json),
-              "run_id"      => JSON.parse(ctx.run_id.to_json),
-              "node_id"     => JSON.parse(ctx.node_id.to_json),
-              "agent_id"    => JSON.parse(id.to_json),
-            },
-          )
-          agent_result = Cogni::Workflows::Declarative::AgentResult.new(
-            agent_type: "default-agent",
-            content: response.text,
-            provider: response.provider,
-            model: "#{response.provider}/#{response.model}",
-          )
-
-          Cogni::Workflows::Declarative::Guardrails.validate_output!(id, agent_result.content, guardrails_config)
-
-          outputs = ctx.state["agent_outputs"]?.try(&.as_h?) || {} of String => JSON::Any
-          outputs = outputs.dup
-          outputs[id] = JSON.parse(agent_result.to_any_hash.to_json)
-
-          result = {
-            "agent_outputs" => JSON.parse(outputs.to_json),
-            "agent_result"  => JSON.parse(agent_result.to_any_hash.to_json),
-            "last_agent"    => JSON.parse(id.to_json),
-            "last_model"    => JSON.parse((agent_result.model || "").to_json),
-            "last_response" => JSON.parse(agent_result.content.to_json),
-            "active_agent"  => JSON.parse(id.to_json),
-          } of String => JSON::Any
-
-          if voice = voice_config
-            result["active_voice"] = JSON.parse(voice.to_json)
-          end
-
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue(result)
-        end
+        builder = Cogni::Workflows::Declarative::WorkflowDefinition.new("__registry_builder__")
+        builder.use(model: default_model) if default_model
+        Cogni::RegistryApi.build_node(
+          builder,
+          "agent",
+          id,
+          prompt: prompt,
+          model: model,
+          resume_schema: resume_schema,
+          voice_config: voice_config,
+          guardrails_config: guardrails_config,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        )
       end
 
       private def create_run_node(
@@ -1407,18 +1371,18 @@ module ACD
         output_schema : Cogni::Workflows::DSL::Validator? = nil,
         workflow_root : String? = nil
       ) : Cogni::Workflows::Declarative::WorkflowNode
-        metadata = {} of String => JSON::Any
-        metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
-        metadata["env"] = JSON.parse(env.to_json) if env
-        metadata["params"] = JSON.parse(params.to_json) if params
-        metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
-
-        executor = Cogni::Workflows::Declarative::RunExecutor.new
-        Cogni::Workflows::Declarative::WorkflowNode.new(ref, Cogni::Workflows::Declarative::NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue(
-            executor.run(ref, ctx, runtime: runtime, env: env, workflow_root: workflow_root)
-          )
-        end
+        builder = Cogni::Workflows::Declarative::WorkflowDefinition.new("__registry_builder__")
+        Cogni::RegistryApi.build_node(
+          builder,
+          "run",
+          ref,
+          runtime: runtime,
+          env: env,
+          params: params,
+          workflow_root: workflow_root,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        )
       end
 
       # Wrap multiple nodes in a single control node

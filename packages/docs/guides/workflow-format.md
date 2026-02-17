@@ -190,9 +190,9 @@ If run params are defined in DSL, runtime includes these params as flat fields i
 - User collisions are indexed as `name:1`, `name:2`, ...
 - You can add explicit aliases during registration and call them directly via `run "alias"`.
 
-Register runtime extensions through `Cogni::Registry`:
-- `Cogni::Registry.node_kind`
-- `Cogni::Registry.resource`
+Register runtime extensions through `Cogni::RegistryApi`:
+- `Cogni::RegistryApi.node_kind`
+- `Cogni::RegistryApi.resource`
 
 ## Examples
 

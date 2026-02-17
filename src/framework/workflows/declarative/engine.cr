@@ -346,8 +346,8 @@ module Cogni
                 end
               end
             end
-            if custom_parameters = node.metadata["parameters"]?
-              if flat = custom_parameters.as_h?
+            if node_kind_parameters = node.metadata["parameters"]?
+              if flat = node_kind_parameters.as_h?
                 flat.each do |k, v|
                   envelope[k] = JSON.parse(v.to_json)
                 end
