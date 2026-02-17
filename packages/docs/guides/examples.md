@@ -17,7 +17,7 @@ Examples live under `shards/examples` and are designed for direct reuse.
 - `rag-playground`: rag DSL + skill choreography
 - `simple-model-test`: model override behavior
 - `full-capabilities`: all currently supported `.acd.cr` directives
-- `config-example`: Crystal-native `AppConfig` template
+- `config-example`: Crystal-native `Cogni::Config::Settings` template
 - `src/custom_provider_example.cr`: custom provider creation macro + `AI::Client` injection
 - `src/control_flow_workflow_example.cr`: programmatic control-flow example (`parallel`, `then`, events) with explicit node schemas
 

@@ -33,7 +33,7 @@ dependencies:
 - `rag-playground`: `rag`, skills + typed validation blocks
 - `simple-model-test`: model selection via agent/workflow defaults
 - `full-capabilities`: all runnable directives supported by current `.acd.cr` loader
-- `config-example`: crystal-native `AppConfig` template
+- `config-example`: crystal-native `Cogni::Config::Settings` template
 - `src/custom_provider_example.cr`: macro-based custom AI provider definition + client injection
 - `src/control_flow_workflow_example.cr`: programmatic control-flow (`parallel`, `then`, events) with explicit input/output schemas
 

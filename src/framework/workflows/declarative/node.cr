@@ -1,7 +1,8 @@
-require "../schema/types"
+require "../dsl/types"
 
-module CogniCore
-  module Workflow
+module Cogni
+  module Workflows
+    module Declarative
     struct NodeContext
       getter workflow_id : String
       getter run_id : String
@@ -52,8 +53,8 @@ module CogniCore
         @id : String,
         @kind : NodeKind = NodeKind::Control,
         @metadata : AnyHash = {} of String => JSON::Any,
-        @input_schema : Schema::Validator? = nil,
-        @output_schema : Schema::Validator? = nil,
+        @input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        @output_schema : Cogni::Workflows::DSL::Validator? = nil,
         &@executor : NodeContext -> WorkflowNodeResult
       )
       end
@@ -80,5 +81,6 @@ module CogniCore
         schema.validate(payload, "$.output")
       end
     end
+  end
   end
 end

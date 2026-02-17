@@ -1,14 +1,14 @@
 require "http/client"
 require "json"
-require "../ai/cliproxy_chat_helper"
+require "../cognicore/ai/cliproxy_chat_helper"
 
-module CogniCore
+module Cogni
   module Config
     module DefaultFunctionHandlers
       extend self
 
-      def agent_codex : CogniCore::Workflow::FunctionHandler
-        ->(ctx : CogniCore::Workflow::NodeContext) do
+      def agent_codex : Cogni::Workflows::Declarative::FunctionHandler
+        ->(ctx : Cogni::Workflows::Declarative::NodeContext) do
           prompt = extract_input_text(ctx.input_data["input"]?)
           command = resolve_string_param(ctx, "bin", env_keys: ["CODEX_BIN"], default: "codex") || "codex"
           model = resolve_string_param(ctx, "model", env_keys: ["CODEX_MODEL"])
@@ -27,7 +27,7 @@ module CogniCore
 
           status = Process.run(command, args: args, input: input, output: stdout, error: stderr)
           if status.success?
-            CogniCore::Workflow::AgentResult.new(
+            Cogni::Workflows::Declarative::AgentResult.new(
               agent_type: "function",
               content: stdout.to_s.strip,
               metadata: {
@@ -37,7 +37,7 @@ module CogniCore
               } of String => JSON::Any,
             )
           else
-            CogniCore::Workflow::AgentResult.new(
+            Cogni::Workflows::Declarative::AgentResult.new(
               agent_type: "function",
               content: "codex exec failed: #{stderr.to_s.strip}",
               metadata: {
@@ -48,22 +48,22 @@ module CogniCore
             )
           end
         rescue ex
-          CogniCore::Workflow::AgentResult.new(
+          Cogni::Workflows::Declarative::AgentResult.new(
             agent_type: "function",
             content: "codex exec error: #{ex.message}",
           )
         end
       end
 
-      def agent_cliproxy : CogniCore::Workflow::FunctionHandler
-        ->(ctx : CogniCore::Workflow::NodeContext) do
+      def agent_cliproxy : Cogni::Workflows::Declarative::FunctionHandler
+        ->(ctx : Cogni::Workflows::Declarative::NodeContext) do
           prompt = extract_input_text(ctx.input_data["input"]?)
           system = resolve_string_param(ctx, "system")
-          base_url = resolve_string_param(ctx, "base_url", env_keys: ["CLIPROXY_API_BASE", "CLIPROXY_API_URL"], default: AI::CLIProxyChatHelper::DEFAULT_BASE_URL) || AI::CLIProxyChatHelper::DEFAULT_BASE_URL
+          base_url = resolve_string_param(ctx, "base_url", env_keys: ["CLIPROXY_API_BASE", "CLIPROXY_API_URL"], default: CogniCore::AI::CLIProxyChatHelper::DEFAULT_BASE_URL) || CogniCore::AI::CLIProxyChatHelper::DEFAULT_BASE_URL
           model = resolve_string_param(ctx, "model", env_keys: ["CLIPROXY_MODEL"], default: "qwen3-coder-plus") || "qwen3-coder-plus"
           api_key = resolve_string_param(ctx, "api_key", env_keys: ["CLIPROXY_API_KEY"])
 
-          response = AI::CLIProxyChatHelper.generate_text(
+          response = CogniCore::AI::CLIProxyChatHelper.generate_text(
             provider_name: "cliproxyapi",
             model: model,
             prompt: prompt,
@@ -72,7 +72,7 @@ module CogniCore
             base_url: base_url,
           )
 
-          CogniCore::Workflow::AgentResult.new(
+          Cogni::Workflows::Declarative::AgentResult.new(
             agent_type: "function",
             content: response.text,
             provider: response.provider,
@@ -84,7 +84,7 @@ module CogniCore
             } of String => JSON::Any,
           )
         rescue ex
-          CogniCore::Workflow::AgentResult.new(
+          Cogni::Workflows::Declarative::AgentResult.new(
             agent_type: "function",
             content: "cliproxy error: #{ex.message}",
           )
@@ -92,8 +92,8 @@ module CogniCore
       end
 
       # OpenCode server API: POST /session then POST /session/:id/message.
-      def agent_opencode : CogniCore::Workflow::FunctionHandler
-        ->(ctx : CogniCore::Workflow::NodeContext) do
+      def agent_opencode : Cogni::Workflows::Declarative::FunctionHandler
+        ->(ctx : Cogni::Workflows::Declarative::NodeContext) do
           prompt = extract_input_text(ctx.input_data["input"]?)
           base_url = resolve_string_param(ctx, "base_url", env_keys: ["OPENCODE_API_BASE", "OPENCODE_API_URL"], default: "http://127.0.0.1:4096") || "http://127.0.0.1:4096"
           api_key = resolve_string_param(ctx, "api_key", env_keys: ["OPENCODE_API_KEY"])
@@ -108,7 +108,7 @@ module CogniCore
             body: "{}"
           )
           unless session_response.success?
-            return CogniCore::Workflow::AgentResult.new(
+            return Cogni::Workflows::Declarative::AgentResult.new(
               agent_type: "function",
               content: "opencode session create failed (#{session_response.status_code}): #{session_response.body}",
             )
@@ -116,7 +116,7 @@ module CogniCore
 
           session_id = parse_session_id(session_response.body)
           unless session_id
-            return CogniCore::Workflow::AgentResult.new(
+            return Cogni::Workflows::Declarative::AgentResult.new(
               agent_type: "function",
               content: "opencode session id not found in response",
             )
@@ -139,7 +139,7 @@ module CogniCore
                       "opencode message failed (#{message_response.status_code}): #{message_response.body}"
                     end
 
-          CogniCore::Workflow::AgentResult.new(
+          Cogni::Workflows::Declarative::AgentResult.new(
             agent_type: "function",
             content: content,
             metadata: {
@@ -150,7 +150,7 @@ module CogniCore
             } of String => JSON::Any,
           )
         rescue ex
-          CogniCore::Workflow::AgentResult.new(
+          Cogni::Workflows::Declarative::AgentResult.new(
             agent_type: "function",
             content: "opencode error: #{ex.message}",
           )
@@ -178,7 +178,7 @@ module CogniCore
       end
 
       private def resolve_string_param(
-        ctx : CogniCore::Workflow::NodeContext,
+        ctx : Cogni::Workflows::Declarative::NodeContext,
         key : String,
         env_keys : Array(String) = [] of String,
         default : String? = nil
@@ -197,7 +197,7 @@ module CogniCore
         default
       end
 
-      private def resolve_string_array_param(ctx : CogniCore::Workflow::NodeContext, key : String) : Array(String)
+      private def resolve_string_array_param(ctx : Cogni::Workflows::Declarative::NodeContext, key : String) : Array(String)
         value = param_from_ctx(ctx, key)
         return [] of String unless value
 
@@ -212,7 +212,7 @@ module CogniCore
         [] of String
       end
 
-      private def param_from_ctx(ctx : CogniCore::Workflow::NodeContext, key : String) : JSON::Any?
+      private def param_from_ctx(ctx : Cogni::Workflows::Declarative::NodeContext, key : String) : JSON::Any?
         direct = ctx.input_data[key]?
         return direct if direct
 

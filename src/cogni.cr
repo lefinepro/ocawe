@@ -1,11 +1,13 @@
 require "option_parser"
 require "./framework/utils/config_parser"
 require "./framework/cognicore/version"
-require "./framework/cognicore/config/app_config"
-require "./framework/cognicore/schema/types"
-require "./framework/cognicore/schema/crystal_dsl"
-require "./framework/cognicore/workflow/run"
-require "./framework/cogni/public_api"
+require "./framework/workflows/dsl/types"
+require "./framework/workflows/dsl/crystal_dsl"
+require "./framework/workflows/declarative/run"
+require "./framework/workflows/declarative/api"
+require "./framework/registry/api"
+require "./framework/config/settings"
+require "./framework/trigger/public_api"
 require "./framework/http/app"
 
 module CogniCore
@@ -13,6 +15,7 @@ module CogniCore
 
   def self.run
     CogniCore::Utils::ConfigParser.load_dotenv
+    settings = Cogni::Config::Settings.default
 
     port = DEFAULT_PORT
     workflows_root = nil.as(String?)
@@ -34,9 +37,14 @@ module CogniCore
     end
 
     # Use default config values if not overridden by command line
-    workflows_root ||= CogniCore::Config::AppConfig::WORKFLOW_PREFERRED_ROOT
-    fallback_workflows_root ||= CogniCore::Config::AppConfig::WORKFLOW_FALLBACK_ROOT
+    workflows_root ||= settings.workflows.preferred_workflows_root
+    fallback_workflows_root ||= settings.workflows.fallback_workflows_root
 
-    ACD::HTTP::App.new(port, workflows_root: workflows_root, fallback_workflows_root: fallback_workflows_root).start
+    ACD::HTTP::App.new(
+      port,
+      workflows_root: workflows_root,
+      fallback_workflows_root: fallback_workflows_root,
+      settings: settings,
+    ).start
   end
 end

@@ -26,32 +26,15 @@ Example bundles are in `shards/examples`:
 - `rag-playground`
 - `simple-model-test`
 
-## 4) Write a typed function node
+## 4) Register a custom node kind
 
 ```crystal
-workflow "typed-node-example" do
-  input_validate Schema::Types.object({
-    "query" => Schema::Types.of(String),
-  })
-
-  build_answer,
-    input_schema: Schema::Types.any(),
-    output_schema: Schema::Types.any()
+Cogni::Registry.node_kind("crystal_native") do |_ctx, parameters|
+  {
+    "status" => JSON.parse("ok".to_json),
+    "message" => parameters["message"]? || JSON.parse("none".to_json),
+  }
 end
-```
-
-Register function in `AppConfig.settings.functions` (auto-registered at runtime startup):
-
-```crystal
-functions: {
-  "build_answer" => ->(ctx : CogniCore::Workflow::NodeContext) {
-    q = ctx.input_data["input"]?.try(&.as_h?).try(&.["query"]?).try(&.as_s?) || ""
-    CogniCore::Workflow::AgentResult.new(
-      agent_type: "function",
-      content: "Echo: #{q}",
-    )
-  },
-} of String => CogniCore::Workflow::FunctionHandler
 ```
 
 ## 5) Add agent guardrails + crystal schema blocks

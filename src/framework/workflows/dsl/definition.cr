@@ -1,5 +1,6 @@
-module CogniCore
-  module DSL
+module Cogni
+  module Workflows
+    module DSL
     struct WorkflowBundleDefinition
       include JSON::Serializable
 
@@ -17,5 +18,6 @@ module CogniCore
       getter fn_count : Int32
       getter suspend_count : Int32
     end
+  end
   end
 end

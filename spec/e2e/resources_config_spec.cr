@@ -15,7 +15,7 @@ describe "E2E: Resources and Configuration" do
       #   @[Resources(model: "cliproxyapi/qwen3-coder-plus")]
       #   agent "simple-model-agent"
       # end
-      workflow = CogniCore::Workflow.create_workflow("simple-model-test", "Model test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("simple-model-test", "Model test")
       workflow
         .use(model: "clipproxyapi/qwen3-coder-plus")
         .agent("simple-model-agent")
@@ -26,18 +26,18 @@ describe "E2E: Resources and Configuration" do
     end
 
     it "resolves model from workflow default" do
-      workflow = CogniCore::Workflow.create_workflow("model-resolution-test", "Model resolution test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("model-resolution-test", "Model resolution test")
       workflow
         .use(model: "clipproxyapi/qwen3-coder-plus")
-        .then(CogniCore::Workflow::WorkflowNode.new("check-model", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("check-model", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({
             "workflow_model" => json_str("clipproxyapi/qwen3-coder-plus"),
             "resolved"       => json_bool(true),
           })
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("model-resolution-test")
@@ -47,17 +47,17 @@ describe "E2E: Resources and Configuration" do
     end
 
     it "uses model resolution priority (request > agent > workflow default)" do
-      workflow = CogniCore::Workflow.create_workflow("model-priority-test", "Model priority test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("model-priority-test", "Model priority test")
       workflow
         .use(model: "default-model")
-        .then(CogniCore::Workflow::WorkflowNode.new("check", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"checked" => json_bool(true)})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("check", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"checked" => json_bool(true)})
         end)
         .commit
 
       workflow.default_model.should eq("default-model")
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("model-priority-test")
@@ -69,7 +69,7 @@ describe "E2E: Resources and Configuration" do
   describe "unified resources" do
     it "creates workflow with combined resource annotation" do
       # Simulates: @[Resources(model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"])]
-      workflow = CogniCore::Workflow.create_workflow("unified-resources", "Unified resources test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("unified-resources", "Unified resources test")
       workflow
         .use(
           model: "openai/gpt-4.1",
@@ -84,7 +84,7 @@ describe "E2E: Resources and Configuration" do
 
     it "creates workflow with unified resource annotation" do
       # Simulates full-capabilities workflow with @[Resources(model: "...", skill: [...], tool: [...])]
-      workflow = CogniCore::Workflow.create_workflow("full-capabilities", "Full capabilities test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("full-capabilities", "Full capabilities test")
       workflow
         .use(
           model: "clipproxyapi/qwen3-coder-plus",
@@ -98,32 +98,32 @@ describe "E2E: Resources and Configuration" do
     end
 
     it "creates workflow with sequential and parallel agents" do
-      translator = CogniCore::Workflow::WorkflowNode.new("translator", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"translated" => json_bool(true)})
+      translator = Cogni::Workflows::Declarative::WorkflowNode.new("translator", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"translated" => json_bool(true)})
       end
 
-      summarizer = CogniCore::Workflow::WorkflowNode.new("summarizer", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-        CogniCore::Workflow::WorkflowNodeResult.continue({"summarized" => json_bool(true)})
+      summarizer = Cogni::Workflows::Declarative::WorkflowNode.new("summarizer", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"summarized" => json_bool(true)})
       end
 
-      workflow = CogniCore::Workflow.create_workflow("unified-pipeline", "Unified pipeline test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("unified-pipeline", "Unified pipeline test")
       workflow
         .use(model: "openai/gpt-4.1")
-        .then(CogniCore::Workflow::WorkflowNode.new("analyzer", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"analyzed" => json_bool(true)})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("analyzer", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"analyzed" => json_bool(true)})
         end)
-        .then(CogniCore::Workflow::WorkflowNode.new("processor", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"processed" => json_bool(true)})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("processor", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"processed" => json_bool(true)})
         end)
         .parallel([translator, summarizer])
-        .then(CogniCore::Workflow::WorkflowNode.new("synthesizer", CogniCore::Workflow::NodeKind::Control) do |ctx|
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("synthesizer", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           translated = ctx.state["translated"]?.try(&.raw) == true
           summarized = ctx.state["summarized"]?.try(&.raw) == true
-          CogniCore::Workflow::WorkflowNodeResult.continue({"synthesized" => json_bool(translated && summarized)})
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"synthesized" => json_bool(translated && summarized)})
         end)
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("unified-pipeline")
@@ -135,12 +135,12 @@ describe "E2E: Resources and Configuration" do
 
   describe "full-capabilities" do
     it "creates workflow with agent, skill, tool, voice, rag, and suspend nodes" do
-      workflow = CogniCore::Workflow.create_workflow("full-demo", "Full demo test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("full-demo", "Full demo test")
       workflow
         .use(model: "clipproxyapi/qwen3-coder-plus")
         .agent("full-agent",
-          input_schema: CogniCore::Schema::Types.object({"input" => CogniCore::Schema::Types.any()}, strict: false),
-          output_schema: CogniCore::Schema::Types.object({"last_response" => CogniCore::Schema::Types.of(String)}, strict: false))
+          input_schema: Cogni::Workflows::DSL::Types.object({"input" => Cogni::Workflows::DSL::Types.any()}, strict: false),
+          output_schema: Cogni::Workflows::DSL::Types.object({"last_response" => Cogni::Workflows::DSL::Types.of(String)}, strict: false))
         .skill("full-skill", agent: "full-agent")
         .voice("voice-step", config: {"provider" => json_str("openai"), "speaker" => json_str("alloy")})
         .rag("rag-step", config: {
@@ -153,18 +153,18 @@ describe "E2E: Resources and Configuration" do
         .commit
 
       workflow.nodes.size.should eq(5)
-      workflow.nodes[0].kind.should eq(CogniCore::Workflow::NodeKind::Agent)
-      workflow.nodes[1].kind.should eq(CogniCore::Workflow::NodeKind::Skill)
-      workflow.nodes[2].kind.should eq(CogniCore::Workflow::NodeKind::Voice)
-      workflow.nodes[3].kind.should eq(CogniCore::Workflow::NodeKind::Rag)
-      workflow.nodes[4].kind.should eq(CogniCore::Workflow::NodeKind::Suspend)
+      workflow.nodes[0].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Agent)
+      workflow.nodes[1].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Skill)
+      workflow.nodes[2].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Voice)
+      workflow.nodes[3].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Rag)
+      workflow.nodes[4].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Suspend)
     end
 
     it "executes full workflow up to approval suspension" do
-      workflow = CogniCore::Workflow.create_workflow("full-approval-test", "Full approval test")
+      workflow = Cogni::Workflows::Declarative.create_workflow("full-approval-test", "Full approval test")
       workflow
-        .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
-          CogniCore::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        .then(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
         end)
         .voice("voice", config: {"provider" => json_str("openai")})
         .rag("rag", config: {
@@ -175,7 +175,7 @@ describe "E2E: Resources and Configuration" do
         .suspend("confirm", reason: "Confirm output")
         .commit
 
-      engine = CogniCore::Workflow::Engine.new
+      engine = Cogni::Workflows::Declarative::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("full-approval-test")

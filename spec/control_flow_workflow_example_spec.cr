@@ -5,7 +5,7 @@ describe CogniExamples::ControlFlowWorkflowExample do
   it "runs branch/parallel and other control-flow methods with schema-typed nodes" do
     workflow = CogniExamples::ControlFlowWorkflowExample.build_branch_parallel_workflow
 
-    engine = CogniCore::Workflow::Engine.new
+    engine = Cogni::Workflows::Declarative::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("control-flow-branch-parallel")

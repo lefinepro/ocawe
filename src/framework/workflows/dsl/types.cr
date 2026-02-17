@@ -1,7 +1,8 @@
 require "json"
 
-module CogniCore
-  module Schema
+module Cogni
+  module Workflows
+    module DSL
     class ValidationError < Exception
     end
 
@@ -266,5 +267,6 @@ module CogniCore
         end
       end
     end
+  end
   end
 end

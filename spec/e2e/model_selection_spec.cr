@@ -6,13 +6,13 @@ describe "E2E: Model Selection and AI Integration" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
-        workflow = CogniCore::Workflow.create_workflow("e2e-model-override", "Model override")
+        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-model-override", "Model override")
         workflow
           .use(model: "openai/gpt-4.1-mini") # workflow default
           .agent("model-agent", prompt: "Test", model: "openai/gpt-4.1") # agent model
           .commit
 
-        engine = CogniCore::Workflow::Engine.new
+        engine = Cogni::Workflows::Declarative::Engine.new
         engine.register(workflow)
 
         # With request model override
@@ -38,13 +38,13 @@ describe "E2E: Model Selection and AI Integration" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
-        workflow = CogniCore::Workflow.create_workflow("e2e-model-fallback", "Model fallback")
+        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-model-fallback", "Model fallback")
         workflow
           .use(model: "openai/gpt-4.1-mini")
           .agent("fallback-agent", prompt: "Test") # no model specified
           .commit
 
-        engine = CogniCore::Workflow::Engine.new
+        engine = Cogni::Workflows::Declarative::Engine.new
         engine.register(workflow)
 
         result = engine.create_run("e2e-model-fallback").start(input_data: {
@@ -63,7 +63,7 @@ describe "E2E: Model Selection and AI Integration" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
-        workflow = CogniCore::Workflow.create_workflow("e2e-use-unified", "Unified use")
+        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-use-unified", "Unified use")
         workflow
           .use(
             model: "openai/gpt-4.1-mini",
@@ -77,7 +77,7 @@ describe "E2E: Model Selection and AI Integration" do
         workflow.default_skills.should eq(["skill-a", "skill-b"])
         workflow.default_tools.should eq(["tool-a"])
 
-        engine = CogniCore::Workflow::Engine.new
+        engine = Cogni::Workflows::Declarative::Engine.new
         engine.register(workflow)
 
         result = engine.create_run("e2e-use-unified").start(input_data: {"task" => json_str("test")})

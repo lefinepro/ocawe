@@ -1,5 +1,6 @@
-module CogniCore
-  module Workflow
+module Cogni
+  module Workflows
+    module Declarative
     class WorkflowRunHandle
       getter run_id : String
       getter workflow_id : String
@@ -323,7 +324,7 @@ module CogniCore
       end
 
       private def node_input_for(node : WorkflowNode, previous_node_id : String?, previous_node_result : AnyHash?) : AnyHash
-        if node.kind == NodeKind::Agent || node.kind == NodeKind::Run
+        if node.kind == NodeKind::Agent || node.kind == NodeKind::Run || node.kind == NodeKind::Custom
           input_payload = previous_node_result ? JSON.parse(previous_node_result.to_json) : JSON.parse(@init_data.to_json)
           context = {
             "workflow_id" => JSON.parse(@workflow_id.to_json),
@@ -337,9 +338,16 @@ module CogniCore
             "context" => JSON.parse(context.to_json),
           } of String => JSON::Any
 
-          if node.kind == NodeKind::Run
+          if node.kind == NodeKind::Run || node.kind == NodeKind::Custom
             if params = node.metadata["params"]?
               if flat = params.as_h?
+                flat.each do |k, v|
+                  envelope[k] = JSON.parse(v.to_json)
+                end
+              end
+            end
+            if custom_parameters = node.metadata["parameters"]?
+              if flat = custom_parameters.as_h?
                 flat.each do |k, v|
                   envelope[k] = JSON.parse(v.to_json)
                 end
@@ -424,5 +432,6 @@ module CogniCore
         @store.list(workflow_id, status)
       end
     end
+  end
   end
 end

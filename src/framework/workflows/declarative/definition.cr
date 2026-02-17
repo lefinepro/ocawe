@@ -1,7 +1,8 @@
-require "../ai/client"
+require "../../cognicore/ai/client"
 
-module CogniCore
-  module Workflow
+module Cogni
+  module Workflows
+    module Declarative
     class WorkflowDefinition
       getter id : String
       getter description : String?
@@ -116,8 +117,8 @@ module CogniCore
         env : AnyHash? = nil,
         workflow_root : String? = nil,
         params : AnyHash? = nil,
-        input_schema : Schema::Validator? = nil,
-        output_schema : Schema::Validator? = nil
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
         metadata = {} of String => JSON::Any
         metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
@@ -139,11 +140,11 @@ module CogniCore
         id : String,
         prompt : String? = nil,
         model : String? = nil,
-        resume_schema : Schema::Validator? = nil,
+        resume_schema : Cogni::Workflows::DSL::Validator? = nil,
         voice_config : AnyHash? = nil,
         guardrails_config : AnyHash? = nil,
-        input_schema : Schema::Validator? = nil,
-        output_schema : Schema::Validator? = nil
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
         metadata = {} of String => JSON::Any
         metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema
@@ -154,7 +155,7 @@ module CogniCore
 
           resolved_model = resolve_model(ctx, model)
           system_prompt = prompt || "You are agent #{id}."
-          response = AI::Client.new.generate_text(
+          response = CogniCore::AI::Client.new.generate_text(
             model_spec: resolved_model,
             prompt: user_prompt,
             system: system_prompt,
@@ -195,13 +196,38 @@ module CogniCore
         end)
       end
 
+      def node_kind(
+        kind : Cogni::NodeKind,
+        id : String? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
+      ) : self
+        node_id = id || "#{kind.node}-#{@nodes.size}"
+        metadata = {
+          "custom_node_kind" => JSON.parse(kind.node.to_json),
+          "parameters" => JSON.parse(kind.parameters.to_json),
+        } of String => JSON::Any
+
+        append_node(WorkflowNode.new(node_id, NodeKind::Custom, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          raw = Cogni::Workflows::Declarative.node_kind_registry.call(kind.node, ctx, kind.parameters)
+          case raw
+          when WorkflowNodeResult
+            raw
+          when Hash(String, JSON::Any)
+            WorkflowNodeResult.continue(raw)
+          else
+            raise "unsupported custom node kind result for #{kind.node}"
+          end
+        end)
+      end
+
 
       def skill(
         id : String,
         agent_id : String? = nil,
         agent : String? = nil,
-        input_schema : Schema::Validator? = nil,
-        output_schema : Schema::Validator? = nil
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
         meta = {} of String => JSON::Any
         selected_agent = agent || agent_id
@@ -214,8 +240,8 @@ module CogniCore
       def voice(
         id : String,
         config : AnyHash = {} of String => JSON::Any,
-        input_schema : Schema::Validator? = nil,
-        output_schema : Schema::Validator? = nil
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
         append_node(WorkflowNode.new(id, NodeKind::Voice, metadata: {
           "dsl_kind" => JSON.parse("voice".to_json),
@@ -230,8 +256,8 @@ module CogniCore
       def rag(
         id : String,
         config : AnyHash = {} of String => JSON::Any,
-        input_schema : Schema::Validator? = nil,
-        output_schema : Schema::Validator? = nil
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
         append_node(WorkflowNode.new(id, NodeKind::Rag, metadata: {
           "dsl_kind" => JSON.parse("rag".to_json),
@@ -244,9 +270,9 @@ module CogniCore
       def suspend(
         id : String,
         reason : String = "human input required",
-        resume_schema : Schema::Validator? = nil,
-        input_schema : Schema::Validator? = nil,
-        output_schema : Schema::Validator? = nil
+        resume_schema : Cogni::Workflows::DSL::Validator? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
         append_node(WorkflowNode.new(id, NodeKind::Suspend, metadata: {
           "reason" => JSON.parse(reason.to_json),
@@ -628,5 +654,6 @@ module CogniCore
     def self.create_workflow(id : String, description : String? = nil)
       WorkflowDefinition.new(id, description)
     end
+  end
   end
 end

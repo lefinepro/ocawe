@@ -1,5 +1,6 @@
-module CogniCore
-  module Workflow
+module Cogni
+  module Workflows
+    module Declarative
     enum FunctionSource
       System
       User
@@ -157,5 +158,6 @@ module CogniCore
     def self.register_function_alias(alias_name : String, target_name : String) : Nil
       @@function_registry.register_alias(alias_name, target_name)
     end
+  end
   end
 end

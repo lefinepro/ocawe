@@ -99,7 +99,7 @@ Run all examples:
 
 ## Crystal Configuration
 
-Framework configuration is defined in Crystal code via `src/framework/cognicore/config/app_config.cr`.
+Framework configuration is defined in Crystal code via `src/framework/config/settings.cr`.
 
 Template example:
 - `shards/examples/config-example/app_config.cr`

@@ -1,5 +1,6 @@
-module CogniCore
-  module Workflow
+module Cogni
+  module Workflows
+    module Declarative
     module Guardrails
       class Violation < Exception
       end
@@ -48,5 +49,6 @@ module CogniCore
         end
       end
     end
+  end
   end
 end
