@@ -108,33 +108,39 @@ describe "E2E: Error Handling Cases" do
     end
   end
 
-  describe "tool errors" do
-    it "rejects non-snake_case tool function names" do
-      workflow = CogniCore::Workflow.create_workflow("e2e-tool-invalid", "Invalid tool")
-
-      expect_raises(Exception, /snake_case/) do
-        workflow.tool("invalid-tool-name")
-      end
-    end
-
-    it "handles tool function that raises error" do
-      CogniCore::Workflow.register_tool("e2e_error_tool") do |_ctx|
-        raise "Intentional tool error"
-        {} of String => JSON::Any
-      end
-
-      workflow = CogniCore::Workflow.create_workflow("e2e-tool-error", "Tool error test")
+  describe "run/function errors" do
+    it "fails on unknown run function reference" do
+      workflow = CogniCore::Workflow.create_workflow("e2e-run-invalid", "Invalid run")
       workflow
-        .tool("e2e_error_tool")
+        .run("missing-function")
         .commit
 
       engine = CogniCore::Workflow::Engine.new
       engine.register(workflow)
 
-      run = engine.create_run("e2e-tool-error")
+      result = engine.create_run("e2e-run-invalid").start
+      result.status.should eq("failed")
+      result.error.not_nil!.message.includes?("unknown function").should eq(true)
+    end
+
+    it "handles run function that raises error" do
+      CogniCore::Workflow.register_function("e2e_error_tool") do |_ctx|
+        raise "Intentional run error"
+        {} of String => JSON::Any
+      end
+
+      workflow = CogniCore::Workflow.create_workflow("e2e-run-error", "Run error test")
+      workflow
+        .run("e2e_error_tool")
+        .commit
+
+      engine = CogniCore::Workflow::Engine.new
+      engine.register(workflow)
+
+      run = engine.create_run("e2e-run-error")
       result = run.start
       result.status.should eq("failed")
-      result.error.not_nil!.message.includes?("Intentional tool error").should eq(true)
+      result.error.not_nil!.message.includes?("Intentional run error").should eq(true)
     end
   end
 

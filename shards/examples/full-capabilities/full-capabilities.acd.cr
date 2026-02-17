@@ -1,7 +1,7 @@
 # Full capabilities example for the current .acd.cr loader.
 # Demonstrates unified resource management and enhanced execution control.
-# Crystal tool syntax example (requires explicit registration if used):
-# tool project_healthcheck
+# Function execution example (requires explicit registration if used):
+# run "project-healthcheck"
 
 workflow "full-capabilities" do
   # Unified resources annotation
@@ -14,8 +14,8 @@ workflow "full-capabilities" do
   agent_codex, model: "gpt-5", args: ["--json"], input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
   agent_cliproxy, model: "qwen3-coder-plus", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
 
-  # External tool with runtime metadata
-  tool "tools/echo-json.sh", runtime: {shell: "bash"}
+  # External script execution with runtime metadata
+  run "tools/echo-json.sh", runtime: {shell: "bash"}
 
   voice "voice-step", config: {provider: "openai", speaker: "alloy"}
   rag "rag-step", config: {operation: "query", vectorStoreName: "memory", indexName: "full-capabilities-index", topK: 3}

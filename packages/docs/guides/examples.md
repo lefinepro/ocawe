@@ -23,9 +23,9 @@ Examples live under `shards/examples` and are designed for direct reuse.
 
 ## Notes
 
-- Bare `snake_case` function lines are supported and are auto-registered from `AppConfig.settings.functions` (or can be registered manually via `CogniCore::Workflow.register_function`).
-- `tool snake_case_fn` syntax is supported for crystal tool functions and should be registered through `CogniCore::Workflow.register_tool`.
-- External tool syntax (`tool "path", runtime: { ... }`) works out of the box when script paths are valid.
+- Use `run "name"` for registered functions and `run "path_or_inline", runtime: { ... }` for external execution.
+- Function names are not restricted to snake_case. Collision rule: system function keeps base name, user function gets `:1`, `:2`, etc., with optional explicit aliases.
+- Programmatic API exposes `Cogni::Workflow` and can be extended by inheritance.
 - Programmatic workflow DSL (`WorkflowDefinition` API) supports `parallel`, `then`, and event nodes (`wait_for_event`, `send_event`).
 
 ## Custom provider macro

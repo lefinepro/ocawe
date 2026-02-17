@@ -50,16 +50,17 @@ curl -s http://localhost:4111/v1/workflows
 curl -s -X POST http://localhost:4111/v1/workflows/full-capabilities/runs -H 'content-type: application/json' -d '{"input_data":{"task":"demo"}}'
 ```
 
-## Crystal function and tool registration
+## Function registration
 
-Workflow function lines (`snake_case_name`; with optional flat params like `model`, `args` + `input_schema` when needed) and `tool snake_case_name` require explicit registration in bootstrap:
+`run "function_name"` entries require explicit function registration in bootstrap.
+Function names are no longer restricted to snake_case; explicit aliases are supported.
 
 ```crystal
 CogniCore::Workflow.register_function("agent_custom_step") do |ctx|
   CogniCore::Workflow::AgentResult.new(agent_type: "function", content: "ok")
 end
 
-CogniCore::Workflow.register_tool("project_healthcheck") do |_ctx|
+CogniCore::Workflow.register_function("project-healthcheck", alias_name: "healthcheck") do |_ctx|
   {"status" => JSON.parse("ok".to_json)}
 end
 ```

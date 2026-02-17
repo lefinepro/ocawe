@@ -103,33 +103,49 @@ describe CogniCore::Workflow::Engine do
     resumed.status.should eq("success")
   end
 
-  it "runs tool nodes through direct crystal tool functions" do
-    CogniCore::Workflow.register_tool("create_sandbox") do |_ctx|
+  it "runs function nodes through run API" do
+    CogniCore::Workflow.register_function("create-sandbox") do |_ctx|
       {
         "tool" => json_any("create-sandbox"),
         "status" => json_any("ok"),
       }
     end
 
-    workflow = CogniCore::Workflow.create_workflow("wf-tools", "tool dispatch")
+    workflow = CogniCore::Workflow.create_workflow("wf-runs", "run dispatch")
     workflow
-      .tool("create_sandbox")
+      .run("create-sandbox")
       .commit
 
     engine = CogniCore::Workflow::Engine.new
     engine.register(workflow)
 
-    run = engine.create_run("wf-tools")
+    run = engine.create_run("wf-runs")
     result = run.start
     result.status.should eq("success")
     result.state.not_nil!["tool"].as_s.should eq("create-sandbox")
   end
 
-  it "rejects crystal tool nodes without snake_case function name" do
-    workflow = CogniCore::Workflow.create_workflow("wf-tools-invalid", "tool dispatch invalid")
-    expect_raises(Exception, /snake_case/) do
-      workflow.tool("create-sandbox")
+  it "supports function aliases when names collide with system functions" do
+    CogniCore::Workflow.register_system_function("conflict-fn") do |_ctx|
+      {"which" => json_any("system")}
     end
+    user_alias = CogniCore::Workflow.register_function("conflict-fn") do |_ctx|
+      {"which" => json_any("user")}
+    end
+    user_alias.should eq("conflict-fn:1")
+
+    workflow = CogniCore::Workflow.create_workflow("wf-fn-collision", "function collision")
+    workflow
+      .run("conflict-fn")
+      .run("conflict-fn:1")
+      .commit
+
+    engine = CogniCore::Workflow::Engine.new
+    engine.register(workflow)
+
+    result = engine.create_run("wf-fn-collision").start
+    result.status.should eq("success")
+    result.state.not_nil!["which"].as_s.should eq("user")
   end
 
   it "supports mastra-compatible rag keys and output shape" do
@@ -293,16 +309,16 @@ describe CogniCore::Workflow::Engine do
       )
     end
 
-    workflow = CogniCore::Workflow.create_workflow("wf-fn-chain", "function chaining")
+    workflow = CogniCore::Workflow.create_workflow("wf-run-chain", "function chaining")
     workflow
-      .fn("agent_step_one")
-      .fn("agent_step_two")
+      .run("agent_step_one")
+      .run("agent_step_two")
       .commit
 
     engine = CogniCore::Workflow::Engine.new
     engine.register(workflow)
 
-    result = engine.create_run("wf-fn-chain").start(input_data: {"task" => json_str("demo")})
+    result = engine.create_run("wf-run-chain").start(input_data: {"task" => json_str("demo")})
     result.status.should eq("success")
     result.state.not_nil!["content"].as_s.should eq("seen:step-one-output")
   end

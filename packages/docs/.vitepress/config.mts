@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   title: "Cogni",
-  description: "Crystal-first runtime for workflows, agents, tools, and skills",
+  description: "Crystal-first runtime for workflows, agents, triggers, and skills",
   themeConfig: {
     nav: [
       { text: "Guides", link: "/guides/tutorial" },
@@ -38,6 +38,8 @@ export default defineConfig({
         text: "API",
         items: [
           { text: "Reference", link: "/api/reference" },
+          { text: "Workflow API Spec", link: "/api/workflow-api-spec" },
+          { text: "Trigger API Spec", link: "/api/trigger-api-spec" },
         ],
       },
     ],
