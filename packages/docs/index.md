@@ -1,11 +1,11 @@
 # Cogni
 
-Crystal-first runtime for workflows, agents, tools, and skills.
+Crystal-first runtime for workflows, agents, triggers, and skills.
 
 ## What You Can Build
 
 - Agent-driven workflows with explicit graph execution.
-- Tool and skill orchestration from workflow bundles.
+- Function/script and skill orchestration from workflow bundles.
 - Voice and RAG workflows with typed schema validation.
 - Local playground-driven development with runtime APIs.
 
@@ -34,3 +34,5 @@ Open docs and playground route:
 - Tutorial: `/guides/tutorial`
 - Workflow format: `/guides/workflow-format`
 - API reference: `/api/reference`
+- Workflow API spec: `/api/workflow-api-spec`
+- Trigger API spec: `/api/trigger-api-spec`

@@ -1,41 +1,43 @@
 require "./e2e_spec_helper"
 
-# E2E Tests for Tools and Functions
+# E2E Tests for Run and Functions
 #
-# Tests tool and function workflow patterns:
-# - Crystal tool execution
+# Tests run and function workflow patterns:
+# - Registered function execution via run
 # - Function registration and chaining
-# - Tool error handling
+# - Run context handling
 
-describe "E2E: Tools and Functions" do
-  describe "tool execution" do
-    it "executes crystal tool functions" do
-      CogniCore::Workflow.register_tool("e2e_test_tool") do |ctx|
+describe "E2E: Run and Functions" do
+  describe "run execution" do
+    it "executes registered functions via run" do
+      CogniCore::Workflow.register_function("e2e_test_tool") do |ctx|
+        input = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
         {
           "tool_name"  => json_any("e2e-test-tool"),
-          "input_task" => json_any(ctx.input_data["task"]?.try(&.as_s?) || "no-task"),
+          "input_task" => json_any(input["task"]?.try(&.as_s?) || "no-task"),
           "status"     => json_any("success"),
         }
       end
 
-      workflow = CogniCore::Workflow.create_workflow("e2e-tool", "Tool test")
+      workflow = CogniCore::Workflow.create_workflow("e2e-run", "Run test")
       workflow
-        .tool("e2e_test_tool")
+        .run("e2e_test_tool")
         .commit
 
       engine = CogniCore::Workflow::Engine.new
       engine.register(workflow)
 
-      run = engine.create_run("e2e-tool")
+      run = engine.create_run("e2e-run")
       result = run.start(input_data: {"task" => json_str("validate-tool")})
       result.status.should eq("success")
       result.state.not_nil!["tool_name"].as_s.should eq("e2e-test-tool")
       result.state.not_nil!["input_task"].as_s.should eq("validate-tool")
     end
 
-    it "executes tool with complex input" do
-      CogniCore::Workflow.register_tool("complex_input_tool") do |ctx|
-        data = ctx.input_data["data"]?.try(&.as_h?) || {} of String => JSON::Any
+    it "executes run with complex input" do
+      CogniCore::Workflow.register_function("complex_input_tool") do |ctx|
+        input = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
+        data = input["data"]?.try(&.as_h?) || {} of String => JSON::Any
         count = data["count"]?.try(&.as_i?) || 0
         {
           "processed_count" => json_any(count * 2),
@@ -43,15 +45,15 @@ describe "E2E: Tools and Functions" do
         }
       end
 
-      workflow = CogniCore::Workflow.create_workflow("complex-tool-test", "Complex tool test")
+      workflow = CogniCore::Workflow.create_workflow("complex-run-test", "Complex run test")
       workflow
-        .tool("complex_input_tool")
+        .run("complex_input_tool")
         .commit
 
       engine = CogniCore::Workflow::Engine.new
       engine.register(workflow)
 
-      run = engine.create_run("complex-tool-test")
+      run = engine.create_run("complex-run-test")
       result = run.start(input_data: {
         "data" => JSON.parse({"count" => 5}.to_json),
       })
@@ -78,16 +80,16 @@ describe "E2E: Tools and Functions" do
         )
       end
 
-      workflow = CogniCore::Workflow.create_workflow("e2e-fn-chain", "Function chaining")
+      workflow = CogniCore::Workflow.create_workflow("e2e-run-chain", "Function chaining")
       workflow
-        .fn("e2e_fn_step_one")
-        .fn("e2e_fn_step_two")
+        .run("e2e_fn_step_one")
+        .run("e2e_fn_step_two")
         .commit
 
       engine = CogniCore::Workflow::Engine.new
       engine.register(workflow)
 
-      result = engine.create_run("e2e-fn-chain").start
+      result = engine.create_run("e2e-run-chain").start
       result.status.should eq("success")
       result.state.not_nil!["content"].as_s.should eq("received:step-one-data")
     end
@@ -118,9 +120,9 @@ describe "E2E: Tools and Functions" do
 
       workflow = CogniCore::Workflow.create_workflow("multi-fn-chain", "Multi function chain")
       workflow
-        .fn("chain_fn_a")
-        .fn("chain_fn_b")
-        .fn("chain_fn_c")
+        .run("chain_fn_a")
+        .run("chain_fn_b")
+        .run("chain_fn_c")
         .commit
 
       engine = CogniCore::Workflow::Engine.new
@@ -132,9 +134,9 @@ describe "E2E: Tools and Functions" do
     end
   end
 
-  describe "tool with workflow context" do
-    it "accesses workflow state in tool" do
-      CogniCore::Workflow.register_tool("state_aware_tool") do |ctx|
+  describe "run with workflow context" do
+    it "accesses workflow state in run function" do
+      CogniCore::Workflow.register_function("state_aware_tool") do |ctx|
         prev_value = ctx.state["setup_value"]?.try(&.as_s?) || "none"
         {
           "from_state" => json_any(prev_value),
@@ -142,18 +144,18 @@ describe "E2E: Tools and Functions" do
         }
       end
 
-      workflow = CogniCore::Workflow.create_workflow("state-tool-test", "State tool test")
+      workflow = CogniCore::Workflow.create_workflow("state-run-test", "State run test")
       workflow
         .then(CogniCore::Workflow::WorkflowNode.new("setup", CogniCore::Workflow::NodeKind::Control) do |_ctx|
           CogniCore::Workflow::WorkflowNodeResult.continue({"setup_value" => json_str("initialized")})
         end)
-        .tool("state_aware_tool")
+        .run("state_aware_tool")
         .commit
 
       engine = CogniCore::Workflow::Engine.new
       engine.register(workflow)
 
-      run = engine.create_run("state-tool-test")
+      run = engine.create_run("state-run-test")
       result = run.start
       result.status.should eq("success")
       result.state.not_nil!["from_state"].as_s.should eq("initialized")

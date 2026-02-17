@@ -135,8 +135,8 @@ end
 | `@[Resources(tool: "...")]` or `@[Resources(tool: [...])]` | Declare tools |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
-| `tool snake_case` | Crystal tool function |
-| `tool "path", runtime: {...}` | External tool |
+| `run "name"` | Execute registered function |
+| `run "path_or_inline", runtime: {...}, env: {...}` | Execute script path or inline script |
 | `voice "..."` | Voice node |
 | `rag "..."` | RAG node |
 | `suspend "..."` | Suspend-and-resume node (`reason`, `resume_schema`) |
@@ -161,6 +161,7 @@ agent "my-agent",
 | `unless...else...end` | Inverted conditional (execute when false) |
 | `while condition do...end` | Loop while condition is true |
 | `until condition do...end` | Loop until condition becomes true |
+| `loop do...end` | Loop until node flow suspends/fails or max iterations reached |
 
 ## Agent Schema References
 
@@ -173,13 +174,21 @@ agent "workflow-agent",
 
 `schema_ref("input")` / `schema_ref("output")` / `schema_ref("resume")` resolve markdown `crystal` schema blocks from the agent file.
 
-For `agent` and bare `snake_case` function nodes, runtime passes a chained input envelope:
+For `agent` and `run` function nodes, runtime passes a chained input envelope:
 
 ```json
 {"input": <previous step output>, "context": {"workflow_id": "...", "run_id": "...", "state": {...}}}
 ```
 
-If function params are defined in DSL, runtime includes these params as flat fields in the function input envelope.
+If run params are defined in DSL, runtime includes these params as flat fields in the run input envelope.
+
+## Function Resolution and Aliases
+
+`run "name"` resolves functions by normalized case-insensitive key.
+
+- If a system and user function share the same name, system keeps base name.
+- User collisions are indexed as `name:1`, `name:2`, ...
+- You can add explicit aliases during registration and call them directly via `run "alias"`.
 
 ## Examples
 
