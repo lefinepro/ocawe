@@ -323,7 +323,7 @@ module CogniCore
       end
 
       private def node_input_for(node : WorkflowNode, previous_node_id : String?, previous_node_result : AnyHash?) : AnyHash
-        if node.kind == NodeKind::Agent || node.kind == NodeKind::Fn
+        if node.kind == NodeKind::Agent || node.kind == NodeKind::Run
           input_payload = previous_node_result ? JSON.parse(previous_node_result.to_json) : JSON.parse(@init_data.to_json)
           context = {
             "workflow_id" => JSON.parse(@workflow_id.to_json),
@@ -337,7 +337,7 @@ module CogniCore
             "context" => JSON.parse(context.to_json),
           } of String => JSON::Any
 
-          if node.kind == NodeKind::Fn
+          if node.kind == NodeKind::Run
             if params = node.metadata["params"]?
               if flat = params.as_h?
                 flat.each do |k, v|

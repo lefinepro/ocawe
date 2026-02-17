@@ -17,6 +17,7 @@ require "./endpoints/skills"
 require "./endpoints/runs"
 require "./endpoints/hitl"
 require "./endpoints/compat"
+require "./endpoints/triggers"
 
 module ACD
   module HTTP
@@ -80,6 +81,7 @@ module ACD
         mount_run_endpoints
         mount_hitl_endpoints
         mount_compat_endpoints
+        mount_trigger_endpoints
 
         Kemal.run
       end
@@ -145,7 +147,13 @@ module ACD
           ids << bundle.id
           definition = load_workflow_definition(bundle, loaded_agents)
           rebuilt_engine.register(definition)
-          tool_ids = definition.nodes.select { |node| node.kind == CogniCore::Workflow::NodeKind::Tool }.map(&.id)
+          tool_ids = [] of String
+          definition.default_tools.each { |id| tool_ids << id unless tool_ids.includes?(id) }
+          definition.nodes.each do |node|
+            next unless node.kind == CogniCore::Workflow::NodeKind::Run
+            next unless node.metadata["runtime"]?
+            tool_ids << node.id unless tool_ids.includes?(node.id)
+          end
 
           loaded_skills.each do |skill|
             qualified_id = "#{bundle.id}:#{skill.id}"
@@ -240,11 +248,10 @@ module ACD
 
       private def register_configured_functions! : Nil
         config = CogniCore::Config::AppConfig.settings
-        snake_case = /\A[a-z][a-z0-9_]*\z/
+        CogniCore::Workflow.reset_function_registry!
 
         config.functions.each do |name, handler|
-          raise "invalid function name '#{name}' in AppConfig.settings.functions; expected snake_case" unless snake_case.matches?(name)
-          CogniCore::Workflow.register_function(name, &handler)
+          CogniCore::Workflow.register_system_function(name, &handler)
         end
       end
 
@@ -380,17 +387,15 @@ module ACD
 
       # Parse workflow body between start_line and end_line
       private def parse_workflow_body(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Int32
-        crystal_tool_pattern = /^\s*tool\s+([a-z][a-z0-9_]*)\s*$/
-        external_tool_pattern = /^\s*tool\s+"([^"]+)"\s*,\s*runtime:\s*(\{.*\})\s*$/
+        run_pattern = /^\s*run\s+"([^"]+)"(.*)$/
         skill_pattern = /^\s*skill\s+"([^"]+)"(?:\s*,\s*agent:\s*"([^"]+)")?/
         rag_pattern = /^\s*rag\s+"([^"]+)"(?:\s*,\s*config:\s*(\{.*\}))?/
         suspend_pattern = /^\s*suspend\s+"([^"]+)"(.*)$/
         reserved_keywords = Set{
           "workflow", "do", "end", "struct", "class", "module",
-          "agent", "skill", "tool", "voice", "rag", "suspend",
+          "agent", "skill", "run", "voice", "rag", "suspend",
           "input_type", "output_type", "input_validate", "output_validate",
-          "parallel", "if", "elsif", "else", "while", "unless", "until",
-          "branch", "dowhile", "dountil", "map",
+          "parallel", "if", "elsif", "else", "while", "unless", "until", "loop",
         }
 
         i = start_line
@@ -441,13 +446,21 @@ module ACD
             next
           end
 
+          # Handle loop do...end loop
+          if line.match(/^\s*loop\s+do\s*$/)
+            block_end = find_block_end(ctx.lines, i, end_line)
+            parse_loop_block(ctx, i - 1, block_end)
+            i = block_end + 1
+            next
+          end
+
           if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
             agent_id = match[1]
             tail = match[2]? || ""
             loaded = ctx.agent_index[agent_id]?
             params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
             if params["custom_fn"]?
-              raise "#{ctx.workflow_file}: `custom_fn` is not supported for agent. Register a snake_case function and call it as a standalone DSL step."
+              raise "#{ctx.workflow_file}: `custom_fn` is not supported for agent. Register a function and call it via `run \"function_name\"`."
             end
             model = parse_optional_string(params["model"]?) || loaded.try(&.model)
             prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
@@ -536,17 +549,29 @@ module ACD
             ctx.workflow.rag(match[1], config: config)
             next
           end
-          if match = line.match(crystal_tool_pattern)
-            ctx.workflow.tool(match[1])
-            next
-          end
-          if match = line.match(external_tool_pattern)
-            runtime = parse_runtime_object(match[2], ctx.workflow_file)
-            ctx.workflow.tool(match[1], runtime: runtime, workflow_root: ctx.workflow_root)
+          if match = line.match(run_pattern)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+
+            ctx.workflow.run(
+              ref,
+              runtime: runtime,
+              env: env,
+              workflow_root: ctx.workflow_root,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+            )
             next
           end
           if line.starts_with?("tool ")
-            raise "#{ctx.workflow_file}: unsupported tool syntax '#{line}'. Use `tool snake_case_fn` or `tool \"path\", runtime: { ... }`"
+            raise "#{ctx.workflow_file}: `tool` is removed from DSL. Use `run \"function_or_path_or_inline\"` with optional `runtime` and `env`."
           end
           if match = line.match(suspend_pattern)
             suspend_id = match[1]
@@ -565,42 +590,10 @@ module ACD
             raise "#{ctx.workflow_file}: `approve` is deprecated. Use `suspend \"id\", reason: \"...\", resume_schema: ...`."
             next
           end
-          if line.match(/^\s*(branch|dowhile|dountil|map)\b/)
-            raise "#{ctx.workflow_file}: legacy control-flow API (`branch|dowhile|dountil|map`) is removed from DSL. Use native Crystal flow (`if/unless/while/until`) and `parallel`."
-          end
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             fn_name = match[1]
-            tail = match[2]? || ""
             next if reserved_keywords.includes?(fn_name)
-
-            unless CogniCore::Workflow.function_registry.registered?(fn_name)
-              raise "#{ctx.workflow_file}: unknown function '#{fn_name}'. Register it in CogniCore::Config::AppConfig."
-            end
-
-            params = parse_line_params(tail, ctx.workflow_file, "function #{fn_name}")
-            schema_keys = Set{"input_schema", "output_schema"}
-            fn_args_defined = params.keys.any? { |k| !schema_keys.includes?(k) }
-            input_schema = if fn_args_defined
-                             compile_required_function_schema(params["input_schema"]?, ctx.workflow_file, fn_name, "input")
-                           else
-                             compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, fn_name, "input")
-                           end
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, fn_name, "output")
-            if input = input_schema
-              if output = output_schema
-                ensure_output_schema_superset!(ctx.workflow_file, fn_name, input, output)
-              end
-            end
-
-            fn_params = extract_function_args(params, ctx.workflow_file)
-
-            ctx.workflow.fn(
-              fn_name,
-              params: fn_params,
-              input_schema: input_schema,
-              output_schema: output_schema,
-            )
-            next
+            raise "#{ctx.workflow_file}: bare function syntax is removed. Use `run \"#{fn_name}\"`."
           end
         end
 
@@ -702,6 +695,27 @@ module ACD
               default_model: ctx.workflow.default_model
             )
             parallel_nodes << node
+            next
+          end
+
+          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            parallel_nodes << create_run_node(
+              ref,
+              runtime: runtime,
+              env: env,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+              workflow_root: ctx.workflow_root
+            )
             next
           end
         end
@@ -808,6 +822,27 @@ module ACD
               default_model: ctx.workflow.default_model
             )
             current_nodes << node
+            next
+          end
+
+          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            current_nodes << create_run_node(
+              ref,
+              runtime: runtime,
+              env: env,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+              workflow_root: ctx.workflow_root
+            )
           end
         end
 
@@ -900,6 +935,34 @@ module ACD
             else
               unless_nodes << node
             end
+            next
+          end
+
+          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+
+            node = create_run_node(
+              ref,
+              runtime: runtime,
+              env: env,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+              workflow_root: ctx.workflow_root
+            )
+
+            if in_else
+              else_nodes << node
+            else
+              unless_nodes << node
+            end
           end
         end
 
@@ -981,6 +1044,28 @@ module ACD
               default_model: ctx.workflow.default_model
             )
             loop_nodes << node
+            next
+          end
+
+          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+
+            loop_nodes << create_run_node(
+              ref,
+              runtime: runtime,
+              env: env,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+              workflow_root: ctx.workflow_root
+            )
           end
         end
 
@@ -1073,6 +1158,28 @@ module ACD
               default_model: ctx.workflow.default_model
             )
             loop_nodes << node
+            next
+          end
+
+          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+
+            loop_nodes << create_run_node(
+              ref,
+              runtime: runtime,
+              env: env,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+              workflow_root: ctx.workflow_root
+            )
           end
         end
 
@@ -1085,6 +1192,111 @@ module ACD
           result = CogniCore::Workflow::WorkflowNodeResult.continue
 
           while !evaluate_dsl_condition(condition, with_state(node_ctx, merged)) && iterations < 100
+            iterations += 1
+            result = loop_body.execute(with_state(node_ctx, merged))
+            break if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            if data = result.data
+              data.each { |k, v| merged[k] = v }
+            end
+          end
+
+          if result.action == CogniCore::Workflow::NodeAction::Continue.to_s.downcase
+            CogniCore::Workflow::WorkflowNodeResult.continue(merged)
+          else
+            result
+          end
+        end
+        ctx.workflow.then(control_node)
+      end
+
+      # Parse loop do...end block
+      private def parse_loop_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
+        loop_nodes = [] of CogniCore::Workflow::WorkflowNode
+
+        i = start_line + 1
+        while i <= end_line
+          raw = ctx.lines[i]
+          line = raw.strip
+          i += 1
+
+          next if line.empty? || line.starts_with?("#")
+          next if line == "end"
+
+          if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
+            agent_id = match[1]
+            tail = match[2]? || ""
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            input_schema = resolve_agent_schema(
+              params["input_schema"]?,
+              loaded,
+              kind: "input",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            output_schema = resolve_agent_schema(
+              params["output_schema"]?,
+              loaded,
+              kind: "output",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+
+            node = create_agent_node(
+              agent_id,
+              prompt: prompt,
+              model: model,
+              resume_schema: resume_schema,
+              voice_config: loaded.try(&.voice_config),
+              guardrails_config: loaded.try(&.guardrails_config),
+              input_schema: input_schema,
+              output_schema: output_schema,
+              default_model: ctx.workflow.default_model
+            )
+            loop_nodes << node
+            next
+          end
+
+          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+
+            loop_nodes << create_run_node(
+              ref,
+              runtime: runtime,
+              env: env,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+              workflow_root: ctx.workflow_root
+            )
+          end
+        end
+
+        return if loop_nodes.empty?
+
+        loop_body = wrap_nodes_in_control(loop_nodes, "loop-body")
+        control_node = CogniCore::Workflow::WorkflowNode.new("loop-#{start_line}", CogniCore::Workflow::NodeKind::Control) do |node_ctx|
+          iterations = 0
+          merged = {} of String => JSON::Any
+          result = CogniCore::Workflow::WorkflowNodeResult.continue
+
+          while iterations < 100
             iterations += 1
             result = loop_body.execute(with_state(node_ctx, merged))
             break if result.action != CogniCore::Workflow::NodeAction::Continue.to_s.downcase
@@ -1161,6 +1373,29 @@ module ACD
           end
 
           CogniCore::Workflow::WorkflowNodeResult.continue(result)
+        end
+      end
+
+      private def create_run_node(
+        ref : String,
+        runtime : CogniCore::Workflow::AnyHash? = nil,
+        env : CogniCore::Workflow::AnyHash? = nil,
+        params : CogniCore::Workflow::AnyHash? = nil,
+        input_schema : CogniCore::Schema::Validator? = nil,
+        output_schema : CogniCore::Schema::Validator? = nil,
+        workflow_root : String? = nil
+      ) : CogniCore::Workflow::WorkflowNode
+        metadata = {} of String => JSON::Any
+        metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
+        metadata["env"] = JSON.parse(env.to_json) if env
+        metadata["params"] = JSON.parse(params.to_json) if params
+        metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
+
+        executor = CogniCore::Workflow::RunExecutor.new
+        CogniCore::Workflow::WorkflowNode.new(ref, CogniCore::Workflow::NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          CogniCore::Workflow::WorkflowNodeResult.continue(
+            executor.run(ref, ctx, runtime: runtime, env: env, workflow_root: workflow_root)
+          )
         end
       end
 
@@ -1368,10 +1603,10 @@ module ACD
         params
       end
 
-      private def extract_function_args(params : Hash(String, String), workflow_file : String) : CogniCore::Workflow::AnyHash?
+      private def extract_named_args(params : Hash(String, String), skip_keys : Set(String), workflow_file : String) : CogniCore::Workflow::AnyHash?
         args = {} of String => JSON::Any
         params.each do |key, value|
-          next if key == "input_schema" || key == "output_schema"
+          next if skip_keys.includes?(key)
           args[key] = JSON.parse(value)
         rescue
           args[key] = parse_runtime_literal(value, workflow_file)
