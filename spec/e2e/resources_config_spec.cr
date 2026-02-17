@@ -3,16 +3,16 @@ require "./e2e_spec_helper"
 # E2E Tests for Resources and Configuration
 #
 # Tests resource management and configuration patterns:
-# - Unified use attribute (model, skill, tool)
+# - Unified @[Resources(...)] annotation (model, skill, tool)
 # - Model selection and resolution
 # - Full capabilities workflow
 # - Crystal-native configuration
 
 describe "E2E: Resources and Configuration" do
   describe "model selection" do
-    it "creates workflow with model default from use attribute" do
+    it "creates workflow with model default from resource annotation" do
       # Simulates: workflow "simple-model-test" do
-      #   use model: "cliproxyapi/qwen3-coder-plus"
+      #   @[Resources(model: "cliproxyapi/qwen3-coder-plus")]
       #   agent "simple-model-agent"
       # end
       workflow = CogniCore::Workflow.create_workflow("simple-model-test", "Model test")
@@ -65,8 +65,8 @@ describe "E2E: Resources and Configuration" do
   end
 
   describe "unified resources" do
-    it "creates workflow with combined use attribute" do
-      # Simulates: use model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"]
+    it "creates workflow with combined resource annotation" do
+      # Simulates: @[Resources(model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"])]
       workflow = CogniCore::Workflow.create_workflow("unified-resources", "Unified resources test")
       workflow
         .use(
@@ -80,8 +80,8 @@ describe "E2E: Resources and Configuration" do
       workflow.default_tools.should eq(["http-client"])
     end
 
-    it "creates workflow with unified use attribute" do
-      # Simulates full-capabilities workflow with use model:, skill:, tool:
+    it "creates workflow with unified resource annotation" do
+      # Simulates full-capabilities workflow with @[Resources(model: "...", skill: [...], tool: [...])]
       workflow = CogniCore::Workflow.create_workflow("full-capabilities", "Full capabilities test")
       workflow
         .use(
@@ -128,7 +128,7 @@ describe "E2E: Resources and Configuration" do
   end
 
   describe "full-capabilities" do
-    it "creates workflow with agent, skill, tool, voice, rag, and approve nodes" do
+    it "creates workflow with agent, skill, tool, voice, rag, and suspend nodes" do
       workflow = CogniCore::Workflow.create_workflow("full-demo", "Full demo test")
       workflow
         .use(model: "clipproxyapi/qwen3-coder-plus")
@@ -143,7 +143,7 @@ describe "E2E: Resources and Configuration" do
           "indexName"       => json_str("full-capabilities-index"),
           "topK"            => JSON.parse(3.to_json),
         })
-        .approve("manual-approval", reason: "Confirm run output")
+        .suspend("manual-approval", reason: "Confirm run output")
         .commit
 
       workflow.nodes.size.should eq(5)
@@ -151,7 +151,7 @@ describe "E2E: Resources and Configuration" do
       workflow.nodes[1].kind.should eq(CogniCore::Workflow::NodeKind::Skill)
       workflow.nodes[2].kind.should eq(CogniCore::Workflow::NodeKind::Voice)
       workflow.nodes[3].kind.should eq(CogniCore::Workflow::NodeKind::Rag)
-      workflow.nodes[4].kind.should eq(CogniCore::Workflow::NodeKind::Approve)
+      workflow.nodes[4].kind.should eq(CogniCore::Workflow::NodeKind::Suspend)
     end
 
     it "executes full workflow up to approval suspension" do
@@ -164,7 +164,7 @@ describe "E2E: Resources and Configuration" do
           "vectorStoreName" => json_str("memory"),
           "indexName"       => json_str("test-index"),
         })
-        .approve("confirm", reason: "Confirm output")
+        .suspend("confirm", reason: "Confirm output")
         .commit
 
       engine = CogniCore::Workflow::Engine.new

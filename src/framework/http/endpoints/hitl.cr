@@ -47,12 +47,14 @@ module ACD
           action = body["action"]?.try(&.as_s?) || ""
 
           resume_payload = body["resume_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body.dup
+          resources = body["resources"]?.try(&.as_h?)
           resume_payload.delete("action")
+          resume_payload.delete("resources")
 
           case action
-          when "resume", "approve"
+          when "resume"
             result_or_error = with_workflow_errors(env) do
-              @workflow_service.resume_run(workflow_id, run_id, resume_data: resume_payload)
+              @workflow_service.resume_run(workflow_id, run_id, resume_data: resume_payload, resources: resources)
             end
             if result_or_error.is_a?(String)
               next result_or_error

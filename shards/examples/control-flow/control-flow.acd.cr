@@ -2,7 +2,7 @@
 # Demonstrates while, unless, and until loops in the workflow DSL.
 
 workflow "control-flow" do
-  use model: "openai/gpt-4.1"
+  @[Resources(model: "openai/gpt-4.1")]
 
   # Execute agent unless condition is true
   unless input.skip_preprocessing

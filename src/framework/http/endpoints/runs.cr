@@ -5,12 +5,14 @@ module ACD
         post "/v1/workflows/:workflowId/runs" do |env|
           workflow_id = env.params.url["workflowId"]
           body = json_body(env)
-          input_data = body["input_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body
+          input_data = body["input_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body.dup
+          resources = body["resources"]?.try(&.as_h?)
+          input_data.delete("resources")
           run_id = body["run_id"]?.try(&.as_s?)
           resource_id = body["resource_id"]?.try(&.as_s?)
 
           result_or_error = with_workflow_errors(env) do
-            @workflow_service.start_run(workflow_id, run_id: run_id, resource_id: resource_id, input_data: input_data)
+            @workflow_service.start_run(workflow_id, run_id: run_id, resource_id: resource_id, input_data: input_data, resources: resources)
           end
           if result_or_error.is_a?(String)
             next result_or_error
@@ -59,12 +61,14 @@ module ACD
           workflow_id = env.params.url["workflowId"]
           run_id = env.params.url["runId"]
           body = json_body(env)
-          resume_data = body["resume_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body
+          resume_data = body["resume_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body.dup
+          resources = body["resources"]?.try(&.as_h?)
+          resume_data.delete("resources")
           node = parse_node_selector(body["node"]?)
           wait_for_all = body["wait_for_all_paths"]?.try(&.as_bool?) || false
 
           result_or_error = with_workflow_errors(env) do
-            @workflow_service.resume_run(workflow_id, run_id, resume_data: resume_data, node: node, wait_for_all_paths: wait_for_all)
+            @workflow_service.resume_run(workflow_id, run_id, resume_data: resume_data, resources: resources, node: node, wait_for_all_paths: wait_for_all)
           end
           if result_or_error.is_a?(String)
             next result_or_error

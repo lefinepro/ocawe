@@ -15,7 +15,7 @@ module CogniCore
       getter skill_node_count : Int32
       getter tool_count : Int32
       getter fn_count : Int32
-      getter approve_count : Int32
+      getter suspend_count : Int32
     end
   end
 end

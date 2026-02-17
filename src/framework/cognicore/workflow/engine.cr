@@ -23,6 +23,7 @@ module CogniCore
 
       def start(
         input_data : AnyHash = {} of String => JSON::Any,
+        resources : AnyHash? = nil,
         runtime_context : AnyHash? = nil,
         output_options : WorkflowOutputOptions = WorkflowOutputOptions.new,
         request_context : AnyHash? = nil,
@@ -38,6 +39,7 @@ module CogniCore
           output_options: output_options,
           request_context: request_context,
           trigger_data: trigger_data,
+          resources: resources,
           resume_data: nil,
           explicit_node: nil,
         )
@@ -45,6 +47,7 @@ module CogniCore
 
       def resume(
         resume_data : AnyHash = {} of String => JSON::Any,
+        resources : AnyHash? = nil,
         node : String | Array(String) | Nil = nil,
         runtime_context : AnyHash? = nil,
         output_options : WorkflowOutputOptions = WorkflowOutputOptions.new,
@@ -76,6 +79,7 @@ module CogniCore
           output_options: output_options,
           request_context: request_context,
           trigger_data: trigger_data,
+          resources: resources,
           resume_data: resume_data,
           explicit_node: explicit,
         )
@@ -199,6 +203,7 @@ module CogniCore
           output_options: output_options,
           request_context: request_context,
           trigger_data: trigger_data,
+          resources: nil,
           resume_data: resume_data,
           explicit_node: target,
         )
@@ -244,6 +249,7 @@ module CogniCore
         output_options : WorkflowOutputOptions,
         request_context : AnyHash?,
         trigger_data : AnyHash?,
+        resources : AnyHash?,
         resume_data : AnyHash?,
         explicit_node : String?
       ) : WorkflowRunResult
@@ -253,6 +259,12 @@ module CogniCore
           @state["workflow_model"] = JSON.parse(workflow_model.to_json) unless @state["workflow_model"]?
         end
         @init_data = input_data.dup if @init_data.empty?
+        if resources
+          existing_resources = @state["resources"]?.try(&.as_h?) || {} of String => JSON::Any
+          merged_resources = existing_resources.dup
+          resources.each { |k, v| merged_resources[k] = v }
+          @state["resources"] = JSON.parse(merged_resources.to_json)
+        end
         @resume_labels.clear
         @suspend_payload = nil
 

@@ -15,7 +15,7 @@
 
 workflow "e2e-test" do
   # Use model from environment or default to qwen3-coder-model
-  use model: "clipproxyapi/qwen3-coder-model"
+  @[Resources(model: "clipproxyapi/qwen3-coder-model")]
 
   # Main processing agent with input/output schema validation
   agent "e2e-processor",
@@ -27,7 +27,7 @@ workflow "e2e-test" do
     }, strict: false)
 
   # Human approval checkpoint
-  approve "e2e-approval", reason: "Review E2E test output"
+  suspend "e2e-approval", reason: "Review E2E test output"
 
   # RAG integration step
   rag "e2e-rag-step", config: {

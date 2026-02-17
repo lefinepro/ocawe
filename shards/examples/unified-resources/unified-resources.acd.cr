@@ -1,11 +1,9 @@
 # Unified Resource Management Example
-# Demonstrates the new unified `use` attribute for models, skills, and tools.
+# Demonstrates the unified `@[Resources(...)]` annotation for models, skills, and tools.
 
 workflow "unified-resources" do
   # Combined resource declaration
-  use model: "openai/gpt-4.1",
-      skill: ["translation", "summarization"],
-      tool: ["http-client"]
+  @[Resources(model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"])]
 
   # Sequential agents with shared resources
   agent "analyzer"

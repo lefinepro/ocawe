@@ -26,7 +26,7 @@ dependencies:
 
 ## Bundles and coverage
 
-- `agents-example`: `use model:`, `agent`
+- `agents-example`: `@[Resources(model: "...")]`, `agent`
 - `skills-example`: `agent`, `skill`
 - `workflow-example`: `agent`, typed `snake_case` function nodes, `schema_ref`
 - `voice-playground`: `voice`, agent `voice`/`guardrails` frontmatter
@@ -35,7 +35,7 @@ dependencies:
 - `full-capabilities`: all runnable directives supported by current `.acd.cr` loader
 - `config-example`: crystal-native `AppConfig` template
 - `src/custom_provider_example.cr`: macro-based custom AI provider definition + client injection
-- `src/control_flow_workflow_example.cr`: programmatic control-flow (`branch`, `parallel`, loops/events) with explicit input/output schemas
+- `src/control_flow_workflow_example.cr`: programmatic control-flow (`parallel`, `then`, events) with explicit input/output schemas
 
 ## Single bundle run
 
