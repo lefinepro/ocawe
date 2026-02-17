@@ -105,7 +105,7 @@ module ACD
           )
 
           begin
-            result = Cogni::Workflows::Declarative.function_registry.call(fn_id, ctx)
+            result = Cogni::RegistryApi.call_function(fn_id, ctx)
             env.response.content_type = "application/json"
             {
               "id" => "trg_fn_#{Random::Secure.hex(12)}",

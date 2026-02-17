@@ -120,21 +120,116 @@ module Cogni
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
-        metadata = {} of String => JSON::Any
-        metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
-        metadata["env"] = JSON.parse(env.to_json) if env
-        metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
-        metadata["params"] = JSON.parse(params.to_json) if params
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "run",
+          ref,
+          runtime: runtime,
+          env: env,
+          workflow_root: workflow_root,
+          params: params,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
+      end
 
-        executor = RunExecutor.new
-        append_node(WorkflowNode.new(ref, NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(executor.run(ref, ctx, runtime: runtime, env: env, workflow_root: workflow_root))
-        end)
+      def agent_codex(
+        id : String = "agent_codex",
+        params : AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
+      ) : self
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "agent_codex",
+          id,
+          params: params,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
+      end
+
+      def agent_cliproxy(
+        id : String = "agent_cliproxy",
+        params : AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
+      ) : self
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "agent_cliproxy",
+          id,
+          params: params,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
+      end
+
+      def agent_opencode(
+        id : String = "agent_opencode",
+        params : AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
+      ) : self
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "agent_opencode",
+          id,
+          params: params,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
       end
 
       # Low-level chaining for explicit workflow nodes (used by control-flow internals).
       def step(node : WorkflowNode) : self
         append_node(node)
+      end
+
+      # Unified step entry for all built-in and external registry node types.
+      def step(
+        type : String,
+        id : String,
+        runtime : AnyHash? = nil,
+        env : AnyHash? = nil,
+        workflow_root : String? = nil,
+        params : AnyHash? = nil,
+        prompt : String? = nil,
+        model : String? = nil,
+        resume_schema : Cogni::Workflows::DSL::Validator? = nil,
+        voice_config : AnyHash? = nil,
+        guardrails_config : AnyHash? = nil,
+        agent_id : String? = nil,
+        agent : String? = nil,
+        config : AnyHash? = nil,
+        reason : String? = nil,
+        node_kind_name : String? = nil,
+        node_kind_parameters : AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
+      ) : self
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          type,
+          id,
+          runtime: runtime,
+          env: env,
+          workflow_root: workflow_root,
+          params: params,
+          prompt: prompt,
+          model: model,
+          resume_schema: resume_schema,
+          voice_config: voice_config,
+          guardrails_config: guardrails_config,
+          agent_id: agent_id,
+          agent: agent,
+          config: config,
+          reason: reason,
+          node_kind_name: node_kind_name,
+          node_kind_parameters: node_kind_parameters,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
       end
 
       def agent(
@@ -147,54 +242,18 @@ module Cogni
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
-        metadata = {} of String => JSON::Any
-        metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema
-
-        append_node(WorkflowNode.new(id, NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          user_prompt = build_agent_user_prompt(ctx)
-          Guardrails.validate_input!(id, user_prompt, guardrails_config)
-
-          resolved_model = resolve_model(ctx, model)
-          system_prompt = prompt || "You are agent #{id}."
-          response = CogniCore::AI::Client.new.generate_text(
-            model_spec: resolved_model,
-            prompt: user_prompt,
-            system: system_prompt,
-            metadata: {
-              "workflow_id" => JSON.parse(ctx.workflow_id.to_json),
-              "run_id" => JSON.parse(ctx.run_id.to_json),
-              "node_id" => JSON.parse(ctx.node_id.to_json),
-              "agent_id" => JSON.parse(id.to_json),
-            },
-          )
-          agent_result = AgentResult.new(
-            agent_type: "default-agent",
-            content: response.text,
-            provider: response.provider,
-            model: "#{response.provider}/#{response.model}",
-          )
-
-          Guardrails.validate_output!(id, agent_result.content, guardrails_config)
-
-          outputs = ctx.state["agent_outputs"]?.try(&.as_h?) || {} of String => JSON::Any
-          outputs = outputs.dup
-          outputs[id] = JSON.parse(agent_result.to_any_hash.to_json)
-
-          result = {
-            "agent_outputs" => JSON.parse(outputs.to_json),
-            "agent_result" => JSON.parse(agent_result.to_any_hash.to_json),
-            "last_agent" => JSON.parse(id.to_json),
-            "last_model" => JSON.parse((agent_result.model || "").to_json),
-            "last_response" => JSON.parse(agent_result.content.to_json),
-            "active_agent" => JSON.parse(id.to_json),
-          } of String => JSON::Any
-
-          if voice = voice_config
-            result["active_voice"] = JSON.parse(voice.to_json)
-          end
-
-          WorkflowNodeResult.continue(result)
-        end)
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "agent",
+          id,
+          prompt: prompt,
+          model: model,
+          resume_schema: resume_schema,
+          voice_config: voice_config,
+          guardrails_config: guardrails_config,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
       end
 
       def step(
@@ -204,22 +263,15 @@ module Cogni
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
         node_id = id || "#{kind.node}-#{@nodes.size}"
-        metadata = {
-          "custom_node_kind" => JSON.parse(kind.node.to_json),
-          "parameters" => JSON.parse(kind.parameters.to_json),
-        } of String => JSON::Any
-
-        append_node(WorkflowNode.new(node_id, NodeKind::Custom, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          raw = Cogni::Workflows::Declarative.node_kind_registry.call(kind.node, ctx, kind.parameters)
-          case raw
-          when WorkflowNodeResult
-            raw
-          when Hash(String, JSON::Any)
-            WorkflowNodeResult.continue(raw)
-          else
-            raise "unsupported custom node kind result for #{kind.node}"
-          end
-        end)
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "node_kind",
+          node_id,
+          node_kind_name: kind.node,
+          node_kind_parameters: kind.parameters,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
       end
 
 
@@ -230,10 +282,15 @@ module Cogni
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
-        meta = {} of String => JSON::Any
-        selected_agent = agent || agent_id
-        meta["agent_id"] = JSON.parse(selected_agent.to_json) if selected_agent
-        append_node(WorkflowNode.new(id, NodeKind::Skill, metadata: meta, input_schema: input_schema, output_schema: output_schema) { |_ctx| WorkflowNodeResult.continue })
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "skill",
+          id,
+          agent_id: agent_id,
+          agent: agent,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
       end
 
       # Voice node implemented as first-class DSL behavior.
@@ -244,12 +301,14 @@ module Cogni
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(id, NodeKind::Voice, metadata: {
-          "dsl_kind" => JSON.parse("voice".to_json),
-          "config" => JSON.parse(config.to_json),
-        } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(run_voice_node(ctx, config))
-        end)
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "voice",
+          id,
+          config: config,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
       end
 
       # RAG node implemented as first-class DSL behavior.
@@ -260,12 +319,14 @@ module Cogni
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(id, NodeKind::Rag, metadata: {
-          "dsl_kind" => JSON.parse("rag".to_json),
-          "config" => JSON.parse(config.to_json),
-        } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(run_rag_node(ctx, config))
-        end)
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "rag",
+          id,
+          config: config,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
       end
 
       def suspend(
@@ -275,30 +336,15 @@ module Cogni
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(WorkflowNode.new(id, NodeKind::Suspend, metadata: {
-          "reason" => JSON.parse(reason.to_json),
-        } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          resume = ctx.resume_data || {} of String => JSON::Any
-
-          if resume.empty?
-            next WorkflowNodeResult.suspend(
-              {
-                "type" => JSON.parse("suspend".to_json),
-                "node_id" => JSON.parse(id.to_json),
-                "reason" => JSON.parse(reason.to_json),
-              },
-              id,
-            )
-          end
-
-          if schema = resume_schema
-            schema.validate(JSON.parse(resume.to_json), "$.resume")
-          end
-
-          WorkflowNodeResult.continue({
-            "resume_data" => JSON.parse(resume.to_json),
-          })
-        end)
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "suspend",
+          id,
+          reason: reason,
+          resume_schema: resume_schema,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
       end
 
       def parallel(parallel_nodes : Array(WorkflowNode)) : self

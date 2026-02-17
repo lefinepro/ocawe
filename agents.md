@@ -6,7 +6,7 @@ Develop and evolve Cogni framework internals safely and consistently.
 ## Scope
 - Runtime engine and declarative workflow API
 - NodeKind execution model
-- Registry surface (`Cogni::Registry.node_kind`, `Cogni::Registry.resource`)
+- Registry surface (`Cogni::RegistryApi.node_kind`, `Cogni::RegistryApi.resource`)
 - HTTP runtime endpoints and compatibility behavior
 - Type-safe schema/DSL integration
 
@@ -31,6 +31,11 @@ Develop and evolve Cogni framework internals safely and consistently.
 5. Validate no stale API names remain.
 
 ## API Direction
-- For custom steps use `Workflow#step(...)` directly.
-- Register custom node kinds only via `Cogni::Registry.node_kind`.
-- Register resource handlers only via `Cogni::Registry.resource`.
+- Use `Workflow#step(type, id, ...)` as the unified node entry for built-in and external nodes.
+- External agent nodes must be created through unified step types:
+  - `agent_cliproxy`
+  - `agent_codex`
+  - `agent_opencode`
+- For NodeKind steps use `Workflow#step(Cogni::NodeKind.new(...), id: ...)`.
+- Register node kinds only via `Cogni::RegistryApi.node_kind`.
+- Register resource handlers only via `Cogni::RegistryApi.resource`.

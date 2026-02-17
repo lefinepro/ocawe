@@ -23,7 +23,7 @@ module Cogni
         def call(kind : String, ctx : NodeContext, parameters : AnyHash) : NodeKindResult
           key = normalize(kind)
           handler = @handlers[key]?
-          raise "unknown custom node kind: #{kind}" unless handler
+          raise "unknown node kind: #{kind}" unless handler
           handler.call(ctx, parameters)
         end
 
