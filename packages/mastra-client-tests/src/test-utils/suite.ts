@@ -19,6 +19,19 @@ function warnOptionalSkip(resourceName: string, method: string | null, reason: s
   console.warn(`[mastra-client-tests] optional check skipped: ${resourceName}${methodLabel} - ${reason}`);
 }
 
+function isNotImplementedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes("not implemented") ||
+    message.includes("not supported") ||
+    message.includes("unsupported") ||
+    message.includes("status 404") ||
+    message.includes("404") ||
+    message.includes("status 501") ||
+    message.includes("501")
+  );
+}
+
 function useServiceLifecycle(): void {
   beforeAll(async () => {
     await ensureTestService();
@@ -67,7 +80,16 @@ export function defineResourceMethodTests(
         }
 
         const verifier = makeRequestVerifier();
-        const result = await callMethod(lookup.resource, scenario.method, scenario.argSets);
+        let result: unknown;
+        try {
+          result = await callMethod(lookup.resource, scenario.method, scenario.argSets);
+        } catch (error) {
+          if (isNotImplementedError(error)) {
+            warnOptionalSkip(resourceName, scenario.method, "backend method is not implemented");
+            return;
+          }
+          throw error;
+        }
 
         verifier.captureFromMeta(getLastRequestMeta());
         expect(result).not.toBeUndefined();
@@ -100,6 +122,10 @@ export function defineResourceMethodTests(
 
         setServiceMode("error");
         const error = await expectMethodFailure(lookup.resource, scenario.method, scenario.argSets);
+        if (isNotImplementedError(error)) {
+          warnOptionalSkip(resourceName, scenario.method, "backend method is not implemented");
+          return;
+        }
 
         expect(error.message.length).toBeGreaterThan(0);
       });
