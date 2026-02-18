@@ -1,14 +1,24 @@
-import { describe, expect, test } from "bun:test";
-import { http, HttpResponse } from "msw";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createClient } from "../test-utils/client-factory";
 import { callMethod, getResource, tryGetResource } from "../test-utils/invoke";
-import { server, useMswLifecycle } from "../test-utils/msw-server";
+import { ensureTestService, getLastRequestMeta, resetTestService, setServiceMode, stopTestService } from "../test-utils/test-service";
 
 describe("MastraClient core integration", () => {
-  useMswLifecycle();
+  beforeAll(async () => {
+    await ensureTestService();
+  });
 
-  test("creates required resource accessors and logs optional drift", () => {
-    const client = createClient();
+  beforeEach(() => {
+    resetTestService();
+    setServiceMode("ok");
+  });
+
+  afterAll(() => {
+    stopTestService();
+  });
+
+  test("creates required resource accessors and logs optional drift", async () => {
+    const client = await createClient();
     const requiredResources = ["agents", "workflows"];
     const optionalResources = ["tools", "vectors", "memory", "logs", "traces", "evals"];
 
@@ -26,27 +36,18 @@ describe("MastraClient core integration", () => {
   });
 
   test("sends auth headers", async () => {
-    let authHeader = "";
-    server.use(
-      http.all(/http:\/\/mastra\.local\/.*/, ({ request }) => {
-        authHeader = request.headers.get("authorization") ?? "";
-        return HttpResponse.json({ ok: true });
-      }),
-    );
-
-    const client = createClient({ headers: { Authorization: "Bearer test-token" } });
+    const client = await createClient({ headers: { Authorization: "Bearer test-token" } });
     const agents = getResource(client, "agents");
     await callMethod(agents, "list", [[], [{ limit: 10 }]]);
 
-    expect(authHeader).toBe("Bearer test-token");
+    expect(getLastRequestMeta().authHeader).toBe("Bearer test-token");
   });
 
   test("propagates transport errors", async () => {
-    server.use(http.all(/http:\/\/mastra\.local\/.*/, () => HttpResponse.error()));
-
-    const client = createClient();
+    const client = await createClient();
     const agents = getResource(client, "agents");
 
+    setServiceMode("error");
     await expect(callMethod(agents, "list", [[], [{ limit: 10 }]])).rejects.toThrow();
   });
 });

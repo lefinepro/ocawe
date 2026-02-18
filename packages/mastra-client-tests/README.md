@@ -1,6 +1,6 @@
 # mastra-client-tests
 
-Integration test suite for `@mastra/client-js` using `bun test` and `msw`.
+Integration test suite for `@mastra/client-js` using `bun test` and an in-process compatibility test service with test workflows.
 
 ## Install
 
