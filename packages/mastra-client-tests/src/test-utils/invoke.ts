@@ -67,6 +67,7 @@ export async function expectMethodFailure(target: any, method: string, argSets: 
 
 export function makeRequestVerifier(): {
   capture: (request: Request) => Promise<void>;
+  captureFromMeta: (meta: { method: string; path: string }) => void;
   lastPath: () => string;
   lastMethod: () => string;
 } {
@@ -78,6 +79,10 @@ export function makeRequestVerifier(): {
       method = request.method;
       path = new URL(request.url).pathname;
       await request.text();
+    },
+    captureFromMeta: (meta: { method: string; path: string }) => {
+      method = meta.method;
+      path = meta.path;
     },
     lastPath: () => path,
     lastMethod: () => method,

@@ -11,8 +11,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@mastra/client-js": "latest",
-    "msw": "^2.11.0"
+    "@mastra/client-js": "latest"
   },
   "devDependencies": {
     "bun-types": "latest",

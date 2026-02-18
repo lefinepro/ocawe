@@ -1,14 +1,12 @@
-import { describe, expect, test } from "bun:test";
-import { http, HttpResponse } from "msw";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createClient } from "./client-factory";
 import { callMethod, expectMethodFailure, hasMethod, makeRequestVerifier, tryGetResource } from "./invoke";
-import { server, useMswLifecycle } from "./msw-server";
+import { ensureTestService, getLastRequestMeta, resetTestService, setServiceMode, stopTestService } from "./test-service";
 
 export type ResourceScenario = {
   method: string;
   argSets: unknown[][];
   pathHint?: string;
-  response?: Record<string, unknown>;
   required?: boolean;
 };
 
@@ -18,8 +16,22 @@ export type ResourceSuiteOptions = {
 
 function warnOptionalSkip(resourceName: string, method: string | null, reason: string): void {
   const methodLabel = method ? `.${method}` : "";
-  // CI-friendly warning for optional API drift with @mastra/client-js@latest.
   console.warn(`[mastra-client-tests] optional check skipped: ${resourceName}${methodLabel} - ${reason}`);
+}
+
+function useServiceLifecycle(): void {
+  beforeAll(async () => {
+    await ensureTestService();
+  });
+
+  beforeEach(() => {
+    resetTestService();
+    setServiceMode("ok");
+  });
+
+  afterAll(() => {
+    stopTestService();
+  });
 }
 
 export function defineResourceMethodTests(
@@ -30,12 +42,12 @@ export function defineResourceMethodTests(
   const resourceRequired = options.resourceRequired ?? false;
 
   describe(`${resourceName} integration`, () => {
-    useMswLifecycle();
+    useServiceLifecycle();
 
     for (const scenario of scenarios) {
       test(`${scenario.method}: success`, async () => {
         const scenarioRequired = scenario.required ?? resourceRequired;
-        const client = createClient();
+        const client = await createClient();
         const lookup = tryGetResource(client, resourceName);
         if (!lookup.found) {
           if (scenarioRequired) {
@@ -55,18 +67,9 @@ export function defineResourceMethodTests(
         }
 
         const verifier = makeRequestVerifier();
-        server.use(
-          http.all(/http:\/\/mastra\.local\/.*/, async ({ request }) => {
-            await verifier.capture(request);
-            return HttpResponse.json(
-              scenario.response ?? { ok: true, resource: resourceName, method: scenario.method },
-              { status: 200 },
-            );
-          }),
-        );
-
         const result = await callMethod(lookup.resource, scenario.method, scenario.argSets);
 
+        verifier.captureFromMeta(getLastRequestMeta());
         expect(result).not.toBeUndefined();
         expect(verifier.lastMethod()).not.toBe("");
         if (scenario.pathHint) {
@@ -76,7 +79,7 @@ export function defineResourceMethodTests(
 
       test(`${scenario.method}: failure`, async () => {
         const scenarioRequired = scenario.required ?? resourceRequired;
-        const client = createClient();
+        const client = await createClient();
         const lookup = tryGetResource(client, resourceName);
         if (!lookup.found) {
           if (scenarioRequired) {
@@ -95,12 +98,7 @@ export function defineResourceMethodTests(
           return;
         }
 
-        server.use(
-          http.all(/http:\/\/mastra\.local\/.*/, () =>
-            HttpResponse.json({ error: "forced failure" }, { status: 500 }),
-          ),
-        );
-
+        setServiceMode("error");
         const error = await expectMethodFailure(lookup.resource, scenario.method, scenario.argSets);
 
         expect(error.message.length).toBeGreaterThan(0);
