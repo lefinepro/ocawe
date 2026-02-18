@@ -413,6 +413,8 @@ module ACD
         suspend_pattern = /^\s*suspend\s+"([^"]+)"(.*)$/
         reserved_keywords = Set{
           "workflow", "do", "end", "struct", "class", "module",
+          "include", "extend", "getter", "setter", "property",
+          "alias", "enum", "lib", "fun", "require",
           "agent", "skill", "run", "voice", "rag", "suspend",
           "input_type", "output_type", "input_validate", "output_validate",
           "parallel", "if", "elsif", "else", "while", "unless", "until", "loop",
