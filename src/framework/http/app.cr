@@ -987,11 +987,12 @@ module ACD
         end
 
         return unless condition && !unless_nodes.empty?
+        condition_value = condition.not_nil!
 
         unless_branch_node = wrap_nodes_in_control(unless_nodes, "unless-branch")
         else_branch_node = else_nodes.empty? ? nil : wrap_nodes_in_control(else_nodes, "else-branch")
         control_node = Cogni::Workflows::Declarative::WorkflowNode.new("unless-#{start_line}", Cogni::Workflows::Declarative::NodeKind::Control) do |node_ctx|
-          selected = evaluate_dsl_condition(condition, node_ctx) ? else_branch_node : unless_branch_node
+          selected = evaluate_dsl_condition(condition_value, node_ctx) ? else_branch_node : unless_branch_node
           if selected
             selected.execute(node_ctx)
           else
@@ -1389,6 +1390,7 @@ module ACD
       private def wrap_nodes_in_control(nodes : Array(Cogni::Workflows::Declarative::WorkflowNode), name : String) : Cogni::Workflows::Declarative::WorkflowNode
         Cogni::Workflows::Declarative::WorkflowNode.new(name, Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
           merged = {} of String => JSON::Any
+          halted = nil.as(Cogni::Workflows::Declarative::WorkflowNodeResult?)
           nodes.each do |node|
             result = node.execute(Cogni::Workflows::Declarative::NodeContext.new(
               workflow_id: ctx.workflow_id,
@@ -1404,13 +1406,14 @@ module ACD
               resume_data: ctx.resume_data,
             ))
             if result.action != Cogni::Workflows::Declarative::NodeAction::Continue.to_s.downcase
-              return result
+              halted = result
+              break
             end
             if data = result.data
               data.each { |k, v| merged[k] = v }
             end
           end
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue(merged)
+          halted || Cogni::Workflows::Declarative::WorkflowNodeResult.continue(merged)
         end
       end
 
