@@ -2,8 +2,8 @@ import { fixtures } from "../test-utils/fixtures";
 import { defineResourceMethodTests } from "../test-utils/suite";
 
 defineResourceMethodTests("agents", [
-  { method: "list", argSets: [[], [{ limit: 10 }]], pathHint: "/agents" },
-  { method: "get", argSets: [[fixtures.agentId]], pathHint: "/agents" },
+  { method: "list", argSets: [[], [{ limit: 10 }]], pathHint: "/agents", required: true },
+  { method: "get", argSets: [[fixtures.agentId]], pathHint: "/agents", required: true },
   {
     method: "generate",
     argSets: [
@@ -11,6 +11,7 @@ defineResourceMethodTests("agents", [
       [{ agentId: fixtures.agentId, messages: [{ role: "user", content: "hello" }] }],
     ],
     pathHint: "/agents",
+    required: true,
   },
   {
     method: "streamGenerate",
@@ -19,6 +20,7 @@ defineResourceMethodTests("agents", [
       [{ agentId: fixtures.agentId, messages: [{ role: "user", content: "stream" }] }],
     ],
     pathHint: "/agents",
+    required: true,
   },
   { method: "getInstructions", argSets: [[fixtures.agentId]], pathHint: "/agents" },
   { method: "getOutput", argSets: [[fixtures.agentId]], pathHint: "/agents" },

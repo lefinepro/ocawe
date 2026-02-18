@@ -2,23 +2,26 @@ import { fixtures } from "../test-utils/fixtures";
 import { defineResourceMethodTests } from "../test-utils/suite";
 
 defineResourceMethodTests("workflows", [
-  { method: "list", argSets: [[], [{ limit: 10 }]], pathHint: "/workflows" },
-  { method: "create", argSets: [[{ name: "wf-new" }]], pathHint: "/workflows" },
-  { method: "get", argSets: [[fixtures.workflowId]], pathHint: "/workflows" },
+  { method: "list", argSets: [[], [{ limit: 10 }]], pathHint: "/workflows", required: true },
+  { method: "create", argSets: [[{ name: "wf-new" }]], pathHint: "/workflows", required: true },
+  { method: "get", argSets: [[fixtures.workflowId]], pathHint: "/workflows", required: true },
   {
     method: "run",
     argSets: [[fixtures.workflowId, { input: { text: "go" } }], [{ workflowId: fixtures.workflowId, input: { text: "go" } }]],
     pathHint: "/workflows",
+    required: true,
   },
   {
     method: "resume",
     argSets: [[fixtures.workflowId, fixtures.runId, { input: {} }], [{ workflowId: fixtures.workflowId, runId: fixtures.runId, input: {} }]],
     pathHint: "/workflows",
+    required: true,
   },
   {
     method: "watch",
     argSets: [[fixtures.workflowId, fixtures.runId], [{ workflowId: fixtures.workflowId, runId: fixtures.runId }]],
     pathHint: "/workflows",
+    required: true,
   },
   { method: "getRuns", argSets: [[fixtures.workflowId], [{ workflowId: fixtures.workflowId }]], pathHint: "/workflows" },
   {
