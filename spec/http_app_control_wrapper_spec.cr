@@ -1,6 +1,14 @@
 require "./spec_helper"
+require "file_utils"
 
 class ACD::HTTP::App
+  def test_load_workflow_definition(
+    bundle : ACD::Discovery::WorkflowBundle,
+    loaded_agents : Array(ACD::Agents::LoadedAgent)
+  ) : Cogni::Workflows::Declarative::WorkflowDefinition
+    load_workflow_definition(bundle, loaded_agents)
+  end
+
   def test_wrap_nodes_in_control(
     nodes : Array(Cogni::Workflows::Declarative::WorkflowNode),
     name : String
@@ -39,5 +47,40 @@ describe "ACD::HTTP::App control wrapper" do
     result.action.should eq(Cogni::Workflows::Declarative::NodeAction::Suspend.to_s.downcase)
     result.resume_labels.should eq(["first-stop"])
     executed.should eq(false)
+  end
+
+  it "parses workflow files that include Crystal type declarations before workflow block" do
+    tmp_dir = "/tmp/cogni_http_app_spec_#{Random.rand(1_000_000)}"
+    Dir.mkdir_p(tmp_dir)
+    begin
+      workflow_file = File.join(tmp_dir, "types_before_workflow.acd.cr")
+      File.write(workflow_file, <<-WORKFLOW)
+struct ExampleInput
+  include JSON::Serializable
+  getter task : String
+end
+
+workflow "types_before_workflow" do
+  run "tool_extract_source_archive_content"
+end
+WORKFLOW
+
+      bundle = ACD::Discovery::WorkflowBundle.new(
+        id: "types_before_workflow",
+        root_path: tmp_dir,
+        workflow_file: workflow_file,
+        agents_dir: File.join(tmp_dir, "agents"),
+        skills_dir: File.join(tmp_dir, "skills"),
+        source_root_type: "preferred",
+      )
+
+      app = ACD::HTTP::App.new(0)
+      definition = app.test_load_workflow_definition(bundle, [] of ACD::Agents::LoadedAgent)
+      definition.id.should eq("types_before_workflow")
+      definition.nodes.size.should eq(1)
+      definition.nodes.first.kind.should eq(Cogni::Workflows::Declarative::NodeKind::Run)
+    ensure
+      FileUtils.rm_rf(tmp_dir)
+    end
   end
 end
