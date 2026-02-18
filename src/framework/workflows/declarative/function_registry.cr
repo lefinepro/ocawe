@@ -46,7 +46,10 @@ module Cogni
         end
 
         canonical = resolve_canonical_name(base, source)
-        register_entry(canonical, source, ->(ctx : NodeContext) : RunnableResult { block.call(ctx) })
+        handler : RunnableHandler = ->(ctx : NodeContext) : RunnableResult do
+          block.call(ctx).as(RunnableResult)
+        end
+        register_entry(canonical, source, handler)
 
         if alias_name
           register_alias!(alias_name, canonical)
