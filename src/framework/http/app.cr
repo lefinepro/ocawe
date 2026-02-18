@@ -1603,18 +1603,20 @@ module ACD
 
       private def parse_runtime_literal(literal : String, workflow_file : String) : JSON::Any
         stripped = literal.strip
-        if stripped.starts_with?("{")
-          return JSON.parse(parse_runtime_object(stripped, workflow_file).to_json)
+        begin
+          if stripped.starts_with?("{")
+            return JSON.parse(parse_runtime_object(stripped, workflow_file).to_json)
+          end
+          if stripped.starts_with?("[")
+            return JSON.parse(stripped)
+          end
+          JSON.parse(stripped)
+        rescue
+          if stripped.starts_with?("\"") && stripped.ends_with?("\"")
+            return JSON.parse(stripped)
+          end
+          JSON.parse(stripped.to_json)
         end
-        if stripped.starts_with?("[")
-          return JSON.parse(stripped)
-        end
-        JSON.parse(stripped)
-      rescue
-        if stripped.starts_with?("\"") && stripped.ends_with?("\"")
-          return JSON.parse(stripped)
-        end
-        JSON.parse(stripped.to_json)
       end
 
       private def compile_required_function_schema(
