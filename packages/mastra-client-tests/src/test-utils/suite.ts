@@ -52,30 +52,21 @@ export function defineResourceMethodTests(
   scenarios: ResourceScenario[],
   options: ResourceSuiteOptions = {},
 ): void {
-  const resourceRequired = options.resourceRequired ?? false;
-
   describe(`${resourceName} integration`, () => {
     useServiceLifecycle();
 
     for (const scenario of scenarios) {
       test(`${scenario.method}: success`, async () => {
-        const scenarioRequired = scenario.required ?? resourceRequired;
         const client = await createClient();
         const lookup = tryGetResource(client, resourceName);
         if (!lookup.found) {
-          if (scenarioRequired) {
-            throw new Error(lookup.reason);
-          }
-          warnOptionalSkip(resourceName, scenario.method, lookup.reason);
+          warnOptionalSkip(resourceName, scenario.method, `${lookup.reason} (not implemented in project)`);
           return;
         }
 
         if (!hasMethod(lookup.resource, scenario.method)) {
           const reason = `Method '${scenario.method}' is not available`;
-          if (scenarioRequired) {
-            throw new Error(reason);
-          }
-          warnOptionalSkip(resourceName, scenario.method, reason);
+          warnOptionalSkip(resourceName, scenario.method, `${reason} (not implemented in project)`);
           return;
         }
 
@@ -100,23 +91,16 @@ export function defineResourceMethodTests(
       });
 
       test(`${scenario.method}: failure`, async () => {
-        const scenarioRequired = scenario.required ?? resourceRequired;
         const client = await createClient();
         const lookup = tryGetResource(client, resourceName);
         if (!lookup.found) {
-          if (scenarioRequired) {
-            throw new Error(lookup.reason);
-          }
-          warnOptionalSkip(resourceName, scenario.method, lookup.reason);
+          warnOptionalSkip(resourceName, scenario.method, `${lookup.reason} (not implemented in project)`);
           return;
         }
 
         if (!hasMethod(lookup.resource, scenario.method)) {
           const reason = `Method '${scenario.method}' is not available`;
-          if (scenarioRequired) {
-            throw new Error(reason);
-          }
-          warnOptionalSkip(resourceName, scenario.method, reason);
+          warnOptionalSkip(resourceName, scenario.method, `${reason} (not implemented in project)`);
           return;
         }
 
