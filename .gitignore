@@ -1,11 +1,8 @@
 build/
+packages/**/dist
+packages/**/node_modules/
 packages/docs/.vitepress/cache/
-packages/docs/.vitepress/dist/
-packages/docs/node_modules/
-packages/playground/node_modules/
-packages/playground/dist/
 packages/playground/.svelte-kit/
-packages/playground/.turbo/
 *.log
 lib/
 bin/
