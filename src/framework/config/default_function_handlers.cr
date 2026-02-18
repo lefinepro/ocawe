@@ -8,7 +8,7 @@ module Cogni
       extend self
 
       def agent_codex : Cogni::Workflows::Declarative::FunctionHandler
-        ->(ctx : Cogni::Workflows::Declarative::NodeContext) do
+        ->(ctx : Cogni::Workflows::Declarative::NodeContext) : Cogni::Workflows::Declarative::RunnableResult do
           prompt = extract_input_text(ctx.input_data["input"]?)
           command = resolve_string_param(ctx, "bin", env_keys: ["CODEX_BIN"], default: "codex") || "codex"
           model = resolve_string_param(ctx, "model", env_keys: ["CODEX_MODEL"])
@@ -56,7 +56,7 @@ module Cogni
       end
 
       def agent_cliproxy : Cogni::Workflows::Declarative::FunctionHandler
-        ->(ctx : Cogni::Workflows::Declarative::NodeContext) do
+        ->(ctx : Cogni::Workflows::Declarative::NodeContext) : Cogni::Workflows::Declarative::RunnableResult do
           prompt = extract_input_text(ctx.input_data["input"]?)
           system = resolve_string_param(ctx, "system")
           base_url = resolve_string_param(ctx, "base_url", env_keys: ["CLIPROXY_API_BASE", "CLIPROXY_API_URL"], default: CogniCore::AI::CLIProxyChatHelper::DEFAULT_BASE_URL) || CogniCore::AI::CLIProxyChatHelper::DEFAULT_BASE_URL
@@ -93,7 +93,7 @@ module Cogni
 
       # OpenCode server API: POST /session then POST /session/:id/message.
       def agent_opencode : Cogni::Workflows::Declarative::FunctionHandler
-        ->(ctx : Cogni::Workflows::Declarative::NodeContext) do
+        ->(ctx : Cogni::Workflows::Declarative::NodeContext) : Cogni::Workflows::Declarative::RunnableResult do
           prompt = extract_input_text(ctx.input_data["input"]?)
           base_url = resolve_string_param(ctx, "base_url", env_keys: ["OPENCODE_API_BASE", "OPENCODE_API_URL"], default: "http://127.0.0.1:4096") || "http://127.0.0.1:4096"
           api_key = resolve_string_param(ctx, "api_key", env_keys: ["OPENCODE_API_KEY"])
