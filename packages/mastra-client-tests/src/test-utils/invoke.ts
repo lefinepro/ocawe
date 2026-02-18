@@ -6,6 +6,89 @@ export type ResourceLookupResult =
   | { found: true; resource: unknown }
   | { found: false; reason: string };
 
+function parseAgentCall(args: unknown[]): { agentId: string; payload: any } {
+  if (typeof args[0] === "string") {
+    return { agentId: args[0], payload: args[1] ?? {} };
+  }
+
+  const payload = (args[0] as any) ?? {};
+  return { agentId: payload.agentId ?? payload.id ?? "agent-weather", payload };
+}
+
+function createAgentsAdapter(client: any): any {
+  if (typeof client?.listAgents !== "function" || typeof client?.getAgent !== "function") {
+    return null;
+  }
+
+  return {
+    async list(...args: any[]) {
+      return client.listAgents(...args);
+    },
+    async get(id: string) {
+      const agent = client.getAgent(id);
+      if (agent?.details) return agent.details();
+      return agent;
+    },
+    async generate(...args: any[]) {
+      const { agentId, payload } = parseAgentCall(args);
+      const agent = client.getAgent(agentId);
+      const input = payload?.messages ?? payload?.prompt ?? payload?.input ?? payload ?? "hello";
+      const opts = typeof payload === "object" ? payload : undefined;
+      return agent.generate(input, opts);
+    },
+    async streamGenerate(...args: any[]) {
+      const { agentId, payload } = parseAgentCall(args);
+      const agent = client.getAgent(agentId);
+      const input = payload?.messages ?? payload?.prompt ?? payload?.input ?? payload ?? "hello";
+      const opts = typeof payload === "object" ? payload : undefined;
+      return agent.stream(input, opts);
+    },
+    async stream(...args: any[]) {
+      const { agentId, payload } = parseAgentCall(args);
+      const agent = client.getAgent(agentId);
+      const input = payload?.messages ?? payload?.prompt ?? payload?.input ?? payload ?? "hello";
+      const opts = typeof payload === "object" ? payload : undefined;
+      return agent.stream(input, opts);
+    },
+    async getInstructions(id: string) {
+      const agent = client.getAgent(id);
+      const details = agent?.details ? await agent.details() : agent;
+      return details?.instructions ?? details;
+    },
+  };
+}
+
+function createWorkflowsAdapter(client: any): any {
+  if (typeof client?.listWorkflows !== "function" || typeof client?.getWorkflow !== "function") {
+    return null;
+  }
+
+  return {
+    async list(...args: any[]) {
+      return client.listWorkflows(...args);
+    },
+    async get(id: string) {
+      const workflow = client.getWorkflow(id);
+      if (workflow?.details) return workflow.details();
+      return workflow;
+    },
+    async run(...args: any[]) {
+      const workflowId = typeof args[0] === "string" ? args[0] : args[0]?.workflowId;
+      const payload = typeof args[0] === "string" ? args[1] ?? {} : args[0] ?? {};
+      const workflow = client.getWorkflow(workflowId);
+      if (workflow?.run) return workflow.run(payload);
+      if (workflow?.start) return workflow.start(payload);
+      throw new Error("Method 'run' is not available");
+    },
+    async watch(...args: any[]) {
+      const workflowId = typeof args[0] === "string" ? args[0] : args[0]?.workflowId;
+      const workflow = client.getWorkflow(workflowId);
+      if (workflow?.watch) return workflow.watch(args[1] ?? args[0]);
+      throw new Error("Method 'watch' is not available");
+    },
+  };
+}
+
 export function tryGetResource(client: any, name: string): ResourceLookupResult {
   const direct = client?.[name];
   if (direct) {
@@ -16,6 +99,20 @@ export function tryGetResource(client: any, name: string): ResourceLookupResult 
   const getter = client?.[getterName];
   if (typeof getter === "function") {
     return { found: true, resource: getter.call(client) };
+  }
+
+  if (name === "agents") {
+    const adapter = createAgentsAdapter(client);
+    if (adapter) {
+      return { found: true, resource: adapter };
+    }
+  }
+
+  if (name === "workflows") {
+    const adapter = createWorkflowsAdapter(client);
+    if (adapter) {
+      return { found: true, resource: adapter };
+    }
   }
 
   return {

@@ -14,13 +14,21 @@ defineResourceMethodTests("agents", [
     required: true,
   },
   {
-    method: "streamGenerate",
+    method: "stream",
     argSets: [
       [fixtures.agentId, { messages: [{ role: "user", content: "stream" }] }],
       [{ agentId: fixtures.agentId, messages: [{ role: "user", content: "stream" }] }],
     ],
     pathHint: "/agents",
     required: true,
+  },
+  {
+    method: "streamGenerate",
+    argSets: [
+      [fixtures.agentId, { messages: [{ role: "user", content: "stream" }] }],
+      [{ agentId: fixtures.agentId, messages: [{ role: "user", content: "stream" }] }],
+    ],
+    pathHint: "/agents",
   },
   { method: "getInstructions", argSets: [[fixtures.agentId]], pathHint: "/agents" },
   { method: "getOutput", argSets: [[fixtures.agentId]], pathHint: "/agents" },
