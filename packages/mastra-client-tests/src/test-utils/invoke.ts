@@ -2,18 +2,39 @@ function asError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
 
-export function getResource(client: any, name: string): any {
+export type ResourceLookupResult =
+  | { found: true; resource: unknown }
+  | { found: false; reason: string };
+
+export function tryGetResource(client: any, name: string): ResourceLookupResult {
   const direct = client?.[name];
   if (direct) {
-    return typeof direct === "function" ? direct.call(client) : direct;
+    return { found: true, resource: typeof direct === "function" ? direct.call(client) : direct };
   }
 
-  const getter = client?.[`get${name[0].toUpperCase()}${name.slice(1)}`];
+  const getterName = `get${name[0].toUpperCase()}${name.slice(1)}`;
+  const getter = client?.[getterName];
   if (typeof getter === "function") {
-    return getter.call(client);
+    return { found: true, resource: getter.call(client) };
   }
 
-  throw new Error(`Resource '${name}' is not available on MastraClient`);
+  return {
+    found: false,
+    reason: `Resource '${name}' is not available on MastraClient`,
+  };
+}
+
+export function getResource(client: any, name: string): any {
+  const lookup = tryGetResource(client, name);
+  if (lookup.found) {
+    return lookup.resource;
+  }
+
+  throw new Error(lookup.reason);
+}
+
+export function hasMethod(target: any, method: string): boolean {
+  return typeof target?.[method] === "function";
 }
 
 export async function callMethod(target: any, method: string, argSets: unknown[][]): Promise<any> {
