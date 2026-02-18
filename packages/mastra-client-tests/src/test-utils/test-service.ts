@@ -46,8 +46,12 @@ function nextRunId(): string {
 function sseResponse(): Response {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(encoder.encode('data: {"type":"text-delta","text":"ok"}\n\n'));
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.enqueue(
+        encoder.encode('data: {"type":"text-delta","payload":{"text":"ok"}}\n\n'),
+      );
+      controller.enqueue(
+        encoder.encode('data: {"type":"finish","payload":{"finishReason":"stop"}}\n\n'),
+      );
       controller.close();
     },
   });
