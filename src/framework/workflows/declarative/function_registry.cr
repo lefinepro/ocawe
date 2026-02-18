@@ -8,7 +8,7 @@ module Cogni
 
     alias RunnableResult = AnyHash | AgentResult
     alias RunnableHandler = Proc(NodeContext, RunnableResult)
-    alias FunctionHandler = Proc(NodeContext, AgentResult)
+    alias FunctionHandler = RunnableHandler
 
     private struct RegisteredFunction
       getter canonical : String
