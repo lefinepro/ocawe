@@ -1,8 +1,7 @@
 require "../../cognicore/ai/client"
 
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
     class WorkflowDefinition
       getter id : String
       getter description : String?
@@ -10,6 +9,8 @@ module Cogni
       getter default_model : String?
       getter default_skills : Array(String)
       getter default_tools : Array(String)
+      getter default_logger : AnyHash?
+      getter node_loggers : Hash(String, AnyHash)
 
       def initialize(@id : String, @description : String? = nil)
         @nodes = [] of WorkflowNode
@@ -17,7 +18,38 @@ module Cogni
         @default_model = nil
         @default_skills = [] of String
         @default_tools = [] of String
+        @default_logger = nil.as(AnyHash?)
+        @node_loggers = {} of String => AnyHash
         @resource_scope_stack = [] of ResourceScope
+      end
+
+      def logger(config : AnyHash) : self
+        ensure_not_committed!
+        @default_logger = config.dup
+        self
+      end
+
+      def apply_logger_to_last_node(config : AnyHash) : self
+        ensure_not_committed!
+        raise "cannot apply logger without nodes" if @nodes.empty?
+
+        normalized = JSON.parse(config.to_json).as_h
+        node = @nodes.last
+        node.metadata["logger"] = JSON.parse(normalized.to_json)
+        @node_loggers[node.id] = normalized
+        self
+      end
+
+      def logger_for_node(node_id : String) : AnyHash?
+        workflow_logger = @default_logger
+        node_logger = @node_loggers[node_id]?
+
+        return nil unless workflow_logger || node_logger
+        merged = (workflow_logger || ({} of String => JSON::Any)).dup
+        if node_logger
+          node_logger.each { |k, v| merged[k] = v }
+        end
+        merged
       end
 
       # Unified resource defaults for model, skills, and tools
@@ -701,6 +733,5 @@ module Cogni
     def self.create_workflow(id : String, description : String? = nil)
       WorkflowDefinition.new(id, description)
     end
-  end
   end
 end

@@ -61,7 +61,7 @@ module ACD
           metadata["agent_id"] = JSON.parse(agent_id.to_json)
           metadata["workflow_id"] = JSON.parse(agent[:workflow_id].to_json)
 
-          agent_result = nil.as(Cogni::Workflows::Declarative::AgentResult?)
+          agent_result = nil.as(Cogni::Workflow::AgentResult?)
           begin
             response = CogniCore::AI::Client.new.generate_text(
               model_spec: model,
@@ -69,7 +69,7 @@ module ACD
               system: [agent[:prompt], system_message].compact.reject(&.empty?).join("\n\n"),
               metadata: metadata,
             )
-            agent_result = Cogni::Workflows::Declarative::AgentResult.new(
+            agent_result = Cogni::Workflow::AgentResult.new(
               agent_type: "default-agent",
               content: response.text,
               provider: response.provider,
@@ -96,7 +96,7 @@ module ACD
         end
       end
 
-      private def extract_chat_messages(body : Cogni::Workflows::Declarative::AnyHash) : Array(NamedTuple(role: String, content: String))
+      private def extract_chat_messages(body : Cogni::Workflow::AnyHash) : Array(NamedTuple(role: String, content: String))
         return [] of NamedTuple(role: String, content: String) unless raw = body["messages"]?
         return [] of NamedTuple(role: String, content: String) unless array = raw.as_a?
 
@@ -120,7 +120,7 @@ module ACD
         end
       end
 
-      private def chat_prompt_from_messages(messages : Array(NamedTuple(role: String, content: String)), body : Cogni::Workflows::Declarative::AnyHash) : String
+      private def chat_prompt_from_messages(messages : Array(NamedTuple(role: String, content: String)), body : Cogni::Workflow::AnyHash) : String
         if input = body["input"]?.try(&.as_s?)
           return input
         end
@@ -132,7 +132,7 @@ module ACD
         messages.map { |message| "#{message[:role]}: #{message[:content]}" }.join("\n")
       end
 
-      private def chat_system_message(messages : Array(NamedTuple(role: String, content: String)), body : Cogni::Workflows::Declarative::AnyHash) : String?
+      private def chat_system_message(messages : Array(NamedTuple(role: String, content: String)), body : Cogni::Workflow::AnyHash) : String?
         if explicit = body["system"]?.try(&.as_s?)
           return explicit
         end

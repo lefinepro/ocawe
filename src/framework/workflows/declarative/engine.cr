@@ -1,6 +1,5 @@
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
     class WorkflowRunHandle
       getter run_id : String
       getter workflow_id : String
@@ -254,6 +253,8 @@ module Cogni
         resume_data : AnyHash?,
         explicit_node : String?
       ) : WorkflowRunResult
+        runtime_logger = Cogni::Logging::WorkflowLogger.new(@workflow_id, @run_id)
+        runtime_logger.run_started(@definition.default_logger)
         @status = RunStatus::Running
         @state = input_data.dup
         if workflow_model = @definition.default_model
@@ -279,6 +280,8 @@ module Cogni
 
         while @node_index < @definition.nodes.size
           node = @definition.nodes[@node_index]
+          node_logger_config = @definition.logger_for_node(node.id)
+          runtime_logger.node_started(node.id, node_logger_config)
           node_input_data = node_input_for(node, previous_node_id, previous_node_result)
           ctx = NodeContext.new(
             workflow_id: @workflow_id,
@@ -303,6 +306,7 @@ module Cogni
               data.each { |k, v| @state[k] = v }
               previous_node_result = data
             end
+            runtime_logger.node_completed(node.id, node_logger_config)
             previous_node_id = node.id
             @node_index += 1
           when NodeAction::Suspend.to_s.downcase
@@ -310,16 +314,20 @@ module Cogni
             @suspend_payload = result.suspend_payload || {} of String => JSON::Any
             labels = result.resume_labels || [] of String
             labels.each { |label| @resume_labels << label unless @resume_labels.includes?(label) }
+            runtime_logger.run_suspended(@definition.default_logger)
             return current_result(output_options)
           else
             @status = RunStatus::Failed
             @error = result.error || WorkflowError.new("workflow_error", "workflow node failed")
+            runtime_logger.node_failed(node.id, node_logger_config, @error.try(&.message))
+            runtime_logger.run_failed(@definition.default_logger, @error.try(&.message))
             return current_result(output_options)
           end
         end
 
         @status = RunStatus::Success
         @output = @state.dup
+        runtime_logger.run_completed(@definition.default_logger)
         current_result(output_options)
       end
 
@@ -432,6 +440,5 @@ module Cogni
         @store.list(workflow_id, status)
       end
     end
-  end
   end
 end

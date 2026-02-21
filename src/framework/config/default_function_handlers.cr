@@ -7,8 +7,8 @@ module Cogni
     module DefaultFunctionHandlers
       extend self
 
-      def agent_codex : Cogni::Workflows::Declarative::FunctionHandler
-        ->(ctx : Cogni::Workflows::Declarative::NodeContext) : Cogni::Workflows::Declarative::RunnableResult do
+      def agent_codex : Cogni::Workflow::FunctionHandler
+        ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
           prompt = extract_input_text(ctx.input_data["input"]?)
           command = resolve_string_param(ctx, "bin", env_keys: ["CODEX_BIN"], default: "codex") || "codex"
           model = resolve_string_param(ctx, "model", env_keys: ["CODEX_MODEL"])
@@ -27,7 +27,7 @@ module Cogni
 
           status = Process.run(command, args: args, input: input, output: stdout, error: stderr)
           if status.success?
-            Cogni::Workflows::Declarative::AgentResult.new(
+            Cogni::Workflow::AgentResult.new(
               agent_type: "function",
               content: stdout.to_s.strip,
               metadata: {
@@ -37,7 +37,7 @@ module Cogni
               } of String => JSON::Any,
             )
           else
-            Cogni::Workflows::Declarative::AgentResult.new(
+            Cogni::Workflow::AgentResult.new(
               agent_type: "function",
               content: "codex exec failed: #{stderr.to_s.strip}",
               metadata: {
@@ -48,15 +48,15 @@ module Cogni
             )
           end
         rescue ex
-          Cogni::Workflows::Declarative::AgentResult.new(
+          Cogni::Workflow::AgentResult.new(
             agent_type: "function",
             content: "codex exec error: #{ex.message}",
           )
         end
       end
 
-      def agent_cliproxy : Cogni::Workflows::Declarative::FunctionHandler
-        ->(ctx : Cogni::Workflows::Declarative::NodeContext) : Cogni::Workflows::Declarative::RunnableResult do
+      def agent_cliproxy : Cogni::Workflow::FunctionHandler
+        ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
           prompt = extract_input_text(ctx.input_data["input"]?)
           system = resolve_string_param(ctx, "system")
           base_url = resolve_string_param(ctx, "base_url", env_keys: ["CLIPROXY_API_BASE", "CLIPROXY_API_URL"], default: CogniCore::AI::CLIProxyChatHelper::DEFAULT_BASE_URL) || CogniCore::AI::CLIProxyChatHelper::DEFAULT_BASE_URL
@@ -72,7 +72,7 @@ module Cogni
             base_url: base_url,
           )
 
-          Cogni::Workflows::Declarative::AgentResult.new(
+          Cogni::Workflow::AgentResult.new(
             agent_type: "function",
             content: response.text,
             provider: response.provider,
@@ -84,7 +84,7 @@ module Cogni
             } of String => JSON::Any,
           )
         rescue ex
-          Cogni::Workflows::Declarative::AgentResult.new(
+          Cogni::Workflow::AgentResult.new(
             agent_type: "function",
             content: "cliproxy error: #{ex.message}",
           )
@@ -92,8 +92,8 @@ module Cogni
       end
 
       # OpenCode server API: POST /session then POST /session/:id/message.
-      def agent_opencode : Cogni::Workflows::Declarative::FunctionHandler
-        ->(ctx : Cogni::Workflows::Declarative::NodeContext) : Cogni::Workflows::Declarative::RunnableResult do
+      def agent_opencode : Cogni::Workflow::FunctionHandler
+        ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
           prompt = extract_input_text(ctx.input_data["input"]?)
           base_url = resolve_string_param(ctx, "base_url", env_keys: ["OPENCODE_API_BASE", "OPENCODE_API_URL"], default: "http://127.0.0.1:4096") || "http://127.0.0.1:4096"
           api_key = resolve_string_param(ctx, "api_key", env_keys: ["OPENCODE_API_KEY"])
@@ -108,7 +108,7 @@ module Cogni
             body: "{}"
           )
           unless session_response.success?
-            return Cogni::Workflows::Declarative::AgentResult.new(
+            return Cogni::Workflow::AgentResult.new(
               agent_type: "function",
               content: "opencode session create failed (#{session_response.status_code}): #{session_response.body}",
             )
@@ -116,7 +116,7 @@ module Cogni
 
           session_id = parse_session_id(session_response.body)
           unless session_id
-            return Cogni::Workflows::Declarative::AgentResult.new(
+            return Cogni::Workflow::AgentResult.new(
               agent_type: "function",
               content: "opencode session id not found in response",
             )
@@ -139,7 +139,7 @@ module Cogni
                       "opencode message failed (#{message_response.status_code}): #{message_response.body}"
                     end
 
-          Cogni::Workflows::Declarative::AgentResult.new(
+          Cogni::Workflow::AgentResult.new(
             agent_type: "function",
             content: content,
             metadata: {
@@ -150,7 +150,7 @@ module Cogni
             } of String => JSON::Any,
           )
         rescue ex
-          Cogni::Workflows::Declarative::AgentResult.new(
+          Cogni::Workflow::AgentResult.new(
             agent_type: "function",
             content: "opencode error: #{ex.message}",
           )
@@ -178,7 +178,7 @@ module Cogni
       end
 
       private def resolve_string_param(
-        ctx : Cogni::Workflows::Declarative::NodeContext,
+        ctx : Cogni::Workflow::NodeContext,
         key : String,
         env_keys : Array(String) = [] of String,
         default : String? = nil
@@ -197,7 +197,7 @@ module Cogni
         default
       end
 
-      private def resolve_string_array_param(ctx : Cogni::Workflows::Declarative::NodeContext, key : String) : Array(String)
+      private def resolve_string_array_param(ctx : Cogni::Workflow::NodeContext, key : String) : Array(String)
         value = param_from_ctx(ctx, key)
         return [] of String unless value
 
@@ -212,7 +212,7 @@ module Cogni
         [] of String
       end
 
-      private def param_from_ctx(ctx : Cogni::Workflows::Declarative::NodeContext, key : String) : JSON::Any?
+      private def param_from_ctx(ctx : Cogni::Workflow::NodeContext, key : String) : JSON::Any?
         direct = ctx.input_data[key]?
         return direct if direct
 

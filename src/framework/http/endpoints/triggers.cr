@@ -17,7 +17,7 @@ module ACD
           if result_or_error.is_a?(String)
             next result_or_error
           end
-          run_result = result_or_error.as(Cogni::Workflows::Declarative::WorkflowRunResult)
+          run_result = result_or_error.as(Cogni::Workflow::WorkflowRunResult)
           env.response.status_code = 201
           env.response.content_type = "application/json"
           @workflow_service.load_snapshot(workflow_id, run_result.run_id).try(&.to_json) || run_result.to_json
@@ -96,7 +96,7 @@ module ACD
           fn_id = env.params.url["id"]
           body = json_body(env)
           input_data = body["input"]?.try(&.as_h?) || body["input_data"]?.try(&.as_h?) || body.dup
-          ctx = Cogni::Workflows::Declarative::NodeContext.new(
+          ctx = Cogni::Workflow::NodeContext.new(
             workflow_id: body["workflow_id"]?.try(&.as_s?) || "trigger:function",
             run_id: body["run_id"]?.try(&.as_s?) || "trigger_#{Random::Secure.hex(8)}",
             node_id: fn_id,

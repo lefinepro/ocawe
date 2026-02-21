@@ -1,8 +1,7 @@
 require "../../mcp/manager"
 
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
       alias ResourceHandler = Proc(NodeContext, AnyHash, AnyHash)
 
       class ResourceRegistry
@@ -55,5 +54,4 @@ module Cogni
         @@resource_registry.register(name, &block)
       end
     end
-  end
 end

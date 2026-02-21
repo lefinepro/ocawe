@@ -1,6 +1,5 @@
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
     module Guardrails
       class Violation < Exception
       end
@@ -49,6 +48,5 @@ module Cogni
         end
       end
     end
-  end
   end
 end

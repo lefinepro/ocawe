@@ -1,8 +1,7 @@
 require "json"
 
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
     alias AnyHash = Hash(String, JSON::Any)
 
     enum RunStatus
@@ -237,6 +236,5 @@ module Cogni
       )
       end
     end
-  end
   end
 end

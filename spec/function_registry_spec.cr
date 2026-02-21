@@ -2,12 +2,12 @@ require "./spec_helper"
 
 describe "function registry" do
   before_each do
-    Cogni::Workflows::Declarative.reset_function_registry!
+    Cogni::Workflow.reset_function_registry!
   end
 
   it "registers a system function from a typed FunctionHandler proc" do
-    handler : Cogni::Workflows::Declarative::FunctionHandler = ->(ctx : Cogni::Workflows::Declarative::NodeContext) : Cogni::Workflows::Declarative::RunnableResult do
-      Cogni::Workflows::Declarative::AgentResult.new(
+    handler : Cogni::Workflow::FunctionHandler = ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
+      Cogni::Workflow::AgentResult.new(
         agent_type: "function",
         content: "hello #{ctx.node_id}",
       )
@@ -15,7 +15,7 @@ describe "function registry" do
 
     Cogni::RegistryApi.register_system_function("typed_handler", &handler)
 
-    ctx = Cogni::Workflows::Declarative::NodeContext.new(
+    ctx = Cogni::Workflow::NodeContext.new(
       workflow_id: "wf-test",
       run_id: "run-test",
       node_id: "node-1",
@@ -35,7 +35,7 @@ describe "function registry" do
       } of String => JSON::Any
     end
 
-    ctx = Cogni::Workflows::Declarative::NodeContext.new(
+    ctx = Cogni::Workflow::NodeContext.new(
       workflow_id: "wf-test",
       run_id: "run-test",
       node_id: "node-2",

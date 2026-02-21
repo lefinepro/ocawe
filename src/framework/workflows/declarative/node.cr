@@ -1,8 +1,7 @@
 require "../dsl/types"
 
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
     struct NodeContext
       getter workflow_id : String
       getter run_id : String
@@ -81,6 +80,5 @@ module Cogni
         schema.validate(payload, "$.output")
       end
     end
-  end
   end
 end

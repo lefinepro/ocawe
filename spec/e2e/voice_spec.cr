@@ -11,24 +11,24 @@ describe "E2E: Voice Operations" do
   describe "voice-playground" do
     it "creates workflow with voice nodes" do
       # Simulates voice-playground workflow structure
-      workflow = Cogni::Workflows::Declarative.create_workflow("voice-playground", "Voice test")
+      workflow = Cogni::Workflow.create_workflow("voice-playground", "Voice test")
       workflow
         .voice("voice-transcribe", config: {"provider" => json_str("openai")})
         .voice("voice-synthesize", config: {"provider" => json_str("openai"), "speaker" => json_str("alloy")})
         .commit
 
       workflow.nodes.size.should eq(2)
-      workflow.nodes[0].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Voice)
-      workflow.nodes[1].kind.should eq(Cogni::Workflows::Declarative::NodeKind::Voice)
+      workflow.nodes[0].kind.should eq(Cogni::Workflow::NodeKind::Voice)
+      workflow.nodes[1].kind.should eq(Cogni::Workflow::NodeKind::Voice)
     end
 
     it "executes voice transcription workflow with text input" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("voice-transcribe-test", "Voice transcribe test")
+      workflow = Cogni::Workflow.create_workflow("voice-transcribe-test", "Voice transcribe test")
       workflow
         .voice("transcribe", config: {"provider" => json_str("openai")})
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("voice-transcribe-test")
@@ -39,12 +39,12 @@ describe "E2E: Voice Operations" do
     end
 
     it "executes voice synthesis workflow with text input" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("voice-synthesize-test", "Voice synthesize test")
+      workflow = Cogni::Workflow.create_workflow("voice-synthesize-test", "Voice synthesize test")
       workflow
         .voice("synthesize", config: {"provider" => json_str("openai"), "speaker" => json_str("alloy")})
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("voice-synthesize-test")
@@ -57,7 +57,7 @@ describe "E2E: Voice Operations" do
 
   describe "voice node execution" do
     it "processes voice node with text input" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-voice", "Voice test")
+      workflow = Cogni::Workflow.create_workflow("e2e-voice", "Voice test")
       workflow
         .voice("speak", config: {
           "provider" => json_str("openai"),
@@ -65,7 +65,7 @@ describe "E2E: Voice Operations" do
         })
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-voice")
@@ -78,19 +78,19 @@ describe "E2E: Voice Operations" do
     end
 
     it "handles voice node in full workflow" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("full-voice-test", "Full voice test")
+      workflow = Cogni::Workflow.create_workflow("full-voice-test", "Full voice test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("setup", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
         end)
         .voice("voice", config: {"provider" => json_str("openai")})
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("after-voice", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("after-voice", Cogni::Workflow::NodeKind::Control) do |ctx|
           voice_ok = ctx.state["voice_status"]?.try(&.as_s?) == "ok"
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"voice_completed" => json_bool(voice_ok)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"voice_completed" => json_bool(voice_ok)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("full-voice-test")
