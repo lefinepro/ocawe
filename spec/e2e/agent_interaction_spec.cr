@@ -6,7 +6,7 @@ describe "E2E: Agent Interaction" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
-        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-agent-voice", "Agent with voice")
+        workflow = Cogni::Workflow.create_workflow("e2e-agent-voice", "Agent with voice")
         workflow
           .agent(
             "voice-agent",
@@ -19,7 +19,7 @@ describe "E2E: Agent Interaction" do
           )
           .commit
 
-        engine = Cogni::Workflows::Declarative::Engine.new
+        engine = Cogni::Workflow::Engine.new
         engine.register(workflow)
 
         result = engine.create_run("e2e-agent-voice").start(input_data: {"task" => json_str("Hello")})
@@ -36,12 +36,12 @@ describe "E2E: Agent Interaction" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
-        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-agent-task", "Agent task input")
+        workflow = Cogni::Workflow.create_workflow("e2e-agent-task", "Agent task input")
         workflow
           .agent("task-agent", prompt: "Process task", model: "openai/gpt-4.1-mini")
           .commit
 
-        engine = Cogni::Workflows::Declarative::Engine.new
+        engine = Cogni::Workflow::Engine.new
         engine.register(workflow)
 
         result = engine.create_run("e2e-agent-task").start(input_data: {
@@ -58,12 +58,12 @@ describe "E2E: Agent Interaction" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
-        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-agent-input-obj", "Agent input object")
+        workflow = Cogni::Workflow.create_workflow("e2e-agent-input-obj", "Agent input object")
         workflow
           .agent("input-agent", prompt: "Process input", model: "openai/gpt-4.1-mini")
           .commit
 
-        engine = Cogni::Workflows::Declarative::Engine.new
+        engine = Cogni::Workflow::Engine.new
         engine.register(workflow)
 
         result = engine.create_run("e2e-agent-input-obj").start(input_data: {
@@ -82,7 +82,7 @@ describe "E2E: Agent Interaction" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
-        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-multi-agent", "Multi-agent chain")
+        workflow = Cogni::Workflow.create_workflow("e2e-multi-agent", "Multi-agent chain")
         workflow
           .use(model: "openai/gpt-4.1-mini")
           .agent("analyzer", prompt: "Analyze input")
@@ -90,7 +90,7 @@ describe "E2E: Agent Interaction" do
           .agent("formatter", prompt: "Format for output")
           .commit
 
-        engine = Cogni::Workflows::Declarative::Engine.new
+        engine = Cogni::Workflow::Engine.new
         engine.register(workflow)
 
         result = engine.create_run("e2e-multi-agent").start(input_data: {

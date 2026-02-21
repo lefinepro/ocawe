@@ -26,6 +26,8 @@ module ACD
             skills: workflow[:skills],
             tools: workflow[:tools],
             default_model: workflow[:default_model],
+            logger: workflow[:logger],
+            node_loggers: workflow[:node_loggers],
           }.to_json
         end
       end

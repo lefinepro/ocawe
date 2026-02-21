@@ -31,7 +31,7 @@ Key endpoints:
 
 Notes:
 - Voice and RAG are DSL workflow nodes (`voice`, `rag`), not dedicated startup auto-registered tools.
-- Workflow executable nodes use `run "ref"` in DSL and `run(...)` in declarative API.
+- Workflow executable nodes use `run "ref"` in DSL and `run(...)` in workflow API.
 - `run` can execute registered functions (`run "name"`), script paths (`run "tools/x.sh", runtime: {...}`), or inline script text (`run "console.log(...)", runtime: {...}`).
 - Function registration supports aliases and indexed collision resolution (`name:1`, `name:2`, ...). Base-name resolution prioritizes system functions.
 - RAG DSL supports Mastra-compatible request keys: `vectorStoreName`, `indexName`, `queryText`, `topK`, `filter`, `operation`.
@@ -40,3 +40,4 @@ Notes:
 - Resume validation supports `resume_schema` and `schema_ref("resume")`.
 - Runs API supports inline `resources` object in both `POST /runs` and `POST /resume`; runtime merges it into `state["resources"]`.
 - Triggers API (`/v1/triggers/*`) is the canonical invocation layer for workflows, agents, skills, and functions.
+- `GET /v1/workflows/{workflowId}` includes logger metadata when present: `logger` (workflow default) and `node_loggers` (node overrides from `@[Logger(...)]`).

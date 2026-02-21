@@ -1,6 +1,5 @@
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
       alias NodeKindResult = WorkflowNodeResult | AnyHash
       alias NodeKindHandler = Proc(NodeContext, AnyHash, NodeKindResult)
 
@@ -46,5 +45,4 @@ module Cogni
         @@node_kind_registry.register(kind, &block)
       end
     end
-  end
 end

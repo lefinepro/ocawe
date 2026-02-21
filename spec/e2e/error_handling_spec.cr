@@ -6,7 +6,7 @@ describe "E2E: Error Handling Cases" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
-        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-guardrails-block", "Guardrails block test")
+        workflow = Cogni::Workflow.create_workflow("e2e-guardrails-block", "Guardrails block test")
         workflow
           .agent(
             "guarded-agent",
@@ -20,7 +20,7 @@ describe "E2E: Error Handling Cases" do
           )
           .commit
 
-        engine = Cogni::Workflows::Declarative::Engine.new
+        engine = Cogni::Workflow::Engine.new
         engine.register(workflow)
 
         # Test with blocked term
@@ -51,7 +51,7 @@ describe "E2E: Error Handling Cases" do
           "e2e-input-schema"
         )
 
-        workflow = Cogni::Workflows::Declarative.create_workflow("e2e-schema-validation", "Schema validation")
+        workflow = Cogni::Workflow.create_workflow("e2e-schema-validation", "Schema validation")
         workflow
           .agent(
             "schema-agent",
@@ -61,7 +61,7 @@ describe "E2E: Error Handling Cases" do
           )
           .commit
 
-        engine = Cogni::Workflows::Declarative::Engine.new
+        engine = Cogni::Workflow::Engine.new
         engine.register(workflow)
 
         # Missing required field
@@ -110,12 +110,12 @@ describe "E2E: Error Handling Cases" do
 
   describe "run/function errors" do
     it "fails on unknown run function reference" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-run-invalid", "Invalid run")
+      workflow = Cogni::Workflow.create_workflow("e2e-run-invalid", "Invalid run")
       workflow
         .run("missing-function")
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       result = engine.create_run("e2e-run-invalid").start
@@ -124,17 +124,17 @@ describe "E2E: Error Handling Cases" do
     end
 
     it "handles run function that raises error" do
-      Cogni::Workflows::Declarative.register_function("e2e_error_tool") do |_ctx|
+      Cogni::Workflow.register_function("e2e_error_tool") do |_ctx|
         raise "Intentional run error"
         {} of String => JSON::Any
       end
 
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-run-error", "Run error test")
+      workflow = Cogni::Workflow.create_workflow("e2e-run-error", "Run error test")
       workflow
         .run("e2e_error_tool")
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-run-error")
@@ -146,16 +146,16 @@ describe "E2E: Error Handling Cases" do
 
   describe "workflow state errors" do
     it "rejects modifications to committed workflow" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-committed", "Committed workflow")
+      workflow = Cogni::Workflow.create_workflow("e2e-committed", "Committed workflow")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"done" => json_bool(true)})
+        .step(Cogni::Workflow::WorkflowNode.new("node", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"done" => json_bool(true)})
         end)
         .commit
 
       expect_raises(Exception, /committed/) do
-        workflow.step(Cogni::Workflows::Declarative::WorkflowNode.new("after-commit", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"error" => json_bool(true)})
+        workflow.step(Cogni::Workflow::WorkflowNode.new("after-commit", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"error" => json_bool(true)})
         end)
       end
     end

@@ -38,6 +38,31 @@ workflow "example" do
 end
 ```
 
+### `@[Logger(...)]` Annotation
+
+`@[Logger(...)]` supports Mastra-compatible logger config keys:
+- `name` (string)
+- `level` (`trace|debug|info|warn|error|fatal`)
+- `transports` (array of objects)
+- `overrideDefaultTransports` (boolean)
+- `formatters` (object)
+
+```crystal
+workflow "logger-example" do
+  # Workflow-level logger default
+  @[Logger(name: "cogni", level: "info")]
+
+  # Node-level override (applies to the next node only)
+  @[Logger(level: "debug")]
+  agent "analyzer"
+
+  run "my-tool"
+end
+```
+
+Parser is strict: unknown keys or invalid types raise workflow parse errors.
+Runtime currently supports console output transport; non-console transports are preserved in metadata and ignored at execution time.
+
 ## Execution Control
 
 ### Parallel Execution
@@ -133,6 +158,7 @@ end
 | `@[Resources(model: "...")]` | Set default model for workflow |
 | `@[Resources(skill: "...")]` or `@[Resources(skill: [...])]` | Declare skills |
 | `@[Resources(tool: "...")]` or `@[Resources(tool: [...])]` | Declare tools |
+| `@[Logger(...)]` | Configure workflow/node logging metadata and runtime log level/shape |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
 | `run "name"` | Execute registered function |

@@ -1,8 +1,7 @@
 require "../../mcp/manager"
 
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
     class RunExecutor
       def run(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil) : AnyHash
         if runtime.nil? && ref.starts_with?("mcp:")
@@ -126,6 +125,5 @@ module Cogni
         end
       end
     end
-  end
   end
 end

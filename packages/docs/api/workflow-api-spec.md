@@ -1,17 +1,17 @@
-# Cogni Declarative Workflow API Specification
+# Cogni Workflow API Specification
 
 ## Scope
 
-This specification defines the declarative workflow-building API exposed by `Cogni::Workflow`.
+This specification defines the workflow-building API exposed by `Cogni::Workflow`.
 
 ## Core Type
 
-- `Cogni::Workflow < CogniCore::Workflow::WorkflowDefinition`
+- `Cogni::Workflow::WorkflowDefinition`
 - Factory: `Cogni::Workflow.build(id, description = nil)`
 
 ## Node Construction
 
-Supported declarative methods:
+Supported workflow methods:
 
 - `use(model:, skill:, tool:)`
 - `agent(...)`
@@ -71,4 +71,3 @@ If `params` metadata exists for `run`, those fields are merged at top-level of t
 - `until_do`: executes body while condition evaluates `false`.
 - `loop_do`: executes body until max iterations or non-continue result.
 - Default loop cap is `100`.
-

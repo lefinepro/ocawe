@@ -1,6 +1,5 @@
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
     module SnapshotStore
       abstract def persist(snapshot : WorkflowRunSnapshot)
       abstract def load(workflow_id : String, run_id : String) : WorkflowRunSnapshot?
@@ -34,6 +33,5 @@ module Cogni
         "#{workflow_id}:#{run_id}"
       end
     end
-  end
   end
 end

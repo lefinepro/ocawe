@@ -5,53 +5,53 @@ module Cogni
   module RegistryApi
     extend self
 
-    alias AnyHash = Cogni::Workflows::Declarative::AnyHash
+    alias AnyHash = Cogni::Workflow::AnyHash
     alias Validator = Cogni::Workflows::DSL::Validator
-    alias WorkflowDefinition = Cogni::Workflows::Declarative::WorkflowDefinition
-    alias WorkflowNode = Cogni::Workflows::Declarative::WorkflowNode
-    alias WorkflowNodeResult = Cogni::Workflows::Declarative::WorkflowNodeResult
-    alias NodeContext = Cogni::Workflows::Declarative::NodeContext
-    alias NodeKind = Cogni::Workflows::Declarative::NodeKind
+    alias WorkflowDefinition = Cogni::Workflow::WorkflowDefinition
+    alias WorkflowNode = Cogni::Workflow::WorkflowNode
+    alias WorkflowNodeResult = Cogni::Workflow::WorkflowNodeResult
+    alias NodeContext = Cogni::Workflow::NodeContext
+    alias NodeKind = Cogni::Workflow::NodeKind
 
     def reset_all! : Nil
-      Cogni::Workflows::Declarative.reset_node_kind_registry!
-      Cogni::Workflows::Declarative.reset_resource_registry!
-      Cogni::Workflows::Declarative.reset_function_registry!
+      Cogni::Workflow.reset_node_kind_registry!
+      Cogni::Workflow.reset_resource_registry!
+      Cogni::Workflow.reset_function_registry!
     end
 
     def register_system_function(
       name : String,
       alias_name : String? = nil,
-      &block : NodeContext -> Cogni::Workflows::Declarative::RunnableResult
+      &block : NodeContext -> Cogni::Workflow::RunnableResult
     ) : String
-      Cogni::Workflows::Declarative.register_system_function(name, alias_name: alias_name, &block)
+      Cogni::Workflow.register_system_function(name, alias_name: alias_name, &block)
     end
 
     def register_function(
       name : String,
       alias_name : String? = nil,
-      source : Cogni::Workflows::Declarative::FunctionSource = Cogni::Workflows::Declarative::FunctionSource::User,
-      &block : NodeContext -> Cogni::Workflows::Declarative::RunnableResult
+      source : Cogni::Workflow::FunctionSource = Cogni::Workflow::FunctionSource::User,
+      &block : NodeContext -> Cogni::Workflow::RunnableResult
     ) : String
-      Cogni::Workflows::Declarative.register_function(name, alias_name: alias_name, source: source, &block)
+      Cogni::Workflow.register_function(name, alias_name: alias_name, source: source, &block)
     end
 
     def call_function(name : String, ctx : NodeContext) : AnyHash
-      Cogni::Workflows::Declarative.function_registry.call(name, ctx)
+      Cogni::Workflow.function_registry.call(name, ctx)
     end
 
     def node_kind(
       kind : String,
-      &block : NodeContext, AnyHash -> Cogni::Workflows::Declarative::NodeKindResult
+      &block : NodeContext, AnyHash -> Cogni::Workflow::NodeKindResult
     ) : Nil
-      Cogni::Workflows::Declarative.register_node_kind(kind, &block)
+      Cogni::Workflow.register_node_kind(kind, &block)
     end
 
     def resource(
       name : String,
       &block : NodeContext, AnyHash -> AnyHash
     ) : Nil
-      Cogni::Workflows::Declarative.register_resource(name, &block)
+      Cogni::Workflow.register_resource(name, &block)
     end
 
     def build_node(
@@ -86,7 +86,7 @@ module Cogni
         metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
         metadata["params"] = JSON.parse(params.to_json) if params
 
-        executor = Cogni::Workflows::Declarative::RunExecutor.new
+        executor = Cogni::Workflow::RunExecutor.new
         return WorkflowNode.new(id, NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           WorkflowNodeResult.continue(executor.run(id, ctx, runtime: runtime, env: env, workflow_root: workflow_root))
         end
@@ -96,7 +96,7 @@ module Cogni
 
         return WorkflowNode.new(id, NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           user_prompt = build_agent_user_prompt(ctx)
-          Cogni::Workflows::Declarative::Guardrails.validate_input!(id, user_prompt, guardrails_config)
+          Cogni::Workflow::Guardrails.validate_input!(id, user_prompt, guardrails_config)
 
           resolved_model = resolve_model(workflow, ctx, model)
           system_prompt = prompt || "You are agent #{id}."
@@ -111,14 +111,14 @@ module Cogni
               "agent_id" => JSON.parse(id.to_json),
             },
           )
-          agent_result = Cogni::Workflows::Declarative::AgentResult.new(
+          agent_result = Cogni::Workflow::AgentResult.new(
             agent_type: "default-agent",
             content: response.text,
             provider: response.provider,
             model: "#{response.provider}/#{response.model}",
           )
 
-          Cogni::Workflows::Declarative::Guardrails.validate_output!(id, agent_result.content, guardrails_config)
+          Cogni::Workflow::Guardrails.validate_output!(id, agent_result.content, guardrails_config)
 
           outputs = ctx.state["agent_outputs"]?.try(&.as_h?) || {} of String => JSON::Any
           outputs = outputs.dup
@@ -158,7 +158,7 @@ module Cogni
           "dsl_kind" => JSON.parse("rag".to_json),
           "config" => JSON.parse(resolved_config.to_json),
         } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(Cogni::Workflows::Declarative::RagRuntime.execute(ctx, resolved_config))
+          WorkflowNodeResult.continue(Cogni::Workflow::RagRuntime.execute(ctx, resolved_config))
         end
       when "suspend"
         suspend_reason = reason || "human input required"
@@ -201,7 +201,7 @@ module Cogni
         } of String => JSON::Any
 
         return WorkflowNode.new(id, NodeKind::Custom, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          raw = Cogni::Workflows::Declarative.node_kind_registry.call(kind_name, ctx, kind_params)
+          raw = Cogni::Workflow.node_kind_registry.call(kind_name, ctx, kind_params)
           case raw
           when WorkflowNodeResult
             raw
@@ -277,14 +277,14 @@ module Cogni
 
     def node_kind(
       kind : String,
-      &block : Cogni::Workflows::Declarative::NodeContext, Cogni::Workflows::Declarative::AnyHash -> Cogni::Workflows::Declarative::NodeKindResult
+      &block : Cogni::Workflow::NodeContext, Cogni::Workflow::AnyHash -> Cogni::Workflow::NodeKindResult
     ) : Nil
       Cogni::RegistryApi.node_kind(kind, &block)
     end
 
     def resource(
       name : String,
-      &block : Cogni::Workflows::Declarative::NodeContext, Cogni::Workflows::Declarative::AnyHash -> Cogni::Workflows::Declarative::AnyHash
+      &block : Cogni::Workflow::NodeContext, Cogni::Workflow::AnyHash -> Cogni::Workflow::AnyHash
     ) : Nil
       Cogni::RegistryApi.resource(name, &block)
     end

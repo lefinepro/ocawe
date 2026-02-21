@@ -12,19 +12,19 @@ require "./e2e_spec_helper"
 describe "E2E: Control Flow" do
   describe "branching" do
     it "executes branch-like conditions correctly" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-branch", "Branch test")
+      workflow = Cogni::Workflow.create_workflow("e2e-branch", "Branch test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("seed", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"selector" => json_str("A")})
+        .step(Cogni::Workflow::WorkflowNode.new("seed", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"selector" => json_str("A")})
         end)
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("dispatch", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("dispatch", Cogni::Workflow::NodeKind::Control) do |ctx|
           selector = ctx.state["selector"]?.try(&.as_s?) || ""
           branch = selector == "A" ? "A" : "B"
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"branch" => json_str(branch)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"branch" => json_str(branch)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-branch")
@@ -34,19 +34,19 @@ describe "E2E: Control Flow" do
     end
 
     it "creates workflow with unless-style conditional" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("control-unless", "Unless test")
+      workflow = Cogni::Workflow.create_workflow("control-unless", "Unless test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("seed", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"skip_preprocessing" => json_bool(false)})
+        .step(Cogni::Workflow::WorkflowNode.new("seed", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"skip_preprocessing" => json_bool(false)})
         end)
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("unless-dispatch", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("unless-dispatch", Cogni::Workflow::NodeKind::Control) do |ctx|
           skip = ctx.state["skip_preprocessing"]?.try(&.raw) == true
           payload = skip ? ({} of String => JSON::Any) : {"skipped" => json_bool(true)}
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue(payload)
+          Cogni::Workflow::WorkflowNodeResult.continue(payload)
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("control-unless")
@@ -56,19 +56,19 @@ describe "E2E: Control Flow" do
     end
 
     it "creates workflow with if/else branching" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("control-branch", "Branch test")
+      workflow = Cogni::Workflow.create_workflow("control-branch", "Branch test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("seed", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"needs_translation" => json_bool(true)})
+        .step(Cogni::Workflow::WorkflowNode.new("seed", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"needs_translation" => json_bool(true)})
         end)
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("if-else-dispatch", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("if-else-dispatch", Cogni::Workflow::NodeKind::Control) do |ctx|
           translated = ctx.state["needs_translation"]?.try(&.raw) == true
           action = translated ? "translated" : "passthrough"
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"action" => json_str(action)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"action" => json_str(action)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("control-branch")
@@ -78,12 +78,12 @@ describe "E2E: Control Flow" do
     end
 
     it "demonstrates branch with multiple conditions" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("multi-branch", "Multi-branch test")
+      workflow = Cogni::Workflow.create_workflow("multi-branch", "Multi-branch test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("seed", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"selector" => json_str("B")})
+        .step(Cogni::Workflow::WorkflowNode.new("seed", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"selector" => json_str("B")})
         end)
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("dispatch", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("dispatch", Cogni::Workflow::NodeKind::Control) do |ctx|
           selector = ctx.state["selector"]?.try(&.as_s?) || ""
           path = case selector
                  when "A" then "A"
@@ -91,11 +91,11 @@ describe "E2E: Control Flow" do
                  when "C" then "C"
                  else "C"
                  end
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"path" => json_str(path)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"path" => json_str(path)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("multi-branch")
@@ -107,20 +107,20 @@ describe "E2E: Control Flow" do
 
   describe "parallel execution" do
     it "executes parallel nodes concurrently" do
-      parallel_1 = Cogni::Workflows::Declarative::WorkflowNode.new("p1", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"p1_result" => json_str("done-1")})
+      parallel_1 = Cogni::Workflow::WorkflowNode.new("p1", Cogni::Workflow::NodeKind::Control) do |_ctx|
+        Cogni::Workflow::WorkflowNodeResult.continue({"p1_result" => json_str("done-1")})
       end
 
-      parallel_2 = Cogni::Workflows::Declarative::WorkflowNode.new("p2", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"p2_result" => json_str("done-2")})
+      parallel_2 = Cogni::Workflow::WorkflowNode.new("p2", Cogni::Workflow::NodeKind::Control) do |_ctx|
+        Cogni::Workflow::WorkflowNodeResult.continue({"p2_result" => json_str("done-2")})
       end
 
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-parallel", "Parallel test")
+      workflow = Cogni::Workflow.create_workflow("e2e-parallel", "Parallel test")
       workflow
         .parallel([parallel_1, parallel_2])
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-parallel")
@@ -131,20 +131,20 @@ describe "E2E: Control Flow" do
     end
 
     it "creates workflow with parallel execution" do
-      validator = Cogni::Workflows::Declarative::WorkflowNode.new("validator", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"validated" => json_bool(true)})
+      validator = Cogni::Workflow::WorkflowNode.new("validator", Cogni::Workflow::NodeKind::Control) do |_ctx|
+        Cogni::Workflow::WorkflowNodeResult.continue({"validated" => json_bool(true)})
       end
 
-      formatter = Cogni::Workflows::Declarative::WorkflowNode.new("formatter", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"formatted" => json_bool(true)})
+      formatter = Cogni::Workflow::WorkflowNode.new("formatter", Cogni::Workflow::NodeKind::Control) do |_ctx|
+        Cogni::Workflow::WorkflowNodeResult.continue({"formatted" => json_bool(true)})
       end
 
-      workflow = Cogni::Workflows::Declarative.create_workflow("control-parallel", "Parallel test")
+      workflow = Cogni::Workflow.create_workflow("control-parallel", "Parallel test")
       workflow
         .parallel([validator, formatter])
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("control-parallel")
@@ -159,18 +159,18 @@ describe "E2E: Control Flow" do
     it "executes do-while style loop in native Crystal" do
       counter = 0
 
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-dowhile", "Loop test")
+      workflow = Cogni::Workflow.create_workflow("e2e-dowhile", "Loop test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("counter-node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("counter-node", Cogni::Workflow::NodeKind::Control) do |_ctx|
           loop do
             counter += 1
             break unless counter < 3
           end
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"count" => JSON.parse(counter.to_json)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"count" => JSON.parse(counter.to_json)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-dowhile")
@@ -182,18 +182,18 @@ describe "E2E: Control Flow" do
     it "executes do-until style loop in native Crystal" do
       counter = 0
 
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-dountil", "Until test")
+      workflow = Cogni::Workflow.create_workflow("e2e-dountil", "Until test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("until-node", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("until-node", Cogni::Workflow::NodeKind::Control) do |_ctx|
           loop do
             counter += 1
             break if counter >= 3
           end
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"iterations" => JSON.parse(counter.to_json)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"iterations" => JSON.parse(counter.to_json)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-dountil")
@@ -205,17 +205,17 @@ describe "E2E: Control Flow" do
     it "demonstrates while loop pattern" do
       counter = 0
 
-      workflow = Cogni::Workflows::Declarative.create_workflow("while-loop", "While loop test")
+      workflow = Cogni::Workflow.create_workflow("while-loop", "While loop test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("increment", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("increment", Cogni::Workflow::NodeKind::Control) do |_ctx|
           while counter < 5
             counter += 1
           end
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"counter" => JSON.parse(counter.to_json)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"counter" => JSON.parse(counter.to_json)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("while-loop")
@@ -227,17 +227,17 @@ describe "E2E: Control Flow" do
     it "demonstrates until loop pattern" do
       counter = 0
 
-      workflow = Cogni::Workflows::Declarative.create_workflow("until-loop", "Until loop test")
+      workflow = Cogni::Workflow.create_workflow("until-loop", "Until loop test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("increment", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("increment", Cogni::Workflow::NodeKind::Control) do |_ctx|
           until counter >= 4
             counter += 1
           end
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"counter" => JSON.parse(counter.to_json)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"counter" => JSON.parse(counter.to_json)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("until-loop")
@@ -247,16 +247,16 @@ describe "E2E: Control Flow" do
     end
 
     it "processes foreach nodes" do
-      foreach_node = Cogni::Workflows::Declarative::WorkflowNode.new("process-item", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-        Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"processed" => json_bool(true)})
+      foreach_node = Cogni::Workflow::WorkflowNode.new("process-item", Cogni::Workflow::NodeKind::Control) do |_ctx|
+        Cogni::Workflow::WorkflowNodeResult.continue({"processed" => json_bool(true)})
       end
 
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-foreach", "Foreach test")
+      workflow = Cogni::Workflow.create_workflow("e2e-foreach", "Foreach test")
       workflow
         .foreach(foreach_node)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-foreach")
@@ -268,22 +268,22 @@ describe "E2E: Control Flow" do
 
   describe "sequential execution" do
     it "executes sequential agent chain" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("control-sequential", "Sequential test")
+      workflow = Cogni::Workflow.create_workflow("control-sequential", "Sequential test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("preprocessor", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"preprocessed" => json_bool(true)})
+        .step(Cogni::Workflow::WorkflowNode.new("preprocessor", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"preprocessed" => json_bool(true)})
         end)
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("analyzer", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("analyzer", Cogni::Workflow::NodeKind::Control) do |ctx|
           preprocessed = ctx.state["preprocessed"]?.try(&.raw) == true
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"analyzed" => json_bool(preprocessed)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"analyzed" => json_bool(preprocessed)})
         end)
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("finalizer", Cogni::Workflows::Declarative::NodeKind::Control) do |ctx|
+        .step(Cogni::Workflow::WorkflowNode.new("finalizer", Cogni::Workflow::NodeKind::Control) do |ctx|
           analyzed = ctx.state["analyzed"]?.try(&.raw) == true
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"finalized" => json_bool(analyzed)})
+          Cogni::Workflow::WorkflowNodeResult.continue({"finalized" => json_bool(analyzed)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("control-sequential")
@@ -295,18 +295,18 @@ describe "E2E: Control Flow" do
 
   describe "sleep and events" do
     it "handles sleep nodes" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-sleep", "Sleep test")
+      workflow = Cogni::Workflow.create_workflow("e2e-sleep", "Sleep test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("before", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"before" => json_bool(true)})
+        .step(Cogni::Workflow::WorkflowNode.new("before", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"before" => json_bool(true)})
         end)
         .sleep(10) # 10ms sleep
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("after", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"after" => json_bool(true)})
+        .step(Cogni::Workflow::WorkflowNode.new("after", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"after" => json_bool(true)})
         end)
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-sleep")
@@ -316,16 +316,16 @@ describe "E2E: Control Flow" do
     end
 
     it "handles wait_for_event and send_event" do
-      workflow = Cogni::Workflows::Declarative.create_workflow("e2e-events", "Events test")
+      workflow = Cogni::Workflow.create_workflow("e2e-events", "Events test")
       workflow
-        .step(Cogni::Workflows::Declarative::WorkflowNode.new("init", Cogni::Workflows::Declarative::NodeKind::Control) do |_ctx|
-          Cogni::Workflows::Declarative::WorkflowNodeResult.continue({"initialized" => json_bool(true)})
+        .step(Cogni::Workflow::WorkflowNode.new("init", Cogni::Workflow::NodeKind::Control) do |_ctx|
+          Cogni::Workflow::WorkflowNodeResult.continue({"initialized" => json_bool(true)})
         end)
         .wait_for_event("data-ready", "event:data-ready")
         .send_event("data-ready", {"source" => json_str("test")})
         .commit
 
-      engine = Cogni::Workflows::Declarative::Engine.new
+      engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-events")

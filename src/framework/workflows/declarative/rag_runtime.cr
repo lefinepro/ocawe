@@ -1,8 +1,7 @@
 require "json"
 
 module Cogni
-  module Workflows
-    module Declarative
+  module Workflow
     class RagRuntime
       record StoredDocument, id : String, text : String, metadata : AnyHash
 
@@ -288,6 +287,5 @@ module Cogni
         JSON.parse(value.to_json)
       end
     end
-  end
   end
 end
