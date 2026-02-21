@@ -128,7 +128,7 @@ module ACD
         end
       end
 
-      private def dispatch_mcp_rpc(method : String, params : Cogni::Workflows::Declarative::AnyHash) : Cogni::Workflows::Declarative::AnyHash
+      private def dispatch_mcp_rpc(method : String, params : Cogni::Workflow::AnyHash) : Cogni::Workflow::AnyHash
         case method
         when "initialize"
           {
@@ -149,7 +149,7 @@ module ACD
         when "tools/call"
           handle_mcp_tools_call(params)
         when "resources/list"
-          local_resources = Cogni::Workflows::Declarative.resource_registry.names.map do |name|
+          local_resources = Cogni::Workflow.resource_registry.names.map do |name|
             {
               "name" => JSON.parse(name.to_json),
               "description" => JSON.parse("Cogni resource #{name}".to_json),
@@ -177,7 +177,7 @@ module ACD
         end
       end
 
-      private def mcp_server_tools : Array(Cogni::Workflows::Declarative::AnyHash)
+      private def mcp_server_tools : Array(Cogni::Workflow::AnyHash)
         local = tools.map do |tool|
           {
             "name" => JSON.parse(tool[:id].to_json),
@@ -187,7 +187,7 @@ module ACD
         local + @mcp_manager.list_tools
       end
 
-      private def handle_mcp_tools_call(params : Cogni::Workflows::Declarative::AnyHash) : Cogni::Workflows::Declarative::AnyHash
+      private def handle_mcp_tools_call(params : Cogni::Workflow::AnyHash) : Cogni::Workflow::AnyHash
         name = params["name"]?.try(&.as_s?) || raise "tools/call requires name"
         arguments = params["arguments"]?.try(&.as_h?) || {} of String => JSON::Any
 
@@ -198,7 +198,7 @@ module ACD
           } of String => JSON::Any
         end
 
-        ctx = Cogni::Workflows::Declarative::NodeContext.new(
+        ctx = Cogni::Workflow::NodeContext.new(
           workflow_id: "mcp",
           run_id: "mcp",
           node_id: name,
@@ -210,7 +210,7 @@ module ACD
         } of String => JSON::Any
       end
 
-      private def handle_mcp_resources_read(params : Cogni::Workflows::Declarative::AnyHash) : Cogni::Workflows::Declarative::AnyHash
+      private def handle_mcp_resources_read(params : Cogni::Workflow::AnyHash) : Cogni::Workflow::AnyHash
         name = params["name"]?.try(&.as_s?) || raise "resources/read requires name"
         arguments = params["arguments"]?.try(&.as_h?) || {} of String => JSON::Any
 
@@ -219,17 +219,17 @@ module ACD
           return @mcp_manager.read_resource(server_id, resource_name, arguments)
         end
 
-        ctx = Cogni::Workflows::Declarative::NodeContext.new(
+        ctx = Cogni::Workflow::NodeContext.new(
           workflow_id: "mcp",
           run_id: "mcp",
           node_id: name,
           input_data: arguments,
           state: arguments,
         )
-        Cogni::Workflows::Declarative.resource_registry.call(name, ctx, arguments)
+        Cogni::Workflow.resource_registry.call(name, ctx, arguments)
       end
 
-      private def handle_mcp_prompts_get(params : Cogni::Workflows::Declarative::AnyHash) : Cogni::Workflows::Declarative::AnyHash
+      private def handle_mcp_prompts_get(params : Cogni::Workflow::AnyHash) : Cogni::Workflow::AnyHash
         name = params["name"]?.try(&.as_s?) || raise "prompts/get requires name"
         arguments = params["arguments"]?.try(&.as_h?) || {} of String => JSON::Any
 
@@ -251,7 +251,7 @@ module ACD
         raise "prompt not found: #{name}"
       end
 
-      private def parse_mcp_server_settings(body : Cogni::Workflows::Declarative::AnyHash, fallback_id : String? = nil) : Cogni::Config::MCPServerSettings
+      private def parse_mcp_server_settings(body : Cogni::Workflow::AnyHash, fallback_id : String? = nil) : Cogni::Config::MCPServerSettings
         id = body["id"]?.try(&.as_s?) || fallback_id || raise "mcp server id is required"
         transport = body["transport"]?.try(&.as_s?) || "http"
         command = body["command"]?.try(&.as_s?)

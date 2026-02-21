@@ -8,7 +8,7 @@ require "../workflows/declarative/node"
 
 module Cogni
   module MCP
-    alias AnyHash = Cogni::Workflows::Declarative::AnyHash
+    alias AnyHash = Cogni::Workflow::AnyHash
 
     class Manager
       @servers = {} of String => Cogni::Config::MCPServerSettings
