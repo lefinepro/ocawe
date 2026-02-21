@@ -1,13 +1,25 @@
+require "../../mcp/manager"
+
 module Cogni
   module Workflows
     module Declarative
     class RunExecutor
       def run(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil) : AnyHash
+        if runtime.nil? && ref.starts_with?("mcp:")
+          return run_mcp_tool(ref, ctx)
+        end
+
         if runtime
           run_external(ref, ctx, runtime, env, workflow_root)
         else
           Cogni::RegistryApi.call_function(ref, ctx)
         end
+      end
+
+      private def run_mcp_tool(ref : String, ctx : NodeContext) : AnyHash
+        server_id, tool_name = Cogni::MCP.parse_mcp_ref(ref)
+        arguments = ctx.input_data["input"]?.try(&.as_h?) || ctx.input_data
+        Cogni::MCP.manager.call_tool(server_id, tool_name, arguments)
       end
 
       private def run_external(ref : String, ctx : NodeContext, runtime : AnyHash, env : AnyHash?, workflow_root : String?) : AnyHash

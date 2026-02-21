@@ -1,3 +1,5 @@
+require "../../mcp/manager"
+
 module Cogni
   module Workflows
     module Declarative
@@ -21,9 +23,17 @@ module Cogni
 
         def call(name : String, ctx : NodeContext, payload : AnyHash = {} of String => JSON::Any) : AnyHash
           key = normalize(name)
+          if key.starts_with?("mcp:")
+            server_id, resource_name = Cogni::MCP.parse_mcp_ref(name)
+            return Cogni::MCP.manager.read_resource(server_id, resource_name, payload)
+          end
           handler = @handlers[key]?
           raise "unknown resource handler: #{name}" unless handler
           handler.call(ctx, payload)
+        end
+
+        def names : Array(String)
+          @handlers.keys.sort
         end
 
         private def normalize(name : String) : String

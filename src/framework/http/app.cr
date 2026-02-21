@@ -8,6 +8,7 @@ require "../cognicore/version"
 require "../workflows/dsl/crystal_dsl"
 require "../workflows/declarative/run"
 require "../config/settings"
+require "../mcp/manager"
 require "./endpoints/health"
 require "./endpoints/docs"
 require "./endpoints/workflows"
@@ -18,6 +19,7 @@ require "./endpoints/runs"
 require "./endpoints/hitl"
 require "./endpoints/compat"
 require "./endpoints/triggers"
+require "./endpoints/mcp"
 
 module ACD
   module HTTP
@@ -38,6 +40,7 @@ module ACD
         @skill_loader = Skills::Loader.new
         @workflow_engine = Cogni::Workflows::Declarative::Engine.new
         @workflow_service = Cogni::Workflows::Declarative::Service.new(@workflow_engine)
+        @mcp_manager = Cogni::MCP.manager
         @workflow_ids = [] of String
         @workflow_index = {} of String => NamedTuple(
           source_root_type: String,
@@ -72,6 +75,7 @@ module ACD
       end
 
       def start
+        @mcp_manager.configure(@settings.mcp)
         register_configured_functions!
         reload_cache!
         start_reload_watcher
@@ -87,6 +91,8 @@ module ACD
         mount_hitl_endpoints
         mount_compat_endpoints
         mount_trigger_endpoints
+        mount_mcp_endpoints
+        mount_mcp_server_endpoint
 
         Kemal.run
       end
@@ -1874,6 +1880,77 @@ module ACD
                     },
                   },
                 },
+              },
+            },
+            "/v1/mcp/servers" => {
+              "get" => {
+                "tags" => ["MCP"],
+                "summary" => "List configured MCP servers",
+                "responses" => {"200" => {"description" => "MCP server list"}},
+              },
+              "post" => {
+                "tags" => ["MCP"],
+                "summary" => "Create MCP server",
+                "responses" => {"200" => {"description" => "MCP server"}},
+              },
+            },
+            "/v1/mcp/servers/{serverId}" => {
+              "get" => {
+                "tags" => ["MCP"],
+                "summary" => "Get MCP server",
+                "responses" => {"200" => {"description" => "MCP server"}, "404" => {"$ref" => "#/components/responses/NotFound"}},
+              },
+              "patch" => {
+                "tags" => ["MCP"],
+                "summary" => "Update MCP server",
+                "responses" => {"200" => {"description" => "MCP server"}},
+              },
+              "delete" => {
+                "tags" => ["MCP"],
+                "summary" => "Delete MCP server",
+                "responses" => {"204" => {"description" => "Deleted"}, "404" => {"$ref" => "#/components/responses/NotFound"}},
+              },
+            },
+            "/v1/mcp/servers/{serverId}/reconnect" => {
+              "post" => {
+                "tags" => ["MCP"],
+                "summary" => "Reconnect MCP server",
+                "responses" => {"200" => {"description" => "MCP server"}},
+              },
+            },
+            "/v1/mcp/catalog" => {
+              "get" => {
+                "tags" => ["MCP"],
+                "summary" => "List full MCP catalog",
+                "responses" => {"200" => {"description" => "MCP catalog"}},
+              },
+            },
+            "/v1/mcp/catalog/tools" => {
+              "get" => {
+                "tags" => ["MCP"],
+                "summary" => "List MCP tools",
+                "responses" => {"200" => {"description" => "MCP tool catalog"}},
+              },
+            },
+            "/v1/mcp/catalog/resources" => {
+              "get" => {
+                "tags" => ["MCP"],
+                "summary" => "List MCP resources",
+                "responses" => {"200" => {"description" => "MCP resource catalog"}},
+              },
+            },
+            "/v1/mcp/catalog/prompts" => {
+              "get" => {
+                "tags" => ["MCP"],
+                "summary" => "List MCP prompts",
+                "responses" => {"200" => {"description" => "MCP prompt catalog"}},
+              },
+            },
+            "/mcp" => {
+              "post" => {
+                "tags" => ["MCP"],
+                "summary" => "MCP JSON-RPC endpoint",
+                "responses" => {"200" => {"description" => "JSON-RPC response"}},
               },
             },
             "/v1/skills" => {

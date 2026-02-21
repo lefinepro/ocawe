@@ -62,6 +62,10 @@ Primary APIs:
 - `GET /v1/skills`
 - `GET /v1/agents`
 - `POST /v1/agents/:agentId/generate`
+- `GET /v1/mcp/servers`
+- `POST /v1/mcp/servers`
+- `GET /v1/mcp/catalog`
+- `POST /mcp`
 
 Compatibility:
 - `POST /v1/chat/completions`
