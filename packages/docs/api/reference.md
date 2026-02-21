@@ -17,6 +17,17 @@ Key endpoints:
 - `POST /v1/agents/{agentId}/generate`
 - `POST /v1/skills/{skillId}/execute`
 - `POST /v1/chat/completions` (OpenAI-compatible)
+- `GET /v1/mcp/servers`
+- `POST /v1/mcp/servers`
+- `GET /v1/mcp/servers/{serverId}`
+- `PATCH /v1/mcp/servers/{serverId}`
+- `DELETE /v1/mcp/servers/{serverId}`
+- `POST /v1/mcp/servers/{serverId}/reconnect`
+- `GET /v1/mcp/catalog`
+- `GET /v1/mcp/catalog/tools`
+- `GET /v1/mcp/catalog/resources`
+- `GET /v1/mcp/catalog/prompts`
+- `POST /mcp` (MCP JSON-RPC endpoint)
 
 Notes:
 - Voice and RAG are DSL workflow nodes (`voice`, `rag`), not dedicated startup auto-registered tools.
