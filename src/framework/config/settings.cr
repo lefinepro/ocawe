@@ -21,13 +21,13 @@ module Cogni
     struct Settings
       getter workflows : WorkflowSettings
       getter node_kinds : NodeKindSettings
-      getter functions : Hash(String, Cogni::Workflows::Declarative::FunctionHandler)
+      getter functions : Hash(String, Cogni::Workflow::FunctionHandler)
       getter mcp : MCPSettings
 
       def initialize(
         @workflows : WorkflowSettings,
         @node_kinds : NodeKindSettings = NodeKindSettings.new,
-        @functions : Hash(String, Cogni::Workflows::Declarative::FunctionHandler) = {} of String => Cogni::Workflows::Declarative::FunctionHandler,
+        @functions : Hash(String, Cogni::Workflow::FunctionHandler) = {} of String => Cogni::Workflow::FunctionHandler,
         @mcp : MCPSettings = MCPSettings.new
       )
       end
@@ -37,7 +37,7 @@ module Cogni
           "agent_opencode" => DefaultFunctionHandlers.agent_opencode,
           "agent_codex" => DefaultFunctionHandlers.agent_codex,
           "agent_cliproxy" => DefaultFunctionHandlers.agent_cliproxy,
-        } of String => Cogni::Workflows::Declarative::FunctionHandler
+        } of String => Cogni::Workflow::FunctionHandler
 
         new(
           workflows: WorkflowSettings.new(
