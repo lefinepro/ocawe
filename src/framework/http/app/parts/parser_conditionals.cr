@@ -1,0 +1,262 @@
+module ACD
+  module HTTP
+    class App
+      private def parse_conditional_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
+        conditions = [] of Tuple(String, Cogni::Workflow::WorkflowNode)
+        otherwise_node = nil.as(Cogni::Workflow::WorkflowNode?)
+
+        i = start_line
+        current_condition = nil.as(String?)
+        current_nodes = [] of Cogni::Workflow::WorkflowNode
+        in_else = false
+
+        while i <= end_line
+          raw = ctx.lines[i]
+          line = raw.strip
+          i += 1
+
+          next if line.empty? || line.starts_with?("#")
+
+          if match = line.match(/^\s*if\s+(.+)$/)
+            current_condition = match[1].strip
+            next
+          end
+
+          if match = line.match(/^\s*elsif\s+(.+)$/)
+            # Save previous condition
+            if current_condition && !current_nodes.empty?
+              node = wrap_nodes_in_control(current_nodes, "if-branch")
+              conditions << {current_condition, node}
+            end
+            current_condition = match[1].strip
+            current_nodes = [] of Cogni::Workflow::WorkflowNode
+            next
+          end
+
+          if line == "else"
+            # Save previous condition
+            if current_condition && !current_nodes.empty?
+              node = wrap_nodes_in_control(current_nodes, "if-branch")
+              conditions << {current_condition, node}
+            end
+            current_condition = nil
+            current_nodes = [] of Cogni::Workflow::WorkflowNode
+            in_else = true
+            next
+          end
+
+          if line == "end"
+            # Save final condition or else block
+            if in_else && !current_nodes.empty?
+              otherwise_node = wrap_nodes_in_control(current_nodes, "else-branch")
+            elsif current_condition && !current_nodes.empty?
+              node = wrap_nodes_in_control(current_nodes, "if-branch")
+              conditions << {current_condition, node}
+            end
+            break
+          end
+
+          # Parse agent nodes inside conditional block
+          if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
+            agent_id = match[1]
+            tail = match[2]? || ""
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            input_schema = resolve_agent_schema(
+              params["input_schema"]?,
+              loaded,
+              kind: "input",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            output_schema = resolve_agent_schema(
+              params["output_schema"]?,
+              loaded,
+              kind: "output",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+
+            node = create_agent_node(
+              agent_id,
+              prompt: prompt,
+              model: model,
+              resume_schema: resume_schema,
+              voice_config: loaded.try(&.voice_config),
+              guardrails_config: loaded.try(&.guardrails_config),
+              input_schema: input_schema,
+              output_schema: output_schema,
+              default_model: ctx.workflow.default_model
+            )
+            current_nodes << node
+            next
+          end
+
+          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            current_nodes << create_run_node(
+              ref,
+              runtime: runtime,
+              env: env,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+              workflow_root: ctx.workflow_root
+            )
+          end
+        end
+
+        return if conditions.empty? && otherwise_node.nil?
+
+        conditional_node = Cogni::Workflow::WorkflowNode.new("if-#{start_line}", Cogni::Workflow::NodeKind::Control) do |node_ctx|
+          selected = conditions.find { |(condition, _)| evaluate_dsl_condition(condition, node_ctx) }.try(&.[1]) || otherwise_node
+          if selected
+            selected.execute(node_ctx)
+          else
+            Cogni::Workflow::WorkflowNodeResult.continue
+          end
+        end
+        ctx.workflow.step(conditional_node)
+      end
+
+      # Parse unless...else...end conditional block
+      private def parse_unless_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
+        i = start_line
+        condition = nil.as(String?)
+        unless_nodes = [] of Cogni::Workflow::WorkflowNode
+        else_nodes = [] of Cogni::Workflow::WorkflowNode
+        in_else = false
+
+        while i <= end_line
+          raw = ctx.lines[i]
+          line = raw.strip
+          i += 1
+
+          next if line.empty? || line.starts_with?("#")
+
+          if match = line.match(/^\s*unless\s+(.+)$/)
+            condition = match[1].strip
+            next
+          end
+
+          if line == "else"
+            in_else = true
+            next
+          end
+
+          if line == "end"
+            break
+          end
+
+          # Parse agent nodes inside unless block
+          if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
+            agent_id = match[1]
+            tail = match[2]? || ""
+            loaded = ctx.agent_index[agent_id]?
+            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            input_schema = resolve_agent_schema(
+              params["input_schema"]?,
+              loaded,
+              kind: "input",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            output_schema = resolve_agent_schema(
+              params["output_schema"]?,
+              loaded,
+              kind: "output",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+            resume_schema = resolve_agent_schema(
+              params["resume_schema"]?,
+              loaded,
+              kind: "resume",
+              workflow_file: ctx.workflow_file,
+              agent_id: agent_id
+            )
+
+            node = create_agent_node(
+              agent_id,
+              prompt: prompt,
+              model: model,
+              resume_schema: resume_schema,
+              voice_config: loaded.try(&.voice_config),
+              guardrails_config: loaded.try(&.guardrails_config),
+              input_schema: input_schema,
+              output_schema: output_schema,
+              default_model: ctx.workflow.default_model
+            )
+
+            if in_else
+              else_nodes << node
+            else
+              unless_nodes << node
+            end
+            next
+          end
+
+          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            ref = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
+            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+
+            node = create_run_node(
+              ref,
+              runtime: runtime,
+              env: env,
+              params: run_params,
+              input_schema: input_schema,
+              output_schema: output_schema,
+              workflow_root: ctx.workflow_root
+            )
+
+            if in_else
+              else_nodes << node
+            else
+              unless_nodes << node
+            end
+          end
+        end
+
+        return unless condition && !unless_nodes.empty?
+        condition_value = condition.not_nil!
+
+        unless_branch_node = wrap_nodes_in_control(unless_nodes, "unless-branch")
+        else_branch_node = else_nodes.empty? ? nil : wrap_nodes_in_control(else_nodes, "else-branch")
+        control_node = Cogni::Workflow::WorkflowNode.new("unless-#{start_line}", Cogni::Workflow::NodeKind::Control) do |node_ctx|
+          selected = evaluate_dsl_condition(condition_value, node_ctx) ? else_branch_node : unless_branch_node
+          if selected
+            selected.execute(node_ctx)
+          else
+            Cogni::Workflow::WorkflowNodeResult.continue
+          end
+        end
+        ctx.workflow.step(control_node)
+      end
+    end
+  end
+end
