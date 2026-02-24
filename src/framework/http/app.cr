@@ -610,8 +610,8 @@ module ACD
             raise "#{ctx.workflow_file}: invalid Workspace annotation syntax '#{workspace_annotation}'" unless match
 
             parsed = parse_workspace_annotation_params(match[1], ctx.workflow_file)
-            workspace_scope = parsed.delete("scope")?.try(&.as_s?)
-
+            workspace_scope_any = parsed.delete("scope")
+            workspace_scope = workspace_scope_any.try(&.as_s?)
             case workspace_scope
             when "workflow"
               ctx.workflow.workspace(parsed)
