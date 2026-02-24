@@ -4,7 +4,7 @@ hooks {
   ["pre-push"] {
     steps {
       ["max-file-lines"] {
-        check = "./bin/check-max-lines.sh"
+        check = "./scripts/check-max-lines.sh"
       }
     }
   }
