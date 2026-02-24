@@ -246,6 +246,7 @@ module Cogni
 
           result.action == NodeAction::Continue.to_s.downcase ? WorkflowNodeResult.continue(merged) : result
         end)
+      end
     end
   end
 end

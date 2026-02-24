@@ -141,13 +141,21 @@ mise run check-file-lines
 
 Code files are limited to `300` lines.
 
-- CI enforces this via `./bin/check-max-lines.sh`.
+- CI enforces this via `./scripts/check-max-lines.sh`.
 - Local `pre-push` is enforced via `jdx/hk` (`hk.pkl`).
 
 Install git hooks once:
 
 ```bash
 mise run hooks-install
+```
+
+## CI Syntax Check
+
+Run Crystal syntax/type smoke-check without generating a binary:
+
+```bash
+./scripts/check-crystal-syntax.sh
 ```
 
 ## Testing

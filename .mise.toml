@@ -48,4 +48,4 @@ run = "./build/cogni up --port 4111"
 run = "hk install"
 
 [tasks.check-file-lines]
-run = "./bin/check-max-lines.sh"
+run = "./scripts/check-max-lines.sh"

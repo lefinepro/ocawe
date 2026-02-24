@@ -33,4 +33,4 @@ Workflow-local assets take precedence for conflicting ids/paths.
 - Maximum: `300` lines per code file.
 - Enforcement:
   - Local `pre-push` hook via `jdx/hk` (`hk.pkl`).
-  - CI check via `bin/check-max-lines.sh`.
+  - CI check via `scripts/check-max-lines.sh`.
