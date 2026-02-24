@@ -11,6 +11,8 @@ module Cogni
       getter default_tools : Array(String)
       getter default_logger : AnyHash?
       getter node_loggers : Hash(String, AnyHash)
+      getter default_workspace : AnyHash?
+      getter node_workspaces : Hash(String, AnyHash)
 
       def initialize(@id : String, @description : String? = nil)
         @nodes = [] of WorkflowNode
@@ -20,6 +22,9 @@ module Cogni
         @default_tools = [] of String
         @default_logger = nil.as(AnyHash?)
         @node_loggers = {} of String => AnyHash
+        @default_workspace = nil.as(AnyHash?)
+        @node_workspaces = {} of String => AnyHash
+        @pending_node_workspace = nil.as(AnyHash?)
         @resource_scope_stack = [] of ResourceScope
       end
 
@@ -50,6 +55,30 @@ module Cogni
           node_logger.each { |k, v| merged[k] = v }
         end
         merged
+      end
+
+      def workspace(config : AnyHash) : self
+        ensure_not_committed!
+        @default_workspace = normalize_hash(config)
+        self
+      end
+
+      def workspace_next(config : AnyHash) : self
+        ensure_not_committed!
+        @pending_node_workspace = normalize_hash(config)
+        self
+      end
+
+      def apply_workspace_to_last_node(config : AnyHash) : self
+        ensure_not_committed!
+        raise "cannot apply workspace without nodes" if @nodes.empty?
+
+        node = @nodes.last
+        resolved = resolve_workspace_for_node(node, normalize_hash(config)) || ({} of String => JSON::Any)
+        raise "workspace config cannot be empty" if resolved.empty?
+        node.metadata["workspace"] = JSON.parse(resolved.to_json)
+        @node_workspaces[node.id] = resolved
+        self
       end
 
       # Unified resource defaults for model, skills, and tools
@@ -149,6 +178,7 @@ module Cogni
         env : AnyHash? = nil,
         workflow_root : String? = nil,
         params : AnyHash? = nil,
+        workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
@@ -160,6 +190,7 @@ module Cogni
           env: env,
           workflow_root: workflow_root,
           params: params,
+          workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
         ))
@@ -168,6 +199,7 @@ module Cogni
       def agent_codex(
         id : String = "agent_codex",
         params : AnyHash? = nil,
+        workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
@@ -176,6 +208,7 @@ module Cogni
           "agent_codex",
           id,
           params: params,
+          workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
         ))
@@ -184,6 +217,7 @@ module Cogni
       def agent_cliproxy(
         id : String = "agent_cliproxy",
         params : AnyHash? = nil,
+        workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
@@ -192,6 +226,7 @@ module Cogni
           "agent_cliproxy",
           id,
           params: params,
+          workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
         ))
@@ -200,6 +235,7 @@ module Cogni
       def agent_opencode(
         id : String = "agent_opencode",
         params : AnyHash? = nil,
+        workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
@@ -208,6 +244,7 @@ module Cogni
           "agent_opencode",
           id,
           params: params,
+          workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
         ))
@@ -237,6 +274,7 @@ module Cogni
         reason : String? = nil,
         node_kind_name : String? = nil,
         node_kind_parameters : AnyHash? = nil,
+        workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
@@ -259,6 +297,7 @@ module Cogni
           reason: reason,
           node_kind_name: node_kind_name,
           node_kind_parameters: node_kind_parameters,
+          workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
         ))
@@ -271,6 +310,7 @@ module Cogni
         resume_schema : Cogni::Workflows::DSL::Validator? = nil,
         voice_config : AnyHash? = nil,
         guardrails_config : AnyHash? = nil,
+        workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : self
@@ -283,6 +323,7 @@ module Cogni
           resume_schema: resume_schema,
           voice_config: voice_config,
           guardrails_config: guardrails_config,
+          workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
         ))
@@ -579,8 +620,36 @@ module Cogni
 
       private def append_node(node : WorkflowNode) : self
         ensure_not_committed!
+        resolved_workspace = resolve_workspace_for_node(node, @pending_node_workspace)
+        if resolved_workspace
+          node.metadata["workspace"] = JSON.parse(resolved_workspace.to_json)
+          @node_workspaces[node.id] = resolved_workspace
+        end
+        @pending_node_workspace = nil
         @nodes << node
         self
+      end
+
+      private def resolve_workspace_for_node(node : WorkflowNode, inline_override : AnyHash?) : AnyHash?
+        merged = ({} of String => JSON::Any)
+        if workflow_default = @default_workspace
+          workflow_default.each { |k, v| merged[k] = v }
+        end
+
+        if existing = node.metadata["workspace"]?.try(&.as_h?)
+          existing.each { |k, v| merged[k] = v }
+        end
+
+        if inline_override
+          inline_override.each { |k, v| merged[k] = v }
+        end
+
+        return nil if merged.empty?
+        Cogni::Workflow.workspace_registry.resolve(merged)
+      end
+
+      private def normalize_hash(hash : AnyHash) : AnyHash
+        JSON.parse(hash.to_json).as_h
       end
 
       private def ensure_not_committed!

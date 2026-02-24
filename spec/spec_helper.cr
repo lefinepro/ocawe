@@ -1,6 +1,7 @@
 require "json"
 require "spec"
 require "../src/cogni"
+require "./support/http_app_test_helpers"
 
 module SpecHelpers
   def self.json_any(value)

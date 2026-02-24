@@ -18,16 +18,28 @@ module Cogni
       end
     end
 
+    struct DatasetSettings
+      getter adapter : String
+      getter file_root : String
+
+      def initialize(@adapter : String = "memory", @file_root : String = "./.cogni/datasets")
+      end
+    end
+
     struct Settings
       getter workflows : WorkflowSettings
       getter node_kinds : NodeKindSettings
+      getter datasets : DatasetSettings
       getter functions : Hash(String, Cogni::Workflow::FunctionHandler)
+      getter workspace_bootstrap : Proc(Nil)?
       getter mcp : MCPSettings
 
       def initialize(
         @workflows : WorkflowSettings,
         @node_kinds : NodeKindSettings = NodeKindSettings.new,
+        @datasets : DatasetSettings = DatasetSettings.new,
         @functions : Hash(String, Cogni::Workflow::FunctionHandler) = {} of String => Cogni::Workflow::FunctionHandler,
+        @workspace_bootstrap : Proc(Nil)? = nil,
         @mcp : MCPSettings = MCPSettings.new
       )
       end
@@ -45,7 +57,9 @@ module Cogni
             fallback_workflows_root: "./src/workflows"
           ),
           node_kinds: NodeKindSettings.new,
+          datasets: DatasetSettings.new,
           functions: functions,
+          workspace_bootstrap: nil,
           mcp: MCPSettings.new,
         )
       end

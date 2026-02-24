@@ -297,7 +297,13 @@ module Cogni
             resume_data: resume_data,
           )
 
+          workspace = node.metadata["workspace"]?.try(&.as_h?)
+          Cogni::Workflow.workspace_registry.emit("before_node", ctx, workspace.not_nil!) if workspace
           result = node.execute(ctx)
+          if workspace
+            event_name = result.action == NodeAction::Fail.to_s.downcase ? "on_error" : "after_node"
+            Cogni::Workflow.workspace_registry.emit(event_name, ctx, workspace)
+          end
 
           case result.action
           when NodeAction::Continue.to_s.downcase
@@ -345,6 +351,9 @@ module Cogni
             "input" => input_payload,
             "context" => JSON.parse(context.to_json),
           } of String => JSON::Any
+          if workspace = node.metadata["workspace"]?.try(&.as_h?)
+            envelope["workspace"] = JSON.parse(workspace.to_json)
+          end
 
           if node.kind == NodeKind::Run || node.kind == NodeKind::Custom
             if params = node.metadata["params"]?

@@ -17,6 +17,7 @@ module Cogni
       Cogni::Workflow.reset_node_kind_registry!
       Cogni::Workflow.reset_resource_registry!
       Cogni::Workflow.reset_function_registry!
+      Cogni::Workflow.reset_workspace_registry!
     end
 
     def register_system_function(
@@ -54,6 +55,18 @@ module Cogni
       Cogni::Workflow.register_resource(name, &block)
     end
 
+    def workspace_schema(name : String, &block : AnyHash -> Nil) : Nil
+      Cogni::Workflow.workspace_registry.register_schema(name, &block)
+    end
+
+    def workspace_resolver(&block : AnyHash -> AnyHash) : Nil
+      Cogni::Workflow.workspace_registry.register_resolver(&block)
+    end
+
+    def workspace_hook(event : String, &block : NodeContext, AnyHash -> Nil) : Nil
+      Cogni::Workflow.workspace_registry.register_hook(event, &block)
+    end
+
     def build_node(
       workflow : WorkflowDefinition,
       type : String,
@@ -73,6 +86,7 @@ module Cogni
       reason : String? = nil,
       node_kind_name : String? = nil,
       node_kind_parameters : AnyHash? = nil,
+      workspace : AnyHash? = nil,
       input_schema : Validator? = nil,
       output_schema : Validator? = nil
     ) : WorkflowNode
@@ -85,6 +99,7 @@ module Cogni
         metadata["env"] = JSON.parse(env.to_json) if env
         metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
         metadata["params"] = JSON.parse(params.to_json) if params
+        metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
         executor = Cogni::Workflow::RunExecutor.new
         return WorkflowNode.new(id, NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
@@ -93,6 +108,7 @@ module Cogni
       when "agent"
         metadata = {} of String => JSON::Any
         metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema
+        metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
         return WorkflowNode.new(id, NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           user_prompt = build_agent_user_prompt(ctx)
@@ -189,6 +205,7 @@ module Cogni
       when "agent_cliproxy", "agent_codex", "agent_opencode"
         metadata = {} of String => JSON::Any
         metadata["params"] = JSON.parse(params.to_json) if params
+        metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
         return WorkflowNode.new(id, NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           WorkflowNodeResult.continue(call_function(normalized, ctx))
         end
@@ -199,6 +216,7 @@ module Cogni
           "node_kind" => JSON.parse(kind_name.to_json),
           "parameters" => JSON.parse(kind_params.to_json),
         } of String => JSON::Any
+        metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
         return WorkflowNode.new(id, NodeKind::Custom, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           raw = Cogni::Workflow.node_kind_registry.call(kind_name, ctx, kind_params)
@@ -287,6 +305,18 @@ module Cogni
       &block : Cogni::Workflow::NodeContext, Cogni::Workflow::AnyHash -> Cogni::Workflow::AnyHash
     ) : Nil
       Cogni::RegistryApi.resource(name, &block)
+    end
+
+    def workspace_schema(name : String, &block : Cogni::Workflow::AnyHash -> Nil) : Nil
+      Cogni::RegistryApi.workspace_schema(name, &block)
+    end
+
+    def workspace_resolver(&block : Cogni::Workflow::AnyHash -> Cogni::Workflow::AnyHash) : Nil
+      Cogni::RegistryApi.workspace_resolver(&block)
+    end
+
+    def workspace_hook(event : String, &block : Cogni::Workflow::NodeContext, Cogni::Workflow::AnyHash -> Nil) : Nil
+      Cogni::RegistryApi.workspace_hook(event, &block)
     end
   end
 end

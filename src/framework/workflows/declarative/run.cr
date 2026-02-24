@@ -1,6 +1,7 @@
 require "./types"
 require "./node_kind"
 require "./node"
+require "./workspace_registry"
 require "./function_registry"
 require "./resource_registry"
 require "./node_kind_registry"
