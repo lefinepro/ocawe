@@ -21,6 +21,17 @@ Examples live under `shards/examples` and are designed for direct reuse.
 - `src/custom_provider_example.cr`: custom provider creation macro + `AI::Client` injection
 - `src/control_flow_workflow_example.cr`: programmatic control-flow example (`parallel`, `then`, events) with explicit node schemas
 
+## Foundation Project: docker-git
+
+`shards/docker-git` is a standalone foundation project that uses `@[Workspace(...)]`
+as the main workflow contract and demonstrates workspace extension APIs.
+
+Run:
+
+```bash
+crystal run shards/docker-git/src/docker_git.cr -- --port 4222
+```
+
 ## Notes
 
 - Use `run "name"` for registered functions and `run "path_or_inline", runtime: { ... }` for external execution.

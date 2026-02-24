@@ -7,6 +7,8 @@ require "../skills/loader"
 require "../cognicore/version"
 require "../workflows/dsl/crystal_dsl"
 require "../workflows/declarative/run"
+require "../dataset/store"
+require "../dataset/service"
 require "../config/settings"
 require "../mcp/manager"
 require "./endpoints/health"
@@ -15,6 +17,7 @@ require "./endpoints/workflows"
 require "./endpoints/agents"
 require "./endpoints/tools"
 require "./endpoints/skills"
+require "./endpoints/datasets"
 require "./endpoints/runs"
 require "./endpoints/hitl"
 require "./endpoints/compat"
@@ -40,6 +43,7 @@ module ACD
         @skill_loader = Skills::Loader.new
         @workflow_engine = Cogni::Workflow::Engine.new
         @workflow_service = Cogni::Workflow::Service.new(@workflow_engine)
+        @dataset_service = Cogni::Dataset::Service.new(build_dataset_store(@settings.datasets))
         @mcp_manager = Cogni::MCP.manager
         @workflow_ids = [] of String
         @workflow_index = {} of String => NamedTuple(
@@ -49,6 +53,8 @@ module ACD
           skills: Array(String),
           tools: Array(String),
           default_model: String?,
+          logger: Cogni::Workflow::AnyHash?,
+          node_loggers: Hash(String, Cogni::Workflow::AnyHash),
         )
         @skills_index = {} of String => NamedTuple(
           id: String,
@@ -87,6 +93,7 @@ module ACD
         mount_agent_endpoints
         mount_tool_endpoints
         mount_skill_endpoints
+        mount_dataset_endpoints
         mount_run_endpoints
         mount_hitl_endpoints
         mount_compat_endpoints
@@ -118,6 +125,7 @@ module ACD
 
       private def reload_cache!
         bundles = @locator.list_workflows
+        @dataset_service.reset_dsl_sources!
         rebuilt_engine = Cogni::Workflow::Engine.new
         ids = [] of String
         index = {} of String => NamedTuple(
@@ -127,6 +135,8 @@ module ACD
           skills: Array(String),
           tools: Array(String),
           default_model: String?,
+          logger: Cogni::Workflow::AnyHash?,
+          node_loggers: Hash(String, Cogni::Workflow::AnyHash),
         )
         skills_index = {} of String => NamedTuple(
           id: String,
@@ -205,6 +215,8 @@ module ACD
             skills: loaded_skills.map(&.id),
             tools: tool_ids,
             default_model: definition.default_model,
+            logger: definition.default_logger,
+            node_loggers: definition.node_loggers,
           }
         end
 
@@ -263,6 +275,18 @@ module ACD
 
         config.functions.each do |name, handler|
           Cogni::RegistryApi.register_system_function(name, &handler)
+        end
+        config.workspace_bootstrap.try(&.call)
+      end
+
+      private def build_dataset_store(config : Cogni::Config::DatasetSettings) : Cogni::Dataset::Store::Base
+        case config.adapter.strip.downcase
+        when "", "memory"
+          Cogni::Dataset::Store::InMemory.new
+        when "file"
+          Cogni::Dataset::Store::File.new(config.file_root)
+        else
+          raise "unsupported dataset adapter: #{config.adapter}"
         end
       end
 
@@ -368,7 +392,8 @@ module ACD
           agent_index: agent_index,
           workflow_file: bundle.workflow_file,
           workflow_root: bundle.root_path,
-          lines: lines
+          lines: lines,
+          dataset_service: @dataset_service
         )
 
         parse_workflow_body(ctx, 0, lines.size)
@@ -398,6 +423,7 @@ module ACD
         getter workflow_file : String
         getter workflow_root : String
         getter lines : Array(String)
+        getter dataset_service : Cogni::Dataset::Service
         property last_agent_id : String?
 
         def initialize(
@@ -405,7 +431,8 @@ module ACD
           @agent_index : Hash(String, Agents::LoadedAgent),
           @workflow_file : String,
           @workflow_root : String,
-          @lines : Array(String)
+          @lines : Array(String),
+          @dataset_service : Cogni::Dataset::Service
         )
           @last_agent_id = nil
         end
@@ -421,7 +448,7 @@ module ACD
           "workflow", "do", "end", "struct", "class", "module",
           "include", "extend", "getter", "setter", "property",
           "alias", "enum", "lib", "fun", "require",
-          "agent", "skill", "run", "voice", "rag", "suspend",
+          "agent", "skill", "run", "voice", "rag", "suspend", "dataset",
           "input_type", "output_type", "input_validate", "output_validate",
           "parallel", "if", "elsif", "else", "while", "unless", "until", "loop",
         }
@@ -478,6 +505,14 @@ module ACD
           if line.match(/^\s*loop\s+do\s*$/)
             block_end = find_block_end(ctx.lines, i, end_line)
             parse_loop_block(ctx, i - 1, block_end)
+            i = block_end + 1
+            next
+          end
+
+          if match = line.match(/^\s*dataset\s+"([^"]+)"\s+do\s*$/)
+            dataset_id = match[1]
+            block_end = find_block_end(ctx.lines, i, end_line)
+            parse_dataset_block(ctx, dataset_id, i, block_end)
             i = block_end + 1
             next
           end
@@ -549,8 +584,44 @@ module ACD
             ctx.workflow.use(model: model, skill: skill, tool: tool)
             next
           end
+          if line.match(/^\s*@\[Workspace\(/)
+            workspace_annotation = line
+            unless workspace_annotation.includes?(")]")
+              while i < end_line
+                continuation = ctx.lines[i].strip
+                workspace_annotation = "#{workspace_annotation} #{continuation}"
+                i += 1
+                break if continuation.includes?(")]")
+              end
+            end
+
+            match = workspace_annotation.match(/^\s*@\[Workspace\((.*)\)\]\s*$/)
+            raise "#{ctx.workflow_file}: invalid Workspace annotation syntax '#{workspace_annotation}'" unless match
+
+            parsed = parse_workspace_annotation_params(match[1], ctx.workflow_file)
+            workspace_scope = parsed.delete("scope")?.try(&.as_s?)
+
+            case workspace_scope
+            when "workflow"
+              ctx.workflow.workspace(parsed)
+            when "node", "next"
+              ctx.workflow.workspace_next(parsed)
+            when nil
+              if ctx.workflow.nodes.empty?
+                ctx.workflow.workspace(parsed)
+              else
+                ctx.workflow.workspace_next(parsed)
+              end
+            else
+              raise "#{ctx.workflow_file}: Workspace scope must be workflow|node|next"
+            end
+            next
+          end
           if line.match(/^\s*@resources\s+/)
             raise "#{ctx.workflow_file}: `@resources` is not a Crystal annotation. Use `@[Resources(model: \"...\", skill: [...], tool: [...])]`."
+          end
+          if line.match(/^\s*docker\s+use\s+/)
+            raise "#{ctx.workflow_file}: `docker use` is deprecated. Use `@[Workspace(...)]`."
           end
           if line.match(/^\s*use\s+/)
             raise "#{ctx.workflow_file}: `use` keyword is deprecated. Use `@[Resources(model: \"...\", skill: [...], tool: [...])]`."
@@ -665,6 +736,72 @@ module ACD
           i += 1
         end
         i - 1
+      end
+
+      private def parse_dataset_block(ctx : WorkflowParserContext, dataset_id : String, start_line : Int32, end_line : Int32) : Nil
+        description = nil.as(String?)
+        schema_source = nil.as(String?)
+        seed_items = [] of Cogni::Dataset::AnyHash
+
+        i = start_line
+        while i < end_line
+          line = ctx.lines[i].strip
+          i += 1
+          next if line.empty? || line.starts_with?("#")
+
+          if match = line.match(/^\s*description\s+"([^"]+)"\s*$/)
+            description = match[1]
+            next
+          end
+
+          if line.match(/^\s*schema\s+/)
+            initial = line.sub(/^\s*schema\s+/, "")
+            collected = collect_balanced_expression(initial, ctx.lines, i, end_line, "dataset #{dataset_id} schema", ctx.workflow_file)
+            schema_source = collected[:value]
+            i = collected[:next_index]
+            next
+          end
+
+          if line.match(/^\s*item\s*\(/)
+            collected = collect_balanced_expression(line, ctx.lines, i, end_line, "dataset #{dataset_id} item", ctx.workflow_file)
+            expression = collected[:value]
+            i = collected[:next_index]
+            match = expression.match(/^\s*item\s*\((.*)\)\s*$/)
+            raise "#{ctx.workflow_file}: invalid dataset item syntax '#{expression}'" unless match
+            parsed = parse_runtime_literal(match[1], ctx.workflow_file)
+            hash = parsed.as_h?
+            raise "#{ctx.workflow_file}: dataset item must be an object" unless hash
+            seed_items << hash
+            next
+          end
+
+          if line.match(/^\s*items\s*\(/)
+            collected = collect_balanced_expression(line, ctx.lines, i, end_line, "dataset #{dataset_id} items", ctx.workflow_file)
+            expression = collected[:value]
+            i = collected[:next_index]
+            match = expression.match(/^\s*items\s*\((.*)\)\s*$/)
+            raise "#{ctx.workflow_file}: invalid dataset items syntax '#{expression}'" unless match
+            parsed = parse_runtime_literal(match[1], ctx.workflow_file)
+            array = parsed.as_a?
+            raise "#{ctx.workflow_file}: dataset items must be an array of objects" unless array
+            array.each do |entry|
+              hash = entry.as_h?
+              raise "#{ctx.workflow_file}: dataset items must be an array of objects" unless hash
+              seed_items << hash
+            end
+            next
+          end
+
+          raise "#{ctx.workflow_file}: unsupported dataset directive '#{line}'"
+        end
+
+        ctx.dataset_service.register_from_dsl(
+          dataset_id,
+          source_file: ctx.workflow_file,
+          description: description,
+          schema_source: schema_source,
+          seed_items: seed_items,
+        )
       end
 
       # Parse a parallel do...end block
@@ -1725,6 +1862,75 @@ module ACD
         parts
       end
 
+      private def collect_balanced_expression(
+        initial : String,
+        lines : Array(String),
+        next_line : Int32,
+        end_line : Int32,
+        context : String,
+        workflow_file : String
+      ) : NamedTuple(value: String, next_index: Int32)
+        expression = initial.strip
+        index = next_line
+        paren, brace, bracket = scan_structure_balance(expression)
+
+        while (paren > 0 || brace > 0 || bracket > 0) && index < end_line
+          continuation = lines[index].strip
+          expression = "#{expression} #{continuation}"
+          d_paren, d_brace, d_bracket = scan_structure_balance(continuation)
+          paren += d_paren
+          brace += d_brace
+          bracket += d_bracket
+          index += 1
+        end
+
+        if paren != 0 || brace != 0 || bracket != 0
+          raise "#{workflow_file}: #{context} has unbalanced expression"
+        end
+
+        {value: expression, next_index: index}
+      end
+
+      private def scan_structure_balance(value : String) : Tuple(Int32, Int32, Int32)
+        paren = 0
+        brace = 0
+        bracket = 0
+        in_string = false
+        escaped = false
+
+        value.each_char do |ch|
+          if in_string
+            if escaped
+              escaped = false
+            elsif ch == '\\'
+              escaped = true
+            elsif ch == '"'
+              in_string = false
+            end
+            next
+          end
+
+          case ch
+          when '"'
+            in_string = true
+          when '('
+            paren += 1
+          when ')'
+            paren -= 1
+          when '{'
+            brace += 1
+          when '}'
+            brace -= 1
+          when '['
+            bracket += 1
+          when ']'
+            bracket -= 1
+          end
+        end
+
+        {paren, brace, bracket}
+      end
+
       private def parse_optional_string(literal : String?) : String?
         return nil unless literal
         return nil unless literal.starts_with?('"') && literal.ends_with?('"') && literal.size >= 2
@@ -1775,6 +1981,10 @@ module ACD
         end
 
         {model: model, skill: skill, tool: tool}
+      end
+
+      private def parse_workspace_annotation_params(content : String, workflow_file : String) : Cogni::Workflow::AnyHash
+        parse_runtime_object("{#{content}}", workflow_file)
       end
 
       private def parse_string_array(content : String) : Array(String)

@@ -1,22 +1,6 @@
 require "./spec_helper"
 require "file_utils"
 
-class ACD::HTTP::App
-  def test_load_workflow_definition(
-    bundle : ACD::Discovery::WorkflowBundle,
-    loaded_agents : Array(ACD::Agents::LoadedAgent)
-  ) : Cogni::Workflow::WorkflowDefinition
-    load_workflow_definition(bundle, loaded_agents)
-  end
-
-  def test_wrap_nodes_in_control(
-    nodes : Array(Cogni::Workflow::WorkflowNode),
-    name : String
-  ) : Cogni::Workflow::WorkflowNode
-    wrap_nodes_in_control(nodes, name)
-  end
-end
-
 describe "ACD::HTTP::App control wrapper" do
   it "halts wrapped if-branch execution on first non-continue result" do
     app = ACD::HTTP::App.new(0)

@@ -63,6 +63,25 @@ end
 Parser is strict: unknown keys or invalid types raise workflow parse errors.
 Runtime currently supports console output transport; non-console transports are preserved in metadata and ignored at execution time.
 
+### `@[Workspace(...)]` Annotation
+
+`@[Workspace(...)]` configures workspace metadata for runtime nodes.
+
+- If used before the first node, it becomes workflow default workspace.
+- If used after nodes have started, it applies to the next node only.
+- Optional `scope: "workflow" | "node" | "next"` can force scope.
+- Custom keys are allowed and passed through; extension logic can validate/resolve via `Cogni::RegistryApi.workspace_*`.
+
+```crystal
+workflow "workspace-flow" do
+  @[Workspace(provider: "docker", repo: "org/repo", scope: "workflow")]
+  run "prepare"
+
+  @[Workspace(branch: "main")]
+  run "build"
+end
+```
+
 ## Execution Control
 
 ### Parallel Execution
@@ -159,6 +178,7 @@ end
 | `@[Resources(skill: "...")]` or `@[Resources(skill: [...])]` | Declare skills |
 | `@[Resources(tool: "...")]` or `@[Resources(tool: [...])]` | Declare tools |
 | `@[Logger(...)]` | Configure workflow/node logging metadata and runtime log level/shape |
+| `@[Workspace(...)]` | Configure workflow-level or next-node workspace metadata |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
 | `run "name"` | Execute registered function |

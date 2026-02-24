@@ -5,6 +5,9 @@ Use `Cogni::RegistryApi` for runtime extension registration.
 Supported API:
 - `Cogni::RegistryApi.node_kind`
 - `Cogni::RegistryApi.resource`
+- `Cogni::RegistryApi.workspace_schema`
+- `Cogni::RegistryApi.workspace_resolver`
+- `Cogni::RegistryApi.workspace_hook`
 - `Workflow#step(type, id, ...)` unified node entry
 
 ## Register NodeKind
@@ -36,6 +39,24 @@ end
 ```
 
 Resource handlers can be registered from NodeKind handlers and used through runtime resource flow.
+
+## Register workspace extensions
+
+```crystal
+Cogni::RegistryApi.workspace_schema("provider_required") do |workspace|
+  raise "workspace.provider required" unless workspace["provider"]?.try(&.as_s?)
+end
+
+Cogni::RegistryApi.workspace_resolver do |workspace|
+  resolved = JSON.parse(workspace.to_json).as_h
+  resolved["resolved"] = JSON.parse(true.to_json)
+  resolved
+end
+
+Cogni::RegistryApi.workspace_hook("before_node") do |ctx, workspace|
+  # Observe resolved workspace before node execution.
+end
+```
 
 ## Unified Node Entry
 
