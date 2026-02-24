@@ -290,6 +290,17 @@ module ACD
         end
       end
 
+      private def build_dataset_store(config : Cogni::Config::DatasetSettings) : Cogni::Dataset::Store::Base
+        case config.adapter.strip.downcase
+        when "", "memory"
+          Cogni::Dataset::Store::InMemory.new
+        when "file"
+          Cogni::Dataset::Store::File.new(config.file_root)
+        else
+          raise "unsupported dataset adapter: #{config.adapter}"
+        end
+      end
+
       private def current_fingerprint : String
         bundles = @locator.list_workflows
         file_count = 0
