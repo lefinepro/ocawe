@@ -9,11 +9,13 @@ module Cogni
     alias WorkflowNodeResult = Cogni::Workflow::WorkflowNodeResult
     alias NodeContext = Cogni::Workflow::NodeContext
     alias NodeKind = Cogni::Workflow::NodeKind
+
     def reset_all! : Nil
       Cogni::Workflow.reset_node_kind_registry!
       Cogni::Workflow.reset_resource_registry!
       Cogni::Workflow.reset_function_registry!
       Cogni::Workflow.reset_workspace_registry!
+      register_default_node_kinds!
     end
 
     def register_system_function(
@@ -89,7 +91,11 @@ module Cogni
       normalized = type.strip.downcase
 
       case normalized
-      when "run"
+      when "exec"
+        if runtime.nil? && !id.starts_with?("mcp:")
+          raise "exec requires runtime; internal Crystal functions must be node kinds"
+        end
+
         metadata = {} of String => JSON::Any
         metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
         metadata["env"] = JSON.parse(env.to_json) if env
@@ -97,9 +103,9 @@ module Cogni
         metadata["params"] = JSON.parse(params.to_json) if params
         metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
-        executor = Cogni::Workflow::RunExecutor.new
-        return WorkflowNode.new(id, NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(executor.run(id, ctx, runtime: runtime, env: env, workflow_root: workflow_root))
+        executor = Cogni::Workflow::ExecExecutor.new
+        return WorkflowNode.new(id, NodeKind::Exec, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          WorkflowNodeResult.continue(executor.exec(id, ctx, runtime: runtime, env: env, workflow_root: workflow_root))
         end
       when "agent"
         metadata = {} of String => JSON::Any
@@ -199,12 +205,17 @@ module Cogni
           })
         end
       when "agent_cliproxy", "agent_codex", "agent_opencode"
-        metadata = {} of String => JSON::Any
-        metadata["params"] = JSON.parse(params.to_json) if params
-        metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
-        return WorkflowNode.new(id, NodeKind::Run, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(call_function(normalized, ctx))
-        end
+        kind_params = params || ({} of String => JSON::Any)
+        return build_node(
+          workflow,
+          "node_kind",
+          id,
+          node_kind_name: normalized,
+          node_kind_parameters: kind_params,
+          workspace: workspace,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        )
       when "node_kind"
         kind_name = node_kind_name || id
         kind_params = node_kind_parameters || ({} of String => JSON::Any)
@@ -227,6 +238,18 @@ module Cogni
         end
       else
         raise "unknown registry node type: #{type}"
+      end
+    end
+
+    private def register_default_node_kinds! : Nil
+      node_kind("agent_codex") do |ctx, _parameters|
+        call_function("agent_codex", ctx)
+      end
+      node_kind("agent_cliproxy") do |ctx, _parameters|
+        call_function("agent_cliproxy", ctx)
+      end
+      node_kind("agent_opencode") do |ctx, _parameters|
+        call_function("agent_opencode", ctx)
       end
     end
   end

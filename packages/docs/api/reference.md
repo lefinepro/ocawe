@@ -31,8 +31,8 @@ Key endpoints:
 
 Notes:
 - Voice and RAG are DSL workflow nodes (`voice`, `rag`), not dedicated startup auto-registered tools.
-- Workflow executable nodes use `run "ref"` in DSL and `run(...)` in workflow API.
-- `run` can execute registered functions (`run "name"`), script paths (`run "tools/x.sh", runtime: {...}`), or inline script text (`run "console.log(...)", runtime: {...}`).
+- Workflow executable nodes use `exec "ref", runtime: {...}` for external tools. Internal Crystal logic is represented as internal function-name nodes (for example `agent_codex` or `project_healthcheck`).
+- `exec` executes external scripts or MCP tools. Registered Crystal functions are consumed via internal function-name nodes.
 - Function registration supports aliases and indexed collision resolution (`name:1`, `name:2`, ...). Base-name resolution prioritizes system functions.
 - RAG DSL supports Mastra-compatible request keys: `vectorStoreName`, `indexName`, `queryText`, `topK`, `filter`, `operation`.
 - Agent frontmatter supports `voice` and `guardrails`; guardrail violations fail workflow runs with `422` (`workflow_error` envelope).

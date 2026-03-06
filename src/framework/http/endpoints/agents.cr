@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       FALLBACK_CHAT_MODEL = "cliproxyapi/qwen3-coder-plus"
 

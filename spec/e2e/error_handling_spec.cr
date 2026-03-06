@@ -108,11 +108,11 @@ describe "E2E: Error Handling Cases" do
     end
   end
 
-  describe "run/function errors" do
-    it "fails on unknown run function reference" do
+  describe "exec/node kind errors" do
+    it "fails on unknown node kind reference" do
       workflow = Cogni::Workflow.create_workflow("e2e-run-invalid", "Invalid run")
       workflow
-        .run("missing-function")
+        .step(Cogni::NodeKind.new("missing-function"), id: "missing-function")
         .commit
 
       engine = Cogni::Workflow::Engine.new
@@ -120,18 +120,21 @@ describe "E2E: Error Handling Cases" do
 
       result = engine.create_run("e2e-run-invalid").start
       result.status.should eq("failed")
-      result.error.not_nil!.message.includes?("unknown function").should eq(true)
+      result.error.not_nil!.message.includes?("unknown node kind").should eq(true)
     end
 
-    it "handles run function that raises error" do
+    it "handles node kind function that raises error" do
       Cogni::Workflow.register_function("e2e_error_tool") do |_ctx|
         raise "Intentional run error"
         {} of String => JSON::Any
       end
+      Cogni::RegistryApi.node_kind("e2e_error_tool") do |ctx, _parameters|
+        Cogni::RegistryApi.call_function("e2e_error_tool", ctx)
+      end
 
       workflow = Cogni::Workflow.create_workflow("e2e-run-error", "Run error test")
       workflow
-        .run("e2e_error_tool")
+        .step(Cogni::NodeKind.new("e2e_error_tool"), id: "e2e_error_tool")
         .commit
 
       engine = Cogni::Workflow::Engine.new

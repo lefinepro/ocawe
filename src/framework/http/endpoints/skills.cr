@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_skill_endpoints
         get "/v1/skills" do |env|

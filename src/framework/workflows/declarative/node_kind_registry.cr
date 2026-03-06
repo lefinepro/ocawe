@@ -22,8 +22,16 @@ module Cogni
         def call(kind : String, ctx : NodeContext, parameters : AnyHash) : NodeKindResult
           key = normalize(kind)
           handler = @handlers[key]?
-          raise "unknown node kind: #{kind}" unless handler
-          handler.call(ctx, parameters)
+          return handler.call(ctx, parameters) if handler
+
+          # Backward-compatible fallback: treat bare workflow calls
+          # (`function_name`) as function-registry handlers when there
+          # is no explicit node kind registered.
+          if Cogni::Workflow.function_registry.registered?(kind)
+            return Cogni::Workflow.function_registry.call(kind, ctx)
+          end
+
+          raise "unknown node kind: #{kind}"
         end
 
         private def normalize(kind : String) : String

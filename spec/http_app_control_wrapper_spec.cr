@@ -1,9 +1,9 @@
 require "./spec_helper"
 require "file_utils"
 
-describe "ACD::HTTP::App control wrapper" do
+describe "ACD::Kemal::App control wrapper" do
   it "halts wrapped if-branch execution on first non-continue result" do
-    app = ACD::HTTP::App.new(0)
+    app = ACD::Kemal::App.new(0)
     executed = false
 
     first = Cogni::Workflow::WorkflowNode.new("first", Cogni::Workflow::NodeKind::Control) do |_ctx|
@@ -45,7 +45,7 @@ struct ExampleInput
 end
 
 workflow "types_before_workflow" do
-  run "tool_extract_source_archive_content"
+  exec "tool_extract_source_archive_content", runtime: {shell: "bash"}
 end
 WORKFLOW
 
@@ -58,11 +58,11 @@ WORKFLOW
         source_root_type: "preferred",
       )
 
-      app = ACD::HTTP::App.new(0)
+      app = ACD::Kemal::App.new(0)
       definition = app.test_load_workflow_definition(bundle, [] of ACD::Agents::LoadedAgent)
       definition.id.should eq("types_before_workflow")
       definition.nodes.size.should eq(1)
-      definition.nodes.first.kind.should eq(Cogni::Workflow::NodeKind::Run)
+      definition.nodes.first.kind.should eq(Cogni::Workflow::NodeKind::Exec)
     ensure
       FileUtils.rm_rf(tmp_dir)
     end

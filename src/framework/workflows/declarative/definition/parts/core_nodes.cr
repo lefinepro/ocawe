@@ -1,7 +1,7 @@
 module Cogni
   module Workflow
     class WorkflowDefinition
-      def run(
+      def exec(
         ref : String,
         runtime : AnyHash? = nil,
         env : AnyHash? = nil,
@@ -13,7 +13,7 @@ module Cogni
       ) : self
         append_node(Cogni::RegistryApi.build_node(
           self,
-          "run",
+          "exec",
           ref,
           runtime: runtime,
           env: env,
@@ -34,9 +34,10 @@ module Cogni
       ) : self
         append_node(Cogni::RegistryApi.build_node(
           self,
-          "agent_codex",
+          "node_kind",
           id,
-          params: params,
+          node_kind_name: "agent_codex",
+          node_kind_parameters: params,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -52,9 +53,10 @@ module Cogni
       ) : self
         append_node(Cogni::RegistryApi.build_node(
           self,
-          "agent_cliproxy",
+          "node_kind",
           id,
-          params: params,
+          node_kind_name: "agent_cliproxy",
+          node_kind_parameters: params,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -70,9 +72,10 @@ module Cogni
       ) : self
         append_node(Cogni::RegistryApi.build_node(
           self,
-          "agent_opencode",
+          "node_kind",
           id,
-          params: params,
+          node_kind_name: "agent_opencode",
+          node_kind_parameters: params,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,

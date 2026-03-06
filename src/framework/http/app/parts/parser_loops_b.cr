@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def parse_loop_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
         loop_nodes = [] of Cogni::Workflow::WorkflowNode
@@ -57,24 +57,41 @@ module ACD
             next
           end
 
-          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+          if match = line.match(/^\s*exec\s+"([^"]+)"(.*)$/)
             ref = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            params = parse_line_params(tail, ctx.workflow_file, "exec #{ref}")
             runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
             env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
-            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
+            exec_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
 
-            loop_nodes << create_run_node(
+            loop_nodes << create_exec_node(
               ref,
               runtime: runtime,
               env: env,
-              params: run_params,
+              params: exec_params,
               input_schema: input_schema,
               output_schema: output_schema,
               workflow_root: ctx.workflow_root
+            )
+            next
+          end
+
+          if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
+            node_kind = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "node #{node_kind}")
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "node #{node_kind}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "node #{node_kind}", "output")
+            node_params = extract_named_args(params, Set{"input_schema", "output_schema"}, ctx.workflow_file)
+            loop_nodes << create_internal_node(
+              node_kind,
+              node_kind,
+              params: node_params,
+              input_schema: input_schema,
+              output_schema: output_schema
             )
           end
         end
@@ -133,7 +150,7 @@ module ACD
         )
       end
 
-      private def create_run_node(
+      private def create_exec_node(
         ref : String,
         runtime : Cogni::Workflow::AnyHash? = nil,
         env : Cogni::Workflow::AnyHash? = nil,
@@ -142,15 +159,36 @@ module ACD
         output_schema : Cogni::Workflows::DSL::Validator? = nil,
         workflow_root : String? = nil
       ) : Cogni::Workflow::WorkflowNode
+        raise "exec requires runtime for non-mcp refs: #{ref}" if runtime.nil? && !ref.starts_with?("mcp:")
+
         builder = Cogni::Workflow::WorkflowDefinition.new("__registry_builder__")
         Cogni::RegistryApi.build_node(
           builder,
-          "run",
+          "exec",
           ref,
           runtime: runtime,
           env: env,
           params: params,
           workflow_root: workflow_root,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        )
+      end
+
+      private def create_internal_node(
+        node_kind : String,
+        id : String,
+        params : Cogni::Workflow::AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
+      ) : Cogni::Workflow::WorkflowNode
+        builder = Cogni::Workflow::WorkflowDefinition.new("__registry_builder__")
+        Cogni::RegistryApi.build_node(
+          builder,
+          "node_kind",
+          id,
+          node_kind_name: node_kind,
+          node_kind_parameters: params || ({} of String => JSON::Any),
           input_schema: input_schema,
           output_schema: output_schema,
         )

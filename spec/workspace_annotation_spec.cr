@@ -20,11 +20,11 @@ describe "workspace annotation and registry integration" do
         "provider" => json_str("docker"),
         "repo" => json_str("org/repo"),
       })
-      .run("noop")
+      .agent_codex("noop")
       .workspace_next({
         "branch" => json_str("main"),
       })
-      .run("noop2")
+      .agent_codex("noop2")
       .commit
 
     first_workspace = workflow.nodes[0].metadata["workspace"].as_h
@@ -57,6 +57,9 @@ describe "workspace annotation and registry integration" do
         "workspace_branch" => workspace["branch"]? || json_str("none"),
       }
     end
+    Cogni::RegistryApi.node_kind(fn_name) do |ctx, _parameters|
+      Cogni::RegistryApi.call_function(fn_name, ctx)
+    end
 
     workflow = Cogni::Workflow.create_workflow("workspace-run")
     workflow
@@ -64,7 +67,7 @@ describe "workspace annotation and registry integration" do
         "provider" => json_str("docker"),
         "branch" => json_str("main"),
       })
-      .run(fn_name)
+      .step(Cogni::NodeKind.new(fn_name), id: fn_name)
       .commit
 
     engine = Cogni::Workflow::Engine.new
@@ -87,10 +90,10 @@ describe "workspace annotation and registry integration" do
       File.write(workflow_file, <<-WORKFLOW)
 workflow "workspace-annotation" do
   @[Workspace(provider: "docker", repo: "org/repo", scope: "workflow")]
-  run "noop"
+  exec "noop", runtime: {shell: "bash"}
 
   @[Workspace(branch: "main")]
-  run "noop2"
+  exec "noop2", runtime: {shell: "bash"}
 end
 WORKFLOW
 
@@ -102,7 +105,7 @@ WORKFLOW
         skills_dir: File.join(tmp_dir, "skills"),
         source_root_type: "preferred",
       )
-      app = ACD::HTTP::App.new(0)
+      app = ACD::Kemal::App.new(0)
       definition = app.test_load_workflow_definition(bundle, [] of ACD::Agents::LoadedAgent)
 
       definition.nodes.size.should eq(2)
@@ -113,7 +116,7 @@ WORKFLOW
       File.write(deprecated_file, <<-WORKFLOW)
 workflow "workspace-deprecated" do
   docker use "workspace-a"
-  run "noop"
+  exec "noop", runtime: {shell: "bash"}
 end
 WORKFLOW
 

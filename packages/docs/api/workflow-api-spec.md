@@ -16,7 +16,7 @@ Supported workflow methods:
 - `use(model:, skill:, tool:)`
 - `agent(...)`
 - `skill(...)`
-- `run(ref, runtime: nil, env: nil, params: nil, input_schema: nil, output_schema: nil)`
+- `exec(ref, runtime: nil, env: nil, params: nil, input_schema: nil, output_schema: nil)`
 - `voice(...)`
 - `rag(...)`
 - `suspend(...)`
@@ -36,16 +36,17 @@ Removed methods:
 - `tool(...)`
 - `fn(...)`
 
-## `run` Resolution
+## `exec` Resolution
 
-`run(ref, ...)` resolves execution as follows:
+`exec(ref, ...)` resolves execution as follows:
 
 1. If `runtime` is provided: execute external script.
   - `ref` is treated as a script path when found under workflow root/global tools root.
   - otherwise `ref` is treated as inline script text.
-2. If `runtime` is omitted: resolve `ref` as registered function name/alias/indexed name.
+2. If `runtime` is omitted, only `mcp:` refs are allowed.
+3. Internal Crystal logic in workflows must be represented as internal function-name nodes (for example `agent_codex`).
 
-External run stdout must be a JSON object.
+External exec stdout must be a JSON object.
 
 ## Function Registration and Collision Rules
 
@@ -57,13 +58,13 @@ Function registry is case-insensitive normalized.
 
 ## Input Envelope Semantics
 
-For `agent` and `run` nodes:
+For `agent`, `exec`, and internal function-name (`custom`) nodes:
 
 ```json
 {"input": <previous-step-output-or-init>, "context": {"workflow_id": "...", "run_id": "...", "state": {...}}}
 ```
 
-If `params` metadata exists for `run`, those fields are merged at top-level of the run input envelope.
+If `params` metadata exists for `exec` or internal function-name nodes, those fields are merged at top-level of the input envelope.
 
 ## Loop Semantics
 

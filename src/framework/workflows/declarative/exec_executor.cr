@@ -8,11 +8,8 @@ module Cogni
           return exec_mcp_tool(ref, ctx)
         end
 
-        if runtime
-          exec_external(ref, ctx, runtime, env, workflow_root)
-        else
-          Cogni::RegistryApi.call_function(ref, ctx)
-        end
+        raise "exec requires runtime for non-mcp refs: #{ref}" unless runtime
+        exec_external(ref, ctx, runtime, env, workflow_root)
       end
 
       private def exec_mcp_tool(ref : String, ctx : NodeContext) : AnyHash

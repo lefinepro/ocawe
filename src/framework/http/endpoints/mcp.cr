@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_mcp_endpoints
         get "/v1/mcp/servers" do |env|

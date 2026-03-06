@@ -2,7 +2,7 @@ module Cogni
   module Workflow
     class WorkflowRunHandle
       private def node_input_for(node : WorkflowNode, previous_node_id : String?, previous_node_result : AnyHash?) : AnyHash
-        if node.kind == NodeKind::Agent || node.kind == NodeKind::Run || node.kind == NodeKind::Custom
+        if node.kind == NodeKind::Agent || node.kind == NodeKind::Exec || node.kind == NodeKind::Custom
           input_payload = previous_node_result ? JSON.parse(previous_node_result.to_json) : JSON.parse(@init_data.to_json)
           context = {
             "workflow_id" => JSON.parse(@workflow_id.to_json),
@@ -19,7 +19,7 @@ module Cogni
             envelope["workspace"] = JSON.parse(workspace.to_json)
           end
 
-          if node.kind == NodeKind::Run || node.kind == NodeKind::Custom
+          if node.kind == NodeKind::Exec || node.kind == NodeKind::Custom
             if params = node.metadata["params"]?
               if flat = params.as_h?
                 flat.each do |k, v|

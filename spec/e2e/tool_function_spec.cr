@@ -1,15 +1,14 @@
 require "./e2e_spec_helper"
 
-# E2E Tests for Run and Functions
-#
-# Tests run and function workflow patterns:
-# - Registered function execution via run
-# - Function registration and chaining
-# - Run context handling
+private def map_function_to_node_kind(name : String) : Nil
+  Cogni::RegistryApi.node_kind(name) do |ctx, _parameters|
+    Cogni::RegistryApi.call_function(name, ctx)
+  end
+end
 
-describe "E2E: Run and Functions" do
-  describe "run execution" do
-    it "executes registered functions via run" do
+describe "E2E: Node Kinds and Functions" do
+  describe "node kind execution" do
+    it "executes registered functions via node kinds" do
       Cogni::Workflow.register_function("e2e_test_tool") do |ctx|
         input = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
         {
@@ -18,10 +17,11 @@ describe "E2E: Run and Functions" do
           "status"     => json_any("success"),
         }
       end
+      map_function_to_node_kind("e2e_test_tool")
 
       workflow = Cogni::Workflow.create_workflow("e2e-run", "Run test")
       workflow
-        .run("e2e_test_tool")
+        .step(Cogni::NodeKind.new("e2e_test_tool"), id: "e2e_test_tool")
         .commit
 
       engine = Cogni::Workflow::Engine.new
@@ -34,7 +34,7 @@ describe "E2E: Run and Functions" do
       result.state.not_nil!["input_task"].as_s.should eq("validate-tool")
     end
 
-    it "executes run with complex input" do
+    it "executes node kind with complex input" do
       Cogni::Workflow.register_function("complex_input_tool") do |ctx|
         input = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
         data = input["data"]?.try(&.as_h?) || {} of String => JSON::Any
@@ -44,10 +44,11 @@ describe "E2E: Run and Functions" do
           "status"          => json_any("processed"),
         }
       end
+      map_function_to_node_kind("complex_input_tool")
 
       workflow = Cogni::Workflow.create_workflow("complex-run-test", "Complex run test")
       workflow
-        .run("complex_input_tool")
+        .step(Cogni::NodeKind.new("complex_input_tool"), id: "complex_input_tool")
         .commit
 
       engine = Cogni::Workflow::Engine.new
@@ -79,11 +80,13 @@ describe "E2E: Run and Functions" do
           content: "received:#{received_content}",
         )
       end
+      map_function_to_node_kind("e2e_fn_step_one")
+      map_function_to_node_kind("e2e_fn_step_two")
 
       workflow = Cogni::Workflow.create_workflow("e2e-run-chain", "Function chaining")
       workflow
-        .run("e2e_fn_step_one")
-        .run("e2e_fn_step_two")
+        .step(Cogni::NodeKind.new("e2e_fn_step_one"), id: "e2e_fn_step_one")
+        .step(Cogni::NodeKind.new("e2e_fn_step_two"), id: "e2e_fn_step_two")
         .commit
 
       engine = Cogni::Workflow::Engine.new
@@ -117,12 +120,15 @@ describe "E2E: Run and Functions" do
           content: "#{prev}->C",
         )
       end
+      map_function_to_node_kind("chain_fn_a")
+      map_function_to_node_kind("chain_fn_b")
+      map_function_to_node_kind("chain_fn_c")
 
       workflow = Cogni::Workflow.create_workflow("multi-fn-chain", "Multi function chain")
       workflow
-        .run("chain_fn_a")
-        .run("chain_fn_b")
-        .run("chain_fn_c")
+        .step(Cogni::NodeKind.new("chain_fn_a"), id: "chain_fn_a")
+        .step(Cogni::NodeKind.new("chain_fn_b"), id: "chain_fn_b")
+        .step(Cogni::NodeKind.new("chain_fn_c"), id: "chain_fn_c")
         .commit
 
       engine = Cogni::Workflow::Engine.new
@@ -134,8 +140,8 @@ describe "E2E: Run and Functions" do
     end
   end
 
-  describe "run with workflow context" do
-    it "accesses workflow state in run function" do
+  describe "node kind with workflow context" do
+    it "accesses workflow state in node kind function" do
       Cogni::Workflow.register_function("state_aware_tool") do |ctx|
         prev_value = ctx.state["setup_value"]?.try(&.as_s?) || "none"
         {
@@ -143,13 +149,14 @@ describe "E2E: Run and Functions" do
           "processed"  => json_any(true),
         }
       end
+      map_function_to_node_kind("state_aware_tool")
 
       workflow = Cogni::Workflow.create_workflow("state-run-test", "State run test")
       workflow
         .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
           Cogni::Workflow::WorkflowNodeResult.continue({"setup_value" => json_str("initialized")})
         end)
-        .run("state_aware_tool")
+        .step(Cogni::NodeKind.new("state_aware_tool"), id: "state_aware_tool")
         .commit
 
       engine = Cogni::Workflow::Engine.new

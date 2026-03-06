@@ -103,17 +103,20 @@ describe Cogni::Workflow::Engine do
     resumed.status.should eq("success")
   end
 
-  it "runs function nodes through run API" do
+  it "runs internal function nodes through node kind API" do
     Cogni::Workflow.register_function("create-sandbox") do |_ctx|
       {
         "tool" => json_any("create-sandbox"),
         "status" => json_any("ok"),
       }
     end
+    Cogni::RegistryApi.node_kind("create-sandbox") do |ctx, _parameters|
+      Cogni::RegistryApi.call_function("create-sandbox", ctx)
+    end
 
     workflow = Cogni::Workflow.create_workflow("wf-runs", "run dispatch")
     workflow
-      .run("create-sandbox")
+      .step(Cogni::NodeKind.new("create-sandbox"), id: "create-sandbox")
       .commit
 
     engine = Cogni::Workflow::Engine.new
@@ -125,7 +128,7 @@ describe Cogni::Workflow::Engine do
     result.state.not_nil!["tool"].as_s.should eq("create-sandbox")
   end
 
-  it "supports function aliases when names collide with system functions" do
+  it "supports internal node kinds mapped to function aliases" do
     Cogni::Workflow.register_system_function("conflict-fn") do |_ctx|
       {"which" => json_any("system")}
     end
@@ -133,11 +136,17 @@ describe Cogni::Workflow::Engine do
       {"which" => json_any("user")}
     end
     user_alias.should eq("conflict-fn:1")
+    Cogni::RegistryApi.node_kind("conflict-fn") do |ctx, _parameters|
+      Cogni::RegistryApi.call_function("conflict-fn", ctx)
+    end
+    Cogni::RegistryApi.node_kind("conflict-fn:1") do |ctx, _parameters|
+      Cogni::RegistryApi.call_function("conflict-fn:1", ctx)
+    end
 
     workflow = Cogni::Workflow.create_workflow("wf-fn-collision", "function collision")
     workflow
-      .run("conflict-fn")
-      .run("conflict-fn:1")
+      .step(Cogni::NodeKind.new("conflict-fn"), id: "conflict-fn")
+      .step(Cogni::NodeKind.new("conflict-fn:1"), id: "conflict-fn:1")
       .commit
 
     engine = Cogni::Workflow::Engine.new

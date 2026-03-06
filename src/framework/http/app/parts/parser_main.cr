@@ -1,8 +1,8 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def parse_workflow_body(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Int32
-        run_pattern = /^\s*run\s+"([^"]+)"(.*)$/
+        exec_pattern = /^\s*exec\s+"([^"]+)"(.*)$/
         skill_pattern = /^\s*skill\s+"([^"]+)"(?:\s*,\s*agent:\s*"([^"]+)")?/
         rag_pattern = /^\s*rag\s+"([^"]+)"(?:\s*,\s*config:\s*(\{.*\}))?/
         suspend_pattern = /^\s*suspend\s+"([^"]+)"(.*)$/
@@ -10,7 +10,7 @@ module ACD
           "workflow", "do", "end", "struct", "class", "module",
           "include", "extend", "getter", "setter", "property",
           "alias", "enum", "lib", "fun", "require",
-          "agent", "skill", "run", "voice", "rag", "suspend", "dataset",
+          "agent", "skill", "exec", "voice", "rag", "suspend", "dataset",
           "input_type", "output_type", "input_validate", "output_validate",
           "parallel", "if", "elsif", "else", "while", "unless", "until", "loop",
         }
@@ -85,7 +85,7 @@ module ACD
             loaded = ctx.agent_index[agent_id]?
             params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
             if params["custom_fn"]?
-              raise "#{ctx.workflow_file}: `custom_fn` is not supported for agent. Register a function and call it via `run \"function_name\"`."
+              raise "#{ctx.workflow_file}: `custom_fn` is not supported for agent. Use internal node calls (`function_name`)."
             end
             model = parse_optional_string(params["model"]?) || loaded.try(&.model)
             prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
@@ -210,29 +210,33 @@ module ACD
             ctx.workflow.rag(match[1], config: config)
             next
           end
-          if match = line.match(run_pattern)
+          if match = line.match(exec_pattern)
             ref = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            params = parse_line_params(tail, ctx.workflow_file, "exec #{ref}")
             runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
             env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
-            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
+            exec_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
 
-            ctx.workflow.run(
+            raise "#{ctx.workflow_file}: exec #{ref} requires runtime for non-mcp refs" if runtime.nil? && !ref.starts_with?("mcp:")
+            ctx.workflow.exec(
               ref,
               runtime: runtime,
               env: env,
               workflow_root: ctx.workflow_root,
-              params: run_params,
+              params: exec_params,
               input_schema: input_schema,
               output_schema: output_schema,
             )
             next
           end
           if line.starts_with?("tool ")
-            raise "#{ctx.workflow_file}: `tool` is removed from DSL. Use `run \"function_or_path_or_inline\"` with optional `runtime` and `env`."
+            raise "#{ctx.workflow_file}: `tool` is removed from DSL. Use `exec \"path_or_inline\", runtime: {...}` for external tools, or internal node calls (`function_name`)."
+          end
+          if line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+            raise "#{ctx.workflow_file}: `run` is removed. Use `exec` for external tools and internal node calls (`function_name`)."
           end
           if match = line.match(suspend_pattern)
             suspend_id = match[1]
@@ -254,7 +258,20 @@ module ACD
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             fn_name = match[1]
             next if reserved_keywords.includes?(fn_name)
-            raise "#{ctx.workflow_file}: bare function syntax is removed. Use `run \"#{fn_name}\"`."
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "node #{fn_name}")
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "node #{fn_name}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "node #{fn_name}", "output")
+            node_params = extract_named_args(params, Set{"input_schema", "output_schema"}, ctx.workflow_file)
+            ctx.workflow.step(
+              "node_kind",
+              fn_name,
+              node_kind_name: fn_name,
+              node_kind_parameters: node_params || ({} of String => JSON::Any),
+              input_schema: input_schema,
+              output_schema: output_schema,
+            )
+            next
           end
         end
 
