@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def find_block_end(lines : Array(String), start_line : Int32, max_line : Int32) : Int32
         depth = 1
@@ -164,23 +164,40 @@ module ACD
             next
           end
 
-          if match = line.match(/^\s*run\s+"([^"]+)"(.*)$/)
+          if match = line.match(/^\s*exec\s+"([^"]+)"(.*)$/)
             ref = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "run #{ref}")
+            params = parse_line_params(tail, ctx.workflow_file, "exec #{ref}")
             runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
             env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "run #{ref}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "run #{ref}", "output")
-            run_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
-            parallel_nodes << create_run_node(
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
+            exec_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            parallel_nodes << create_exec_node(
               ref,
               runtime: runtime,
               env: env,
-              params: run_params,
+              params: exec_params,
               input_schema: input_schema,
               output_schema: output_schema,
               workflow_root: ctx.workflow_root
+            )
+            next
+          end
+
+          if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
+            node_kind = match[1]
+            tail = match[2]? || ""
+            params = parse_line_params(tail, ctx.workflow_file, "node #{node_kind}")
+            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "node #{node_kind}", "input")
+            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "node #{node_kind}", "output")
+            node_params = extract_named_args(params, Set{"input_schema", "output_schema"}, ctx.workflow_file)
+            parallel_nodes << create_internal_node(
+              node_kind,
+              node_kind,
+              params: node_params,
+              input_schema: input_schema,
+              output_schema: output_schema
             )
             next
           end

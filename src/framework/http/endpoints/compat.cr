@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_compat_endpoints
         post "/v1/responses" { |env| not_implemented(env, "responses endpoint pending Kemal integration") }

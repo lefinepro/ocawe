@@ -56,7 +56,7 @@ workflow "logger-example" do
   @[Logger(level: "debug")]
   agent "analyzer"
 
-  run "my-tool"
+  my_tool
 end
 ```
 
@@ -75,10 +75,10 @@ Runtime currently supports console output transport; non-console transports are 
 ```crystal
 workflow "workspace-flow" do
   @[Workspace(provider: "docker", repo: "org/repo", scope: "workflow")]
-  run "prepare"
+  exec "prepare", runtime: {shell: "bash"}
 
   @[Workspace(branch: "main")]
-  run "build"
+  exec "build", runtime: {shell: "bash"}
 end
 ```
 
@@ -181,8 +181,8 @@ end
 | `@[Workspace(...)]` | Configure workflow-level or next-node workspace metadata |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
-| `run "name"` | Execute registered function |
-| `run "path_or_inline", runtime: {...}, env: {...}` | Execute script path or inline script |
+| `function_name` | Execute internal node kind (registered via `NodeKind::new(function_name)`) |
+| `exec "path_or_inline", runtime: {...}, env: {...}` | Execute external script path or inline script |
 | `voice "..."` | Voice node |
 | `rag "..."` | RAG node |
 | `suspend "..."` | Suspend-and-resume node (`reason`, `resume_schema`) |
@@ -220,21 +220,23 @@ agent "workflow-agent",
 
 `schema_ref("input")` / `schema_ref("output")` / `schema_ref("resume")` resolve markdown `crystal` schema blocks from the agent file.
 
-For `agent` and `run` function nodes, runtime passes a chained input envelope:
+For `agent`, `exec`, and internal function-name nodes, runtime passes a chained input envelope:
 
 ```json
 {"input": <previous step output>, "context": {"workflow_id": "...", "run_id": "...", "state": {...}}}
 ```
 
-If run params are defined in DSL, runtime includes these params as flat fields in the run input envelope.
+If exec/internal-node params are defined in DSL, runtime includes these params as flat fields in the input envelope.
+
+For internal function-name nodes, `input_schema` and `output_schema` are reserved schema keys; all other named args are passed through as node parameters.
 
 ## Function Resolution and Aliases
 
-`run "name"` resolves functions by normalized case-insensitive key.
+`function_name` resolves node-kind handlers by normalized case-insensitive key.
 
 - If a system and user function share the same name, system keeps base name.
 - User collisions are indexed as `name:1`, `name:2`, ...
-- You can add explicit aliases during registration and call them directly via `run "alias"`.
+- You can add explicit aliases during registration and call them via `alias` node invocation syntax.
 
 Register runtime extensions through `Cogni::RegistryApi`:
 - `Cogni::RegistryApi.node_kind`

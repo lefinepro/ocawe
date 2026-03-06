@@ -34,7 +34,7 @@ crystal run shards/docker-git/src/docker_git.cr -- --port 4222
 
 ## Notes
 
-- Use `run "name"` for registered functions and `run "path_or_inline", runtime: { ... }` for external execution.
+- Use `function_name` (for example `agent_codex`) for internal Crystal handlers, and `exec "path_or_inline", runtime: {...}` for external execution.
 - Function names are not restricted to snake_case. Collision rule: system function keeps base name, user function gets `:1`, `:2`, etc., with optional explicit aliases.
 - Programmatic API exposes `Cogni::Workflow` and can be extended by inheritance.
 - Programmatic workflow DSL (`WorkflowDefinition` API) supports `parallel`, `then`, and event nodes (`wait_for_event`, `send_event`).

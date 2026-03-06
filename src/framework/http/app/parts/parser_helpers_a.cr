@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def wrap_nodes_in_control(nodes : Array(Cogni::Workflow::WorkflowNode), name : String) : Cogni::Workflow::WorkflowNode
         Cogni::Workflow::WorkflowNode.new(name, Cogni::Workflow::NodeKind::Control) do |ctx|

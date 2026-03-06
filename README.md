@@ -23,6 +23,13 @@ Build CLI:
 crystal build src/cli/main.cr -o build/cogni
 ```
 
+`cogni build/dev/up` now auto-bootstrap Crystal when `crystal` is missing by downloading a platform archive into `./.tools/crystal`.
+You can control bootstrap with env vars:
+- `COGNI_CRYSTAL_VERSION` (default `1.13.3`)
+- `COGNI_CRYSTAL_BASE_URL` (default Crystal GitHub releases URL)
+- `COGNI_CRYSTAL_FORCE_BOOTSTRAP=1` (force local toolchain even if system `crystal` exists)
+- `COGNI_CRYSTAL_VERBOSE=1` (print toolchain version during bootstrap)
+
 Run runtime server:
 
 ```bash
@@ -70,6 +77,17 @@ Primary APIs:
 Compatibility:
 - `POST /v1/chat/completions`
 
+Federation APIs:
+- `POST /federation/follows`
+- `GET /federation/following`
+- `POST /federation/inbox` (S2S inbound activities, signature-verified)
+- `GET /federation/outbox`
+- `POST /federation/outbox`
+
+S2S ticket ingestion mode:
+- follow remote actor and poll remote `outbox` for `Create(Ticket)` activities
+- require HTTP Signatures for federation requests
+
 ## Project Structure
 
 ```text
@@ -104,6 +122,71 @@ Run all examples:
 ## Crystal Configuration
 
 Framework configuration is defined in Crystal code via `src/framework/config/settings.cr`.
+
+Federation memory defaults:
+- `adapter: "memory"`
+- `sqlite_path: "./.cogni/federation.sqlite3"`
+
+Alternative config format (RCL) is also supported.
+Static config file `./cogni.config.rcl` is auto-loaded when present.
+
+Example `config.rcl`:
+
+```rcl
+api = "lefine"
+
+federation do
+  adapter = "memory"
+  sqlite_path = "./.cogni/federation.sqlite3"
+end
+
+datasets do
+  adapter = "file"
+  file_root = "./.cogni/datasets"
+end
+
+workflows do
+  preferred_workflows_root = "./src/workflows"
+  fallback_workflows_root = "./src/workflows"
+end
+```
+
+Default static file in repo: `cogni.config.rcl`.
+
+`api` supports string or array of strings:
+- `"lefine"`: ForgeFed-only mode (mounts only `/federation/*` plus health/docs)
+- `"mastra"`: default runtime APIs (`/v1/*`)
+- `["mastra", "lefine"]`: enable both groups
+
+Federation persistence modes:
+- `adapter = "memory"` (default): state in process memory (reset on restart)
+- `adapter = "sqlite"` (optional): persistent state in SQLite file via `sqlite_path`
+
+Function handler selection via RCL:
+- `functions.enabled = ["agent_opencode", "agent_codex", "agent_cliproxy"]`
+- handlers are optional and available only if external shard `cogni-agent-functions` is connected by the host app
+
+Optional external handler install in host `shard.yml`:
+
+```yaml
+dependencies:
+  cogni:
+    path: ../cogni
+  cogni-agent-functions:
+    path: ../cogni/shards/agent-functions
+```
+
+Run with RCL:
+
+```bash
+./build/cogni up --port 4111 --config-rcl ./config.rcl
+```
+
+Or with env:
+
+```bash
+COGNI_CONFIG_RCL=./config.rcl ./build/cogni up --port 4111
+```
 
 Template example:
 - `shards/examples/config-example/app_config.cr`

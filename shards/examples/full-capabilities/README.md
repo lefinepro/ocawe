@@ -5,9 +5,9 @@ Runnable example for all active `.acd.cr` directives used by the current loader:
 - `@[Resources(model: ...)]` (unified resource management for model/skills/tools)
 - `agent` (+ `schema_ref("input"|"output")`)
 - `skill`
-- `snake_case` function nodes with explicit schemas (`agent_opencode`, `agent_codex`, `agent_cliproxy`)
-- `run "function_name"` (registered function execution)
-- `run "path_or_inline", runtime: { ... }` (external script execution)
+- internal node directives with explicit schemas (`agent_opencode`, `agent_codex`, `agent_cliproxy`)
+- `function_name` (registered internal node execution)
+- `exec "path_or_inline", runtime: { ... }` (external script execution)
 - `voice`
 - `rag`
 - `suspend`

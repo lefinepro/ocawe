@@ -21,7 +21,7 @@ module Cogni
     enum NodeKind
       Agent
       Skill
-      Run
+      Exec
       Suspend
       Voice
       Rag

@@ -26,10 +26,52 @@ module Cogni
       end
     end
 
+    struct FederationSettings
+      getter adapter : String
+      getter sqlite_path : String
+      getter s2s_poll_interval_seconds : Int32
+      getter s2s_http_timeout_seconds : Int32
+      getter signatures_required : Bool
+      getter local_actor : String
+      getter local_key_id : String
+      getter local_private_key_path : String
+
+      def initialize(
+        @adapter : String = "memory",
+        @sqlite_path : String = "./.cogni/federation.sqlite3",
+        @s2s_poll_interval_seconds : Int32 = 15,
+        @s2s_http_timeout_seconds : Int32 = 10,
+        @signatures_required : Bool = true,
+        @local_actor : String = "http://127.0.0.1:4111/actors/server",
+        @local_key_id : String = "http://127.0.0.1:4111/actors/server#main-key",
+        @local_private_key_path : String = "./.cogni/federation-private.pem"
+      )
+      end
+    end
+
+    struct ApiSettings
+      getter enabled : Array(String)
+
+      def initialize(enabled : Array(String) = ["mastra"] of String)
+        normalized = enabled.map(&.strip.downcase).reject(&.empty?).uniq
+        @enabled = normalized.empty? ? ["mastra"] of String : normalized
+      end
+
+      def enable?(name : String) : Bool
+        @enabled.includes?(name.strip.downcase)
+      end
+
+      def lefine_only? : Bool
+        @enabled.size == 1 && @enabled[0] == "lefine"
+      end
+    end
+
     struct Settings
       getter workflows : WorkflowSettings
       getter node_kinds : NodeKindSettings
       getter datasets : DatasetSettings
+      getter federation : FederationSettings
+      getter api : ApiSettings
       getter functions : Hash(String, Cogni::Workflow::FunctionHandler)
       getter workspace_bootstrap : Proc(Nil)?
       getter mcp : MCPSettings
@@ -38,6 +80,8 @@ module Cogni
         @workflows : WorkflowSettings,
         @node_kinds : NodeKindSettings = NodeKindSettings.new,
         @datasets : DatasetSettings = DatasetSettings.new,
+        @federation : FederationSettings = FederationSettings.new,
+        @api : ApiSettings = ApiSettings.new,
         @functions : Hash(String, Cogni::Workflow::FunctionHandler) = {} of String => Cogni::Workflow::FunctionHandler,
         @workspace_bootstrap : Proc(Nil)? = nil,
         @mcp : MCPSettings = MCPSettings.new
@@ -45,11 +89,7 @@ module Cogni
       end
 
       def self.default : Settings
-        functions = {
-          "agent_opencode" => DefaultFunctionHandlers.agent_opencode,
-          "agent_codex" => DefaultFunctionHandlers.agent_codex,
-          "agent_cliproxy" => DefaultFunctionHandlers.agent_cliproxy,
-        } of String => Cogni::Workflow::FunctionHandler
+        functions = DefaultFunctionHandlers.available
 
         new(
           workflows: WorkflowSettings.new(
@@ -58,6 +98,8 @@ module Cogni
           ),
           node_kinds: NodeKindSettings.new,
           datasets: DatasetSettings.new,
+          federation: FederationSettings.new,
+          api: ApiSettings.new,
           functions: functions,
           workspace_bootstrap: nil,
           mcp: MCPSettings.new,

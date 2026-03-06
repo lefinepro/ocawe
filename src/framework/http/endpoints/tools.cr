@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_tool_endpoints
         get "/v1/tools" do |env|

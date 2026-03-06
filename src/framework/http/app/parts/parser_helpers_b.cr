@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def parse_runtime_literal(literal : String, workflow_file : String) : JSON::Any
         stripped = literal.strip

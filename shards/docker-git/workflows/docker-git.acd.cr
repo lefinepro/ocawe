@@ -9,14 +9,14 @@ workflow "docker-git" do
     secrets: {github_token: "secret://github/token"},
     scope: "workflow"
   )]
-  run "docker_workspace_create"
+  docker_workspace_create
 
   @[Workspace(branch: "main", mode: "clone", scope: "node")]
-  run "docker_workspace_clone"
+  docker_workspace_clone
 
   @[Workspace(mode: "open", mcp_playwright: true, scope: "node")]
-  run "docker_workspace_open"
+  docker_workspace_open
 
   @[Workspace(mode: "delete", scope: "node")]
-  run "docker_workspace_delete"
+  docker_workspace_delete
 end

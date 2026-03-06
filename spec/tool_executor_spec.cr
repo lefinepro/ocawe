@@ -2,16 +2,9 @@ require "./spec_helper"
 require "file_utils"
 
 
-describe Cogni::Workflow::RunExecutor do
-  it "runs registered functions directly by name" do
-    Cogni::Workflow.register_function("create_sandbox") do |_ctx|
-      {
-        "tool" => json_any("create-sandbox"),
-        "status" => json_any("ok"),
-      }
-    end
-
-    executor = Cogni::Workflow::RunExecutor.new
+describe Cogni::Workflow::ExecExecutor do
+  it "rejects non-mcp refs without runtime" do
+    executor = Cogni::Workflow::ExecExecutor.new
     ctx = Cogni::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_1",
@@ -20,13 +13,13 @@ describe Cogni::Workflow::RunExecutor do
       state: {} of String => JSON::Any,
     )
 
-    result = executor.run("create_sandbox", ctx)
-    result["tool"].as_s.should eq("create-sandbox")
-    result["status"].as_s.should eq("ok")
+    expect_raises(Exception, /exec requires runtime/) do
+      executor.exec("create_sandbox", ctx)
+    end
   end
 
   it "runs external scripts with runtime metadata" do
-    executor = Cogni::Workflow::RunExecutor.new
+    executor = Cogni::Workflow::ExecExecutor.new
     ctx = Cogni::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_2",
@@ -36,7 +29,7 @@ describe Cogni::Workflow::RunExecutor do
     )
     runtime = {"shell" => json_any("bash")} of String => JSON::Any
 
-    result = executor.run(
+    result = executor.exec(
       "tools/create-sandbox.sh",
       ctx,
       runtime: runtime,
@@ -52,7 +45,7 @@ describe Cogni::Workflow::RunExecutor do
     File.write(script, "#!/usr/bin/env bash\nset -euo pipefail\necho not-json\n")
     File.chmod(script, 0o755)
 
-    executor = Cogni::Workflow::RunExecutor.new
+    executor = Cogni::Workflow::ExecExecutor.new
     ctx = Cogni::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_3",
@@ -63,31 +56,22 @@ describe Cogni::Workflow::RunExecutor do
 
     runtime = {"shell" => json_any("bash")} of String => JSON::Any
     expect_raises(Exception, /invalid JSON/) do
-      executor.run("invalid.sh", ctx, runtime: runtime, workflow_root: dir)
+      executor.exec("invalid.sh", ctx, runtime: runtime, workflow_root: dir)
     end
   end
 
-  it "runs registered ai generate function by direct name" do
-    Cogni::Workflow.register_function("ai_generate_text") do |ctx|
-      {
-        "tool" => json_any("ai-generate-text"),
-        "model" => json_any(ctx.state["workflow_model"]?.try(&.as_s?) || "missing"),
-        "text" => json_any(ctx.state["task"]?.try(&.as_s?) || ""),
-      }
-    end
-
-    executor = Cogni::Workflow::RunExecutor.new
+  it "fails when runtime object is empty" do
+    executor = Cogni::Workflow::ExecExecutor.new
     ctx = Cogni::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_4",
-      node_id: "ai_generate_text",
+      node_id: "external-empty-runtime",
       input_data: {"task" => json_any("hello")},
-      state: {"task" => json_any("hello"), "workflow_model" => json_any("cliproxyapi/qwen3-coder-plus")},
+      state: {"task" => json_any("hello")},
     )
 
-    result = executor.run("ai_generate_text", ctx)
-    result["tool"].as_s.should eq("ai-generate-text")
-    result["model"].as_s.should eq("cliproxyapi/qwen3-coder-plus")
-    result["text"].as_s.includes?("hello").should eq(true)
+    expect_raises(Exception, /runtime object must contain at least one key/) do
+      executor.exec("tools/create-sandbox.sh", ctx, runtime: ({} of String => JSON::Any), workflow_root: "./shards/examples/sandbox-example")
+    end
   end
 end

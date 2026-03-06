@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_docs_endpoints
         get "/openapi.json" do |env|

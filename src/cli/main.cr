@@ -5,12 +5,14 @@ module CogniCore
   module CLI
     class Main
       private DEFAULT_PORT = 4111
-      private RUNTIME_ENTRY = "../../src/cogni.cr"
-      private RUNTIME_BIN = "../../build/cognicore"
-      private DEV_RUNTIME_BIN = "../../build/cognicore-dev"
-      private WORKFLOWS_PATH = "../../src/workflows"
-      private AGENTS_PATH = "../../agents"
-      private TOOLS_PATH = "../../tools"
+      private PROJECT_ROOT = File.expand_path("../..", __DIR__)
+      private RUNTIME_ENTRY = "#{PROJECT_ROOT}/src/cogni.cr"
+      private RUNTIME_BIN = "#{PROJECT_ROOT}/build/cognicore"
+      private DEV_RUNTIME_BIN = "#{PROJECT_ROOT}/build/cognicore-dev"
+      private WORKFLOWS_PATH = "#{PROJECT_ROOT}/src/workflows"
+      private AGENTS_PATH = "#{PROJECT_ROOT}/agents"
+      private TOOLS_PATH = "#{PROJECT_ROOT}/tools"
+      private BOOTSTRAP_CRYSTAL = "#{PROJECT_ROOT}/scripts/bootstrap-crystal.sh"
 
       def run(args : Array(String)) : Nil
         command = args.shift?
@@ -39,9 +41,9 @@ module CogniCore
           Commands:
             build [--release] [--output PATH]
                 Build runtime binary.
-            dev [--port N] [--interval SECONDS]
+            dev [--port N] [--interval SECONDS] [--config-rcl PATH]
                 Watch workflows/global agents/tools, recompile and restart runtime in dev mode.
-            up [--port N] [--workflows-root PATH] [--fallback-workflows-root PATH]
+            up [--port N] [--workflows-root PATH] [--fallback-workflows-root PATH] [--config-rcl PATH]
                 Auto-build release runtime binary and start server.
             -v, --version
                 Print version.
@@ -66,17 +68,19 @@ module CogniCore
       private def dev(args : Array(String)) : Nil
         port = DEFAULT_PORT
         interval = 1.0
+        config_rcl = nil.as(String?)
 
         OptionParser.parse(args) do |parser|
           parser.on("--port PORT", "Runtime port") { |v| port = v.to_i }
           parser.on("--interval SECONDS", "Watch interval") { |v| interval = v.to_f }
+          parser.on("--config-rcl PATH", "RCL config path") { |v| config_rcl = v }
         end
 
         tracked = [WORKFLOWS_PATH, AGENTS_PATH, TOOLS_PATH]
         fingerprint = compute_fingerprint(tracked)
 
         abort_unless_success(build_runtime(release: false, output: DEV_RUNTIME_BIN))
-        runtime = spawn_cmd("#{DEV_RUNTIME_BIN} --port #{port}")
+        runtime = spawn_cmd(dev_runtime_cmd(port, config_rcl))
 
         Signal::INT.trap do
           terminate(runtime)
@@ -91,7 +95,7 @@ module CogniCore
           puts "[cogni] changes detected, recompiling runtime..."
           if build_runtime(release: false, output: DEV_RUNTIME_BIN)
             terminate(runtime)
-            runtime = spawn_cmd("#{DEV_RUNTIME_BIN} --port #{port}")
+            runtime = spawn_cmd(dev_runtime_cmd(port, config_rcl))
             fingerprint = current
             puts "[cogni] runtime restarted"
           else
@@ -104,11 +108,13 @@ module CogniCore
         port = DEFAULT_PORT
         workflows_root = nil.as(String?)
         fallback_workflows_root = nil.as(String?)
+        config_rcl = nil.as(String?)
 
         OptionParser.parse(args) do |parser|
           parser.on("--port PORT", "Runtime port") { |v| port = v.to_i }
           parser.on("--workflows-root PATH", "Preferred workflows root path") { |v| workflows_root = v }
           parser.on("--fallback-workflows-root PATH", "Fallback workflows root path") { |v| fallback_workflows_root = v }
+          parser.on("--config-rcl PATH", "RCL config path") { |v| config_rcl = v }
         end
 
         abort_unless_success(build_runtime(release: true, output: RUNTIME_BIN))
@@ -118,6 +124,7 @@ module CogniCore
           io << " --port #{port}"
           io << " --workflows-root=#{workflows_root}" if workflows_root
           io << " --fallback-workflows-root=#{fallback_workflows_root}" if fallback_workflows_root
+          io << " --config-rcl=#{config_rcl}" if config_rcl
         end
 
         runtime = spawn_cmd(command)
@@ -130,7 +137,15 @@ module CogniCore
 
       private def build_runtime(release : Bool, output : String) : Bool
         release_flag = release ? "--release " : ""
-        run_cmd("mkdir -p ../../build && crystal build #{RUNTIME_ENTRY} #{release_flag}-o #{output}")
+        run_cmd("mkdir -p #{PROJECT_ROOT}/build && bash #{BOOTSTRAP_CRYSTAL} && crystal build #{RUNTIME_ENTRY} #{release_flag}-o #{output}")
+      end
+
+      private def dev_runtime_cmd(port : Int32, config_rcl : String?) : String
+        String.build do |io|
+          io << DEV_RUNTIME_BIN
+          io << " --port #{port}"
+          io << " --config-rcl=#{config_rcl}" if config_rcl
+        end
       end
 
       private def compute_fingerprint(paths : Array(String)) : String

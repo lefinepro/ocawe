@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_trigger_endpoints
         post "/v1/triggers/workflows/:id" do |env|

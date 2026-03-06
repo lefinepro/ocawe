@@ -17,11 +17,17 @@ describe Cogni::Workflow::Engine do
         content: "seen:#{received}",
       )
     end
+    Cogni::RegistryApi.node_kind("agent_step_one") do |ctx, _parameters|
+      Cogni::RegistryApi.call_function("agent_step_one", ctx)
+    end
+    Cogni::RegistryApi.node_kind("agent_step_two") do |ctx, _parameters|
+      Cogni::RegistryApi.call_function("agent_step_two", ctx)
+    end
 
     workflow = Cogni::Workflow.create_workflow("wf-run-chain", "function chaining")
     workflow
-      .run("agent_step_one")
-      .run("agent_step_two")
+      .step(Cogni::NodeKind.new("agent_step_one"), id: "agent_step_one")
+      .step(Cogni::NodeKind.new("agent_step_two"), id: "agent_step_two")
       .commit
 
     engine = Cogni::Workflow::Engine.new

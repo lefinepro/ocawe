@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_hitl_endpoints
         get "/v1/hitl/runs" do |env|

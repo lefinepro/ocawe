@@ -18,13 +18,13 @@ describe "workspace bootstrap in settings" do
       end,
     )
 
-    app = ACD::HTTP::App.new(0, settings: settings)
+    app = ACD::Kemal::App.new(0, settings: settings)
     app.test_register_configured_functions!
 
     workflow = Cogni::Workflow.create_workflow("workspace-bootstrap")
     workflow
       .workspace({"provider" => json_str("docker")})
-      .run("noop")
+      .agent_codex("noop")
       .commit
 
     workspace = workflow.nodes.first.metadata["workspace"].as_h

@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_dataset_endpoints
         get "/v1/datasets" do |env|
@@ -106,9 +106,8 @@ module ACD
             elsif item = body["item"]?.try(&.as_h?)
               raw_items << item
             else
-              hash = body.as_h?
-              if hash && !hash.empty?
-                raw_items << hash
+              if !body.empty?
+                raw_items << body
               end
             end
 

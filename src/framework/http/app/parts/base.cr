@@ -1,7 +1,8 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       RELOAD_INTERVAL_SECONDS = 2.0
+      @federation_store : Cogni::Federation::Store::Base
 
       def initialize(
         @port : Int32,
@@ -18,6 +19,7 @@ module ACD
         @workflow_engine = Cogni::Workflow::Engine.new
         @workflow_service = Cogni::Workflow::Service.new(@workflow_engine)
         @dataset_service = Cogni::Dataset::Service.new(build_dataset_store(@settings.datasets))
+        @federation_store = build_federation_store(@settings.federation)
         @mcp_manager = Cogni::MCP.manager
         @workflow_ids = [] of String
         @workflow_index = {} of String => NamedTuple(
@@ -60,22 +62,26 @@ module ACD
         reload_cache!
         start_reload_watcher
 
-        Kemal.config.port = @port
+        ::Kemal.config.port = @port
         mount_health_endpoints
         mount_docs_endpoints
-        mount_workflow_endpoints
-        mount_agent_endpoints
-        mount_tool_endpoints
-        mount_skill_endpoints
-        mount_dataset_endpoints
-        mount_run_endpoints
-        mount_hitl_endpoints
-        mount_compat_endpoints
-        mount_trigger_endpoints
-        mount_mcp_endpoints
-        mount_mcp_server_endpoint
+        unless @settings.api.lefine_only?
+          mount_workflow_endpoints
+          mount_agent_endpoints
+          mount_tool_endpoints
+          mount_skill_endpoints
+          mount_dataset_endpoints
+          mount_run_endpoints
+          mount_hitl_endpoints
+          mount_compat_endpoints
+          mount_trigger_endpoints
+          mount_mcp_endpoints
+          mount_mcp_server_endpoint
+        end
+        mount_federation_endpoints if @settings.api.enable?("lefine")
+        start_federation_poller if @settings.api.enable?("lefine")
 
-        Kemal.run
+        ::Kemal.run
       end
 
       private def start_reload_watcher
@@ -145,7 +151,7 @@ module ACD
           tool_ids = [] of String
           definition.default_tools.each { |id| tool_ids << id unless tool_ids.includes?(id) }
           definition.nodes.each do |node|
-            next unless node.kind == Cogni::Workflow::NodeKind::Run
+            next unless node.kind == Cogni::Workflow::NodeKind::Exec
             next unless node.metadata["runtime"]?
             tool_ids << node.id unless tool_ids.includes?(node.id)
           end
@@ -264,14 +270,70 @@ module ACD
         end
       end
 
-      private def build_dataset_store(config : Cogni::Config::DatasetSettings) : Cogni::Dataset::Store::Base
+      private def build_federation_store(config : Cogni::Config::FederationSettings) : Cogni::Federation::Store::Base
         case config.adapter.strip.downcase
         when "", "memory"
-          Cogni::Dataset::Store::InMemory.new
-        when "file"
-          Cogni::Dataset::Store::File.new(config.file_root)
+          Cogni::Federation::Store::Memory.new
+        when "sqlite"
+          Cogni::Federation::Store::SQLite.new(config.sqlite_path)
         else
-          raise "unsupported dataset adapter: #{config.adapter}"
+          raise "unsupported federation adapter: #{config.adapter}"
+        end
+      end
+
+      private def start_federation_poller : Nil
+        interval = @settings.federation.s2s_poll_interval_seconds
+        return if interval <= 0
+
+        spawn do
+          loop do
+            begin
+              run_federation_poll_cycle
+            rescue ex
+              STDERR.puts "[federation] poll cycle failed: #{ex.message}"
+            end
+            sleep interval
+          end
+        end
+      end
+
+      private def run_federation_poll_cycle : Nil
+        follows = @federation_store.list_following
+        follows.each do |follow|
+          remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
+          status = follow["status"]?.try(&.as_s?).to_s
+          remote_outbox = follow["remote_outbox"]?.try(&.as_s?).to_s
+          next if remote_actor.empty? || remote_outbox.empty?
+          next unless status == "active" || status == "pending"
+
+          begin
+            outbox_doc = fetch_jsonld_activity(remote_outbox, follow)
+            activities = extract_activities_from_outbox(outbox_doc)
+            newest_id = ""
+            activities.each do |activity|
+              activity_id = activity["id"]?.try(&.as_s?).to_s
+              next if activity_id.empty?
+              newest_id = activity_id if newest_id.empty?
+              next if @federation_store.activity_seen?(remote_actor, activity_id)
+              processed = process_polled_activity(follow, activity)
+              if processed
+                @federation_store.mark_activity_seen(remote_actor, activity_id, Time.utc.to_s("%Y-%m-%dT%H:%M:%SZ"))
+              end
+            end
+
+            @federation_store.upsert_follow_sync_state(
+              remote_actor: remote_actor,
+              cursor: newest_id.empty? ? nil : newest_id,
+              last_polled_at: Time.utc.to_s("%Y-%m-%dT%H:%M:%SZ"),
+              error: ""
+            )
+          rescue ex
+            @federation_store.upsert_follow_sync_state(
+              remote_actor: remote_actor,
+              last_polled_at: Time.utc.to_s("%Y-%m-%dT%H:%M:%SZ"),
+              error: ex.message || ex.class.name
+            )
+          end
         end
       end
 

@@ -1,0 +1,16 @@
+api = "mastra"
+
+federation do
+  adapter = "memory"
+  sqlite_path = "./.cogni/federation.sqlite3"
+end
+
+datasets do
+  adapter = "memory"
+  file_root = "./.cogni/datasets"
+end
+
+workflows do
+  preferred_workflows_root = "./src/workflows"
+  fallback_workflows_root = "./src/workflows"
+end

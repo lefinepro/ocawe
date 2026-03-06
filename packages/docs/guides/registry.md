@@ -66,13 +66,13 @@ All built-in and external nodes can be created through one entry:
 workflow = Cogni::Workflow.build("unified")
 workflow
   .step("agent", "assistant", prompt: "You are helpful")
-  .step("run", "function_name")
+  .step("exec", "tools/tool.sh", runtime: {"shell" => JSON.parse("bash".to_json)})
   .step("skill", "translator", agent_id: "assistant")
   .step("voice", "voice-step", config: {"voice_operator" => JSON.parse("openai".to_json)})
   .step("rag", "rag-step", config: {"operation" => JSON.parse("query".to_json)})
   .step("suspend", "approval", reason: "human approval")
-  .step("agent_cliproxy", "ext-cliproxy", params: {"model" => JSON.parse("qwen3-coder-plus".to_json)})
-  .step("agent_codex", "ext-codex")
-  .step("agent_opencode", "ext-opencode")
+  .step("node_kind", "ext-cliproxy", node_kind_name: "agent_cliproxy", node_kind_parameters: {"model" => JSON.parse("qwen3-coder-plus".to_json)})
+  .step("node_kind", "ext-codex", node_kind_name: "agent_codex")
+  .step("node_kind", "ext-opencode", node_kind_name: "agent_opencode")
   .commit
 ```

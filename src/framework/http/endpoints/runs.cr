@@ -1,5 +1,5 @@
 module ACD
-  module HTTP
+  module Kemal
     class App
       private def mount_run_endpoints
         post "/v1/workflows/:workflowId/runs" do |env|
