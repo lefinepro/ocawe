@@ -56,7 +56,6 @@ module ACD
             break
           end
 
-          # Parse agent nodes inside conditional block
           if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
             agent_id = match[1]
             tail = match[2]? || ""
@@ -152,7 +151,6 @@ module ACD
         ctx.workflow.step(conditional_node)
       end
 
-      # Parse unless...else...end conditional block
       private def parse_unless_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
         i = start_line
         condition = nil.as(String?)
@@ -181,7 +179,6 @@ module ACD
             break
           end
 
-          # Parse agent nodes inside unless block
           if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
             agent_id = match[1]
             tail = match[2]? || ""

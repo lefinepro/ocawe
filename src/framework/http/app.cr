@@ -29,6 +29,8 @@ require "./endpoints/compat"
 require "./endpoints/triggers"
 require "./endpoints/mcp"
 require "./endpoints/federation"
+require "./endpoints/federation_helpers"
+require "./endpoints/federation_transport_helpers"
 require "./app/parts/base"
 require "./app/parts/cache_and_loading"
 require "./app/parts/parser_main"
@@ -42,6 +44,7 @@ require "./app/parts/openapi_root"
 require "./app/parts/openapi_paths_primary"
 require "./app/parts/openapi_paths_runs"
 require "./app/parts/openapi_components"
+require "./app/parts/federation_polling"
 
 module ACD
   alias HTTP = Kemal
