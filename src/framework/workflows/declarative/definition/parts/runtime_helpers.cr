@@ -36,7 +36,7 @@ module Cogni
       def sleep(milliseconds : Int32) : self
         ensure_not_committed!
         sleeper = WorkflowNode.new("sleep-#{@nodes.size}", NodeKind::Control) do |_ctx|
-          ::sleep(milliseconds / 1000.0)
+          ::sleep(milliseconds.milliseconds)
           WorkflowNodeResult.continue
         end
         @nodes << sleeper
@@ -48,7 +48,7 @@ module Cogni
         sleeper = WorkflowNode.new("sleep-until-#{@nodes.size}", NodeKind::Control) do |_ctx|
           now = Time.utc.to_unix
           remaining = unix_time_seconds - now
-          ::sleep(remaining) if remaining > 0
+          ::sleep(remaining.seconds) if remaining > 0
           WorkflowNodeResult.continue
         end
         @nodes << sleeper
