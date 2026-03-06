@@ -11,6 +11,9 @@ fi
 violations=0
 
 while IFS= read -r -d '' file; do
+  if [[ ! -f "$file" ]]; then
+    continue
+  fi
   if [[ ! "$file" =~ $code_ext_regex ]]; then
     continue
   fi

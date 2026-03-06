@@ -1,10 +1,7 @@
 require "./spec_helper"
-
-
 describe Cogni::Workflow::Engine do
   it "runs start/resume/cancel/time_travel lifecycle" do
     workflow = Cogni::Workflow.create_workflow("wf-test", "test workflow")
-
     workflow
       .step(Cogni::Workflow::WorkflowNode.new("node-1", Cogni::Workflow::NodeKind::Control) do |_ctx|
         Cogni::Workflow::WorkflowNodeResult.continue({"value" => json_str("ok")})
@@ -300,5 +297,4 @@ describe Cogni::Workflow::Engine do
       ENV.delete("COGNICORE_MOCK_LLM")
     end
   end
-
 end
