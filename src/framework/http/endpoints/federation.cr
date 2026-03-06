@@ -196,7 +196,6 @@ module ACD
         }.to_json
       end
 
-      private def normalize_federation_activity(raw : String?) : String
     end
   end
 end
