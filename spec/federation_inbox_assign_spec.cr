@@ -19,12 +19,13 @@ describe "ACD::Kemal::App federation ticket routing" do
     )
   end
 
-  it "resolves workflow actor from ticket assignee or attributedTo and defaults to prepare-order" do
+  it "resolves workflow actor from ticket assignee or attributedTo and from body workflow_id" do
     app = ACD::Kemal::App.new(0)
     local_domain = "http://127.0.0.1:4111"
     body = {
       "@context" => json_str("https://www.w3.org/ns/activitystreams"),
       "type" => json_str("Create"),
+      "workflow_id" => json_str("prepare-order"),
     } of String => JSON::Any
 
     ticket_with_assignee = {
