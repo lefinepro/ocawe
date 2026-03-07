@@ -7,8 +7,9 @@ RUN shards install
 
 COPY . .
 RUN mkdir -p /cogni/src/workflows/solver
-RUN mkdir -p build && crystal build src/cli/main.cr --release -o build/cogni
+RUN shards build --production --release
+RUN chmod +x /cogni/entrypoint.sh
 
 EXPOSE 4111
 
-CMD ["./build/cogni", "up", "--port", "4111", "--config-rcl", "/cogni/cogni.config.rcl"]
+ENTRYPOINT ["/cogni/entrypoint.sh"]
