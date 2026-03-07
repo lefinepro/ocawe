@@ -4,7 +4,7 @@ module Cogni
 
     def agent_opencode : Cogni::Workflow::FunctionHandler
       ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
-        prompt = extract_input_text(ctx.input_data["input"]?)
+        prompt = apply_agent_prompt_contracts(ctx, extract_input_text(ctx.input_data["input"]?))
         command = resolve_string_param(ctx, "bin", env_keys: ["OPENCODE_BIN"], default: provider_default_bin("opencode")) || provider_default_bin("opencode")
         model = resolve_string_param(ctx, "model", env_keys: ["OPENCODE_MODEL"])
         args = resolve_string_array_param(ctx, "args", env_keys: ["OPENCODE_ARGS"])

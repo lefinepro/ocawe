@@ -4,7 +4,7 @@ module Cogni
 
     def agent_cliproxy : Cogni::Workflow::FunctionHandler
       ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
-        prompt = extract_input_text(ctx.input_data["input"]?)
+        prompt = apply_agent_prompt_contracts(ctx, extract_input_text(ctx.input_data["input"]?))
         system = resolve_string_param(ctx, "system")
         base_url = resolve_string_param(
           ctx,

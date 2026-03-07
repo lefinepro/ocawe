@@ -6,6 +6,7 @@ module ACD
     class App
       FEDERATION_JSONLD_CONTENT_TYPE = "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
       FEDERATION_JSONLD_CONTEXT = "https://www.w3.org/ns/activitystreams"
+      FEDERATION_FORGEFED_CONTEXT = "https://forgefed.org/ns"
 
       private def mount_federation_endpoints
         post "/federation/follows" do |env|
@@ -138,12 +139,14 @@ module ACD
 
         get "/federation/outbox" do |env|
           events = @federation_store.list_outbox_events
+          items = events.map { |entry| entry["activity"]? || JSON.parse("{}") }
           env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
           {
             "@context" => FEDERATION_JSONLD_CONTEXT,
             "type" => "OrderedCollection",
             "totalItems" => events.size,
-            "orderedItems" => events.map { |entry| entry["activity"]? || JSON.parse("{}") },
+            "items" => items,
+            "orderedItems" => items,
             "outbox" => events,
           }.to_json
         end

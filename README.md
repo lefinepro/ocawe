@@ -36,6 +36,59 @@ Run runtime server:
 ./build/cogni up --port 4111
 ```
 
+## Docker Compose (solver)
+
+`codex` and other provider CLIs are installed inside the container on demand (no `/root/.nvm` bind and no custom `PATH` env needed).
+For auth, mount only `/root/.codex`.
+
+```yaml
+services:
+  cogni:
+    image: cogni:test
+    container_name: cogni-solver
+    ports:
+      - "4111:4111"
+    environment:
+      - COGNI_BUILD_ARGS=--release
+      - COGNI_CONFIG_RCL=/cogni/cogni.config.rcl
+    volumes:
+      - ./cogni.config.rcl:/cogni/cogni.config.rcl:ro
+      - /root/.codex:/root/.codex
+    restart: unless-stopped
+```
+
+Full compose example file: `docker-compose.solver-full-example.yml`.
+
+Provider credential forwarding workflows:
+- `provider-credentials-codex`
+- `provider-credentials-claude`
+- `provider-credentials-opencode`
+- `provider-credentials-qwen`
+
+Start and test:
+
+```bash
+docker compose -f docker-compose.solver-full-example.yml up -d --build
+
+curl -sS http://127.0.0.1:4111/v1/workflows | jq
+
+curl -sS -X POST http://127.0.0.1:4111/v1/workflows/provider-credentials-codex/runs \
+  -H 'content-type: application/json' \
+  -d '{"input":{"content":"run mock credentials check"}}' | jq
+```
+
+The flow runs `tools/mock-data.rb` (Ruby), saves a file under `/cogni/.cogni/mock-data`, then runs `agent_codex` through `tools/mock-agent-cli.rb`, which saves a credentials report under `/cogni/.cogni/mock-agent`.
+
+Direct local demo (without HTTP runtime):
+
+```bash
+PATH="/tmp/fakebin:$PATH" crystal run scripts/provider_credentials_demo.cr
+```
+
+This executes `agent_codex`, `agent_claude_code`, `agent_opencode`, and `agent_qwen` handlers directly, verifies forwarded credential/config paths, and writes:
+- mock data file under `./.tmp/mock-data`
+- provider reports under `./.tmp/mock-agent`
+
 Run playground:
 
 ```bash
@@ -146,8 +199,8 @@ datasets do
 end
 
 workflows do
-  preferred_workflows_root = "./src/workflows"
-  fallback_workflows_root = "./src/workflows"
+  preferred_workflows_root = "./workflows"
+  fallback_workflows_root = "./workflows"
 end
 ```
 
@@ -170,6 +223,27 @@ Agent CLI defaults:
 - `agent_codex`, `agent_claude_code`, `agent_opencode`, `agent_qwen` can auto-install their CLI on first use.
 - `CODEX_BIN` / `CLAUDE_BIN` / `OPENCODE_BIN` / `QWEN_BIN` are optional executable overrides.
 - per-provider credentials/config paths can be set in node params (`path_to_credentials`, `path_to_config`, `path_to_config_codex`) or via env.
+- federation merge runs (`api=lefine`, `activity=merge`) inject strict prompt instructions for `agent_*` to return ForgeFed `Offer(Ticket)` JSON only.
+
+Minimal workflow snippets:
+
+```crystal
+workflow "solver-codex" do
+  agent_codex, install_policy: "on_demand", args: ["--skip-git-repo-check"], input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end
+
+workflow "solver-claude" do
+  agent_claude_code, install_policy: "on_demand", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end
+
+workflow "solver-opencode" do
+  agent_opencode, install_policy: "on_demand", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end
+
+workflow "solver-qwen" do
+  agent_qwen, install_policy: "on_demand", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end
+```
 
 Optional external handler install in host `shard.yml`:
 

@@ -34,6 +34,15 @@ Open docs and playground route:
 - Tutorial: `/guides/tutorial`
 - Workflow format: `/guides/workflow-format`
 - Registry API: `/guides/registry`
+- Maddy SMTP for printers: `/guides/maddy-printers-smtp`
+- Maddy users bulk create: `/guides/maddy-users-bulk-create`
+- Maddy Deliverability (SPF/DKIM/DMARC): `/guides/maddy-deliverability`
+- Maddy Autodiscover/Autoconfig: `/guides/maddy-autodiscover`
+- Maddy Outbound Multi-IP (domain -> IP): `/guides/maddy-outbound-ip`
+- Webmail for Maddy (Roundcube + ISPmanager): `/guides/maddy-webmail`
+- Fail2Ban for Maddy: `/guides/maddy-fail2ban`
+- Admin Lockdown (Maddy + ISPmanager): `/guides/maddy-admin-lockdown`
+- ISPmanager: add 5 domains: `/guides/ispmanager-add-domains`
 - API reference: `/api/reference`
 - Workflow API spec: `/api/workflow-api-spec`
 - Trigger API spec: `/api/trigger-api-spec`

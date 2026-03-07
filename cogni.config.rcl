@@ -11,6 +11,6 @@ datasets do
 end
 
 workflows do
-  preferred_workflows_root = "./src/workflows"
-  fallback_workflows_root = "./src/workflows"
+  preferred_workflows_root = "./workflows"
+  fallback_workflows_root = "./workflows"
 end

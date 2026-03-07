@@ -40,6 +40,18 @@ crystal run shards/docker-git/src/docker_git.cr -- --port 4222
 - Programmatic workflow DSL (`WorkflowDefinition` API) supports `parallel`, `then`, and event nodes (`wait_for_event`, `send_event`).
 - Federation MR flow accepts `Create(Ticket)`, `Offer(Ticket)` and direct `Ticket` payloads. MR results are published as ForgeFed-style `Offer` with `object.type=Ticket`, no `object.id`, `object.attributedTo=actor`, HTML `content` and `source` in CommonMark.
 
+## Full Container Example
+
+- Compose file: `docker-compose.solver-full-example.yml`
+- Mock tools:
+  - `tools/mock-data.rb` (returns JSON and saves mock payload file)
+  - `tools/mock-agent-cli.rb` (captures forwarded credentials/config env and saves report file)
+- Workflows:
+  - `provider-credentials-codex`
+  - `provider-credentials-claude`
+  - `provider-credentials-opencode`
+  - `provider-credentials-qwen`
+
 ## Custom provider macro
 
 Use `CogniCore::AI.create_custom_provider` to generate a provider class:
