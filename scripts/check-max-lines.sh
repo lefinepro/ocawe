@@ -3,9 +3,10 @@ set -euo pipefail
 
 max_lines="${MAX_FILE_LINES:-300}"
 code_ext_regex='\.(cr|sh|rb|py|js|mjs|cjs|ts|tsx|jsx|svelte|yml|yaml)$'
-exclude_regex='(^$)'
+default_exclude_regex='(^|/)pnpm-lock\.yaml$'
+exclude_regex="${default_exclude_regex}"
 if [[ -n "${MAX_FILE_LINES_EXCLUDE_REGEX:-}" ]]; then
-  exclude_regex="${MAX_FILE_LINES_EXCLUDE_REGEX}"
+  exclude_regex="(${default_exclude_regex})|(${MAX_FILE_LINES_EXCLUDE_REGEX})"
 fi
 
 violations=0
