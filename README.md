@@ -245,6 +245,26 @@ workflow "solver-qwen" do
 end
 ```
 
+Minimal workflow snippets:
+
+```crystal
+workflow "solver-codex" do
+  agent_codex, install_policy: "on_demand", args: ["--skip-git-repo-check"], input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end
+
+workflow "solver-claude" do
+  agent_claude_code, install_policy: "on_demand", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end
+
+workflow "solver-opencode" do
+  agent_opencode, install_policy: "on_demand", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end
+
+workflow "solver-qwen" do
+  agent_qwen, install_policy: "on_demand", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end
+```
+
 Optional external handler install in host `shard.yml`:
 
 ```yaml
