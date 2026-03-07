@@ -1,0 +1,5 @@
+require "../workflows/declarative/run"
+require "../cognicore/ai/client"
+require "./api/parts/registry_api_core"
+require "./api/parts/registry_api_helpers"
+require "./api/parts/registry_facade"

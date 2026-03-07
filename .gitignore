@@ -1,0 +1,10 @@
+build/
+packages/**/dist
+packages/**/node_modules/
+packages/docs/.vitepress/cache/
+packages/playground/.svelte-kit/
+*.log
+lib/
+bin/
+.meta/
+.codex/

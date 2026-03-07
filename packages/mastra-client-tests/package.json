@@ -1,0 +1,20 @@
+{
+  "name": "mastra-client-tests",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "bun@1.2.22",
+  "scripts": {
+    "test": "bun test",
+    "test:integration": "bun test",
+    "test:integration:coverage": "bun test --coverage",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mastra/client-js": "latest"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5.9.2"
+  }
+}
