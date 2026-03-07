@@ -1,0 +1,8 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "CogniCore API",
+    "version": "dev"
+  },
+  "paths": {}
+}

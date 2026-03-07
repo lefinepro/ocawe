@@ -1,0 +1,23 @@
+name: cogni
+version: 0.0.1
+
+authors:
+  - CogniCore Team
+
+targets:
+  cogni:
+    main: src/cli/main.cr
+  cognicore:
+    main: src/cogni.cr
+
+crystal: ">= 1.12.0"
+
+dependencies:
+  kemal:
+    github: kemalcr/kemal
+  db:
+    github: crystal-lang/crystal-db
+  sqlite3:
+    github: crystal-lang/crystal-sqlite3
+
+license: MIT
