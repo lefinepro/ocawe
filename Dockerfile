@@ -7,7 +7,7 @@ RUN shards install
 
 COPY . .
 RUN mkdir -p /cogni/src/workflows/solver
-RUN shards build --production --release
+RUN shards install && shards build --release --no-debug
 RUN chmod +x /cogni/entrypoint.sh
 
 EXPOSE 4111
