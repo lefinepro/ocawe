@@ -2,7 +2,7 @@ name: docker-publish
 
 on:
   push:
-    branches: ["main"]
+    branches: ["release"]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -35,7 +35,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=release,enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
