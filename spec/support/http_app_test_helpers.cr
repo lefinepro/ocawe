@@ -32,4 +32,38 @@ class ACD::Kemal::App
   ) : String
     resolve_ticket_workflow_actor(body, ticket, local_domain)
   end
+
+  def test_extract_ticket_activity_payload(
+    activity : Hash(String, JSON::Any)
+  ) : NamedTuple(activity_type: String, ticket: Hash(String, JSON::Any))?
+    extract_ticket_activity_payload(activity)
+  end
+
+  def test_infer_ticket_workflow_activity(
+    activity_doc : Hash(String, JSON::Any),
+    ticket : Hash(String, JSON::Any),
+    incoming_activity_type : String
+  ) : String
+    infer_ticket_workflow_activity(activity_doc, ticket, incoming_activity_type)
+  end
+
+  def test_build_merge_result_offer_activity(
+    suffix : String,
+    ticket : Hash(String, JSON::Any),
+    output : Hash(String, JSON::Any),
+    remote_actor : String,
+    workflow_actor : String,
+    local_domain : String,
+    result_text : String
+  ) : Hash(String, JSON::Any)
+    build_merge_result_offer_activity(
+      suffix: suffix,
+      ticket: ticket,
+      output: output,
+      remote_actor: remote_actor,
+      workflow_actor: workflow_actor,
+      local_domain: local_domain,
+      result_text: result_text,
+    )
+  end
 end

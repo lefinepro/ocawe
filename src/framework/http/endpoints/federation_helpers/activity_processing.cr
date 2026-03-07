@@ -50,25 +50,105 @@ module ACD
           return true
         end
 
-        return false unless activity_type == "Create"
         return false unless status == "active"
+        ticket_payload = extract_ticket_activity_payload(activity)
+        return false unless ticket_payload
+
+        process_ticket_create_activity(
+          follow,
+          activity,
+          ticket_payload[:ticket],
+          ticket_payload[:activity_type],
+        )
+      end
+
+      private def extract_ticket_activity_payload(
+        activity : Hash(String, JSON::Any)
+      ) : NamedTuple(activity_type: String, ticket: Hash(String, JSON::Any))?
+        activity_type = activity["type"]?.try(&.as_s?).to_s.strip
+
+        if activity_type == "Ticket"
+          return {
+            activity_type: activity_type,
+            ticket:        activity,
+          }
+        end
+
+        return nil unless activity_type == "Create" || activity_type == "Offer"
         ticket = activity["object"]?.try(&.as_h?) || {} of String => JSON::Any
         ticket_type = ticket["type"]?.try(&.as_s?).to_s.strip.downcase
-        return false unless ticket_type == "ticket"
+        return nil unless ticket_type == "ticket"
 
-        process_ticket_create_activity(follow, activity, ticket)
+        {
+          activity_type: activity_type,
+          ticket:        ticket,
+        }
+      end
+
+      private def ticket_has_offer_attachment?(ticket : Hash(String, JSON::Any)) : Bool
+        attachment = ticket["attachment"]?
+        if attachment_hash = attachment.try(&.as_h?)
+          return attachment_hash["type"]?.try(&.as_s?).to_s.strip.downcase == "offer"
+        end
+        attachments = attachment.try(&.as_a?) || [] of JSON::Any
+        attachments.any? do |entry|
+          next false unless entry_hash = entry.as_h?
+          entry_hash["type"]?.try(&.as_s?).to_s.strip.downcase == "offer"
+        end
+      end
+
+      private def activity_reference(value : JSON::Any?) : String
+        return "" unless value
+        if value_hash = value.as_h?
+          return pick_first_non_empty(
+            value_hash["id"]?.try(&.as_s?),
+            value_hash["context"]?.try(&.as_s?),
+            value_hash["url"]?.try(&.as_s?),
+          )
+        end
+        value.as_s? || ""
+      end
+
+      private def ticket_offer_attachment_field(ticket : Hash(String, JSON::Any), field : String) : String
+        attachment = ticket["attachment"]?
+        if attachment_hash = attachment.try(&.as_h?)
+          return activity_reference(attachment_hash[field]?)
+        end
+        attachments = attachment.try(&.as_a?) || [] of JSON::Any
+        attachments.each do |entry|
+          next unless entry_hash = entry.as_h?
+          next unless entry_hash["type"]?.try(&.as_s?).to_s.strip.downcase == "offer"
+          return activity_reference(entry_hash[field]?)
+        end
+        ""
+      end
+
+      private def infer_ticket_workflow_activity(
+        activity_doc : Hash(String, JSON::Any),
+        ticket : Hash(String, JSON::Any),
+        incoming_activity_type : String
+      ) : String
+        explicit = normalize_federation_activity(
+          ticket["activity"]?.try(&.as_s?) ||
+          activity_doc["activity"]?.try(&.as_s?)
+        )
+        return explicit unless explicit == "ticket"
+        return "merge" if incoming_activity_type == "Offer"
+        return "merge" if ticket_has_offer_attachment?(ticket)
+        "ticket"
       end
 
       private def process_ticket_create_activity(
         follow : Hash(String, JSON::Any),
         activity_doc : Hash(String, JSON::Any),
-        ticket : Hash(String, JSON::Any)
+        ticket : Hash(String, JSON::Any),
+        incoming_activity_type : String
       ) : Bool
         remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
         received_at = Time.utc.to_s("%Y-%m-%dT%H:%M:%SZ")
         @federation_store.append_inbox_event(
           actor: remote_actor,
-          activity_type: "Create",
+          activity_type: incoming_activity_type,
           payload: activity_doc,
           received_at: received_at,
         )
@@ -102,11 +182,17 @@ module ACD
         task = ticket["name"]?.try(&.as_s?) || ticket["summary"]?.try(&.as_s?) || ""
         return false if task.strip.empty?
         content = ticket["content"]?.try(&.as_s?) || ""
-        activity = normalize_federation_activity(
-          ticket["activity"]?.try(&.as_s?) ||
-          activity_doc["activity"]?.try(&.as_s?)
+        activity = infer_ticket_workflow_activity(
+          activity_doc,
+          ticket,
+          incoming_activity_type
         )
-        repo_url = ticket["source"]?.try(&.as_s?) || activity_doc["repo_url"]?.try(&.as_s?) || ""
+        repo_url = pick_first_non_empty(
+          ticket["source"]?.try(&.as_s?),
+          ticket_offer_attachment_field(ticket, "target"),
+          ticket_offer_attachment_field(ticket, "origin"),
+          activity_doc["repo_url"]?.try(&.as_s?),
+        )
         repo_ref = activity_doc["repo_ref"]?.try(&.as_s?) || "main"
         provider = activity_doc["provider"]?.try(&.as_s?) || "codex"
         ticket_id = ticket["id"]?.try(&.as_s?) || activity_doc["id"]?.try(&.as_s?) || ""
@@ -114,11 +200,11 @@ module ACD
         suffix = Random.rand(UInt64::MAX).to_s(16)
         assign_activity = JSON.parse({
           "@context" => FEDERATION_JSONLD_CONTEXT,
-          "id" => "#{local_domain}/activities/assign-#{suffix}",
-          "type" => "Assign",
-          "actor" => workflow_actor,
-          "object" => JSON.parse(ticket.to_json),
-          "target" => workflow_actor,
+          "id"       => "#{local_domain}/activities/assign-#{suffix}",
+          "type"     => "Assign",
+          "actor"    => workflow_actor,
+          "object"   => JSON.parse(ticket.to_json),
+          "target"   => workflow_actor,
         }.to_json).as_h
         @federation_store.append_outbox_event(
           activity: assign_activity,
@@ -127,18 +213,19 @@ module ACD
         )
 
         input_data = {
-          "task" => JSON.parse(task.to_json),
-          "content" => JSON.parse(content.to_json),
-          "ticket_id" => JSON.parse(ticket_id.to_json),
-          "ticket" => JSON.parse(ticket.to_json),
-          "repo_url" => JSON.parse(repo_url.to_json),
-          "repo_ref" => JSON.parse(repo_ref.to_json),
-          "provider" => JSON.parse(provider.to_json),
-          "remote_actor" => JSON.parse(remote_actor.to_json),
-          "local_actor" => JSON.parse(local_actor.to_json),
+          "input"          => JSON.parse(ticket.to_json),
+          "task"           => JSON.parse(task.to_json),
+          "content"        => JSON.parse(content.to_json),
+          "ticket_id"      => JSON.parse(ticket_id.to_json),
+          "ticket"         => JSON.parse(ticket.to_json),
+          "repo_url"       => JSON.parse(repo_url.to_json),
+          "repo_ref"       => JSON.parse(repo_ref.to_json),
+          "provider"       => JSON.parse(provider.to_json),
+          "remote_actor"   => JSON.parse(remote_actor.to_json),
+          "local_actor"    => JSON.parse(local_actor.to_json),
           "workflow_actor" => JSON.parse(workflow_actor.to_json),
-          "api" => JSON.parse("lefine".to_json),
-          "activity" => JSON.parse(activity.to_json),
+          "api"            => JSON.parse("lefine".to_json),
+          "activity"       => JSON.parse(activity.to_json),
         } of String => JSON::Any
 
         run_result = @workflow_service.start_run(workflow_id, input_data: input_data)

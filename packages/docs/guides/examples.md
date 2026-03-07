@@ -38,6 +38,7 @@ crystal run shards/docker-git/src/docker_git.cr -- --port 4222
 - Function names are not restricted to snake_case. Collision rule: system function keeps base name, user function gets `:1`, `:2`, etc., with optional explicit aliases.
 - Programmatic API exposes `Cogni::Workflow` and can be extended by inheritance.
 - Programmatic workflow DSL (`WorkflowDefinition` API) supports `parallel`, `then`, and event nodes (`wait_for_event`, `send_event`).
+- Federation MR flow accepts `Create(Ticket)`, `Offer(Ticket)` and direct `Ticket` payloads. MR results are published as ForgeFed-style `Offer` with `object.type=Ticket`, no `object.id`, `object.attributedTo=actor`, HTML `content` and `source` in CommonMark.
 
 ## Custom provider macro
 

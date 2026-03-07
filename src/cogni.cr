@@ -1,4 +1,5 @@
 require "option_parser"
+require "../shards/agent-functions/src/cogni-agent-functions"
 require "./framework/utils/config_parser"
 require "./framework/cognicore/version"
 require "./framework/workflows/dsl/types"
@@ -52,3 +53,7 @@ module CogniCore
     ).start
   end
 end
+
+{% if flag?(:cogni_runtime_main) %}
+  CogniCore.run
+{% end %}

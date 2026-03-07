@@ -2,14 +2,17 @@ FROM crystallang/crystal:1.13.3
 
 WORKDIR /cogni
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libsqlite3-dev \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY shard.yml shard.lock ./
 RUN shards install
 
 COPY . .
-RUN mkdir -p /cogni/src/workflows/solver
-RUN shards install && shards build --release --no-debug
+RUN shards build cogni --release --no-debug
 RUN chmod +x /cogni/entrypoint.sh
 
 EXPOSE 4111
 
-ENTRYPOINT ["/cogni/entrypoint.sh"]
+ENTRYPOINT ["bash", "/cogni/entrypoint.sh"]

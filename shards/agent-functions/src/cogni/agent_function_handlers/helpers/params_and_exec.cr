@@ -30,7 +30,11 @@ module Cogni
         return text
       end
       if hash = input.as_h?
-        return hash["content"]?.try(&.as_s?) || hash["text"]?.try(&.as_s?) || input.to_json
+        return hash["content"]?.try(&.as_s?) ||
+          hash["text"]?.try(&.as_s?) ||
+          hash["task"]?.try(&.as_s?) ||
+          hash["prompt"]?.try(&.as_s?) ||
+          input.to_json
       end
       input.to_json
     end

@@ -137,7 +137,7 @@ module CogniCore
 
       private def build_runtime(release : Bool, output : String) : Bool
         release_flag = release ? "--release " : ""
-        run_cmd("mkdir -p #{PROJECT_ROOT}/build && bash #{BOOTSTRAP_CRYSTAL} && crystal build #{RUNTIME_ENTRY} #{release_flag}-o #{output}")
+        run_cmd("mkdir -p #{PROJECT_ROOT}/build && bash #{BOOTSTRAP_CRYSTAL} && crystal build #{RUNTIME_ENTRY} -D cogni_runtime_main #{release_flag}-o #{output}")
       end
 
       private def dev_runtime_cmd(port : Int32, config_rcl : String?) : String
