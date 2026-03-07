@@ -108,6 +108,7 @@ module CogniCore
       private def self.apply_rcl_settings(base : Cogni::Config::Settings, raw : Hash(String, RCL::Value)) : Cogni::Config::Settings
         root = raw["root"]?
         tree = root.is_a?(Hash(String, RCL::Value)) ? root : raw
+        apply_credentials_env_overrides(tree["credentials"]?)
 
         workflows = base.workflows
         if wf_raw = tree["workflows"]?
@@ -245,6 +246,51 @@ module CogniCore
         else
           [] of String
         end
+      end
+
+      private def self.apply_credentials_env_overrides(value : RCL::Value?) : Nil
+        return unless value
+        hash = value.as?(Hash(String, RCL::Value))
+        return unless hash
+
+        flatten_credentials(hash).each do |key, val|
+          next if key.empty? || val.empty?
+          ENV[key] = val unless ENV.has_key?(key)
+        end
+      end
+
+      private def self.flatten_credentials(hash : Hash(String, RCL::Value), prefix : String = "") : Hash(String, String)
+        out = {} of String => String
+        hash.each do |key, value|
+          normalized = normalize_env_key(key)
+          full_key = prefix.empty? ? normalized : "#{prefix}_#{normalized}"
+
+          case value
+          when Hash(String, RCL::Value)
+            nested = flatten_credentials(value, full_key)
+            nested.each { |nk, nv| out[nk] = nv }
+          when String
+            out[full_key] = value
+          when Bool
+            out[full_key] = value ? "true" : "false"
+          when Int32
+            out[full_key] = value.to_s
+          when Int64
+            out[full_key] = value.to_s
+          when Float64
+            out[full_key] = value.to_s
+          when Array(RCL::Value)
+            strings = value.compact_map { |entry| entry.is_a?(String) ? entry : nil }
+            out[full_key] = strings.join(" ") unless strings.empty?
+          else
+            next
+          end
+        end
+        out
+      end
+
+      private def self.normalize_env_key(key : String) : String
+        key.upcase.gsub(/[^A-Z0-9]+/, "_").gsub(/^_+|_+$/, "")
       end
     end
   end
