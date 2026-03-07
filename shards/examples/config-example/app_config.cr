@@ -11,6 +11,7 @@ module Cogni
           "agent_opencode" => Cogni::Config::DefaultFunctionHandlers.agent_opencode,
           "agent_codex" => Cogni::Config::DefaultFunctionHandlers.agent_codex,
           "agent_cliproxy" => Cogni::Config::DefaultFunctionHandlers.agent_cliproxy,
+          "agent_qwen" => Cogni::Config::DefaultFunctionHandlers.agent_qwen,
         } of String => Cogni::Workflow::FunctionHandler,
       )
     end

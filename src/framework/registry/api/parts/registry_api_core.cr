@@ -204,7 +204,7 @@ module Cogni
             "resume_data" => JSON.parse(resume.to_json),
           })
         end
-      when "agent_cliproxy", "agent_codex", "agent_opencode"
+      when "agent_cliproxy", "agent_codex", "agent_opencode", "agent_claude_code", "agent_qwen"
         kind_params = params || ({} of String => JSON::Any)
         return build_node(
           workflow,
@@ -250,6 +250,12 @@ module Cogni
       end
       node_kind("agent_opencode") do |ctx, _parameters|
         call_function("agent_opencode", ctx)
+      end
+      node_kind("agent_claude_code") do |ctx, _parameters|
+        call_function("agent_claude_code", ctx)
+      end
+      node_kind("agent_qwen") do |ctx, _parameters|
+        call_function("agent_qwen", ctx)
       end
     end
   end

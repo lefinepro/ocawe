@@ -163,8 +163,13 @@ Federation persistence modes:
 - `adapter = "sqlite"` (optional): persistent state in SQLite file via `sqlite_path`
 
 Function handler selection via RCL:
-- `functions.enabled = ["agent_opencode", "agent_codex", "agent_cliproxy"]`
+- `functions.enabled = ["agent_opencode", "agent_codex", "agent_cliproxy", "agent_claude_code", "agent_qwen"]`
 - handlers are optional and available only if external shard `cogni-agent-functions` is connected by the host app
+
+Agent CLI defaults:
+- `agent_codex`, `agent_claude_code`, `agent_opencode`, `agent_qwen` can auto-install their CLI on first use.
+- `CODEX_BIN` / `CLAUDE_BIN` / `OPENCODE_BIN` / `QWEN_BIN` are optional executable overrides.
+- per-provider credentials/config paths can be set in node params (`path_to_credentials`, `path_to_config`, `path_to_config_codex`) or via env.
 
 Optional external handler install in host `shard.yml`:
 

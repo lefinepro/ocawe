@@ -82,6 +82,44 @@ module Cogni
         ))
       end
 
+      def agent_claude_code(
+        id : String = "agent_claude_code",
+        params : AnyHash? = nil,
+        workspace : AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
+      ) : self
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "node_kind",
+          id,
+          node_kind_name: "agent_claude_code",
+          node_kind_parameters: params,
+          workspace: workspace,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
+      end
+
+      def agent_qwen(
+        id : String = "agent_qwen",
+        params : AnyHash? = nil,
+        workspace : AnyHash? = nil,
+        input_schema : Cogni::Workflows::DSL::Validator? = nil,
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
+      ) : self
+        append_node(Cogni::RegistryApi.build_node(
+          self,
+          "node_kind",
+          id,
+          node_kind_name: "agent_qwen",
+          node_kind_parameters: params,
+          workspace: workspace,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
+      end
+
       # Low-level chaining for explicit workflow nodes (used by control-flow internals).
       def step(node : WorkflowNode) : self
         append_node(node)
