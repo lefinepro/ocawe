@@ -17,7 +17,9 @@ module ACD
 
       private def extract_activities_from_outbox(outbox_doc : Hash(String, JSON::Any)) : Array(Hash(String, JSON::Any))
         items = [] of Hash(String, JSON::Any)
-        ordered_items = outbox_doc["orderedItems"]?.try(&.as_a?) || [] of JSON::Any
+        ordered_items = outbox_doc["orderedItems"]?.try(&.as_a?) ||
+          outbox_doc["items"]?.try(&.as_a?) ||
+          [] of JSON::Any
         if ordered_items.empty?
           if first = outbox_doc["first"]?
             first_doc = if first_hash = first.as_h?
@@ -27,7 +29,9 @@ module ACD
                         else
                           {} of String => JSON::Any
                         end
-            ordered_items = first_doc["orderedItems"]?.try(&.as_a?) || [] of JSON::Any
+            ordered_items = first_doc["orderedItems"]?.try(&.as_a?) ||
+              first_doc["items"]?.try(&.as_a?) ||
+              [] of JSON::Any
           end
         end
         ordered_items.each do |entry|

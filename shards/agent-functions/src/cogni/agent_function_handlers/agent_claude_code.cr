@@ -4,7 +4,7 @@ module Cogni
 
     def agent_claude_code : Cogni::Workflow::FunctionHandler
       ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
-        prompt = extract_input_text(ctx.input_data["input"]?)
+        prompt = apply_agent_prompt_contracts(ctx, extract_input_text(ctx.input_data["input"]?))
         command = resolve_string_param(ctx, "bin", env_keys: ["CLAUDE_CODE_BIN", "CLAUDE_BIN"], default: provider_default_bin("claude_code")) || provider_default_bin("claude_code")
         model = resolve_string_param(ctx, "model", env_keys: ["CLAUDE_CODE_MODEL", "CLAUDE_MODEL"])
         args = resolve_string_array_param(ctx, "args", env_keys: ["CLAUDE_CODE_ARGS", "CLAUDE_ARGS"])

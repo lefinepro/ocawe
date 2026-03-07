@@ -4,10 +4,10 @@ module Cogni
 
     private def provider_default_bin(provider : String) : String
       case provider
-      when "codex" then "codex"
+      when "codex"       then "codex"
       when "claude_code" then "claude"
-      when "opencode" then "opencode"
-      when "qwen" then "qwen"
+      when "opencode"    then "opencode"
+      when "qwen"        then "qwen"
       else
         provider
       end
@@ -28,16 +28,32 @@ module Cogni
       command.split(/\s+/, remove_empty: true).first?.to_s
     end
 
+    private def ensure_npm_command : String
+      "command -v npm >/dev/null 2>&1 || (apt-get update && apt-get install -y --no-install-recommends nodejs npm ca-certificates && rm -rf /var/lib/apt/lists/*)"
+    end
+
+    private def ensure_pip3_command : String
+      "command -v pip3 >/dev/null 2>&1 || (apt-get update && apt-get install -y --no-install-recommends python3 python3-pip ca-certificates && rm -rf /var/lib/apt/lists/*)"
+    end
+
     private def provider_default_install_commands(provider : String) : Array(String)
       case provider
       when "codex"
-        ["npm install -g @openai/codex"]
+        [
+          "command -v codex >/dev/null 2>&1 || (#{ensure_npm_command}; npm install -g @openai/codex)",
+        ]
       when "claude_code"
-        ["npm install -g @anthropic-ai/claude-code"]
+        [
+          "command -v claude >/dev/null 2>&1 || (#{ensure_npm_command}; npm install -g @anthropic-ai/claude-code)",
+        ]
       when "opencode"
-        ["npm install -g @opencode-ai/cli", "npm install -g opencode"]
+        [
+          "command -v opencode >/dev/null 2>&1 || (#{ensure_npm_command}; npm install -g @opencode-ai/cli || npm install -g opencode)",
+        ]
       when "qwen"
-        ["pip install -U qwen-code", "npm install -g @qwen-code/cli"]
+        [
+          "command -v qwen >/dev/null 2>&1 || (#{ensure_pip3_command}; pip3 install -U qwen-code || (#{ensure_npm_command}; npm install -g @qwen-code/cli))",
+        ]
       else
         [] of String
       end

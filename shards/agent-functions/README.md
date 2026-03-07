@@ -18,3 +18,38 @@ Notes:
   - `path_to_credentials`
   - `path_to_config`
   - provider-specific variants like `path_to_config_codex`.
+- In federation runs with `api=lefine` and `activity=merge`, handlers prepend a strict prompt contract:
+  - output must be a ForgeFed `Offer(Ticket)` JSON object only (no prose/markdown).
+
+## Workflow examples
+
+```crystal
+workflow "solver-codex" do
+  agent_codex,
+    args: ["--skip-git-repo-check"],
+    install_policy: "on_demand",
+    input_schema: Schema::Types.any(),
+    output_schema: Schema::Types.any()
+end
+
+workflow "solver-claude" do
+  agent_claude_code,
+    install_policy: "on_demand",
+    input_schema: Schema::Types.any(),
+    output_schema: Schema::Types.any()
+end
+
+workflow "solver-opencode" do
+  agent_opencode,
+    install_policy: "on_demand",
+    input_schema: Schema::Types.any(),
+    output_schema: Schema::Types.any()
+end
+
+workflow "solver-qwen" do
+  agent_qwen,
+    install_policy: "on_demand",
+    input_schema: Schema::Types.any(),
+    output_schema: Schema::Types.any()
+end
+```

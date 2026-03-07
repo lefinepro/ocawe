@@ -66,4 +66,40 @@ class ACD::Kemal::App
       result_text: result_text,
     )
   end
+
+  def test_publish_result_activity_from_output(
+    workflow_id : String,
+    run_id : String,
+    run_status : String,
+    output : Hash(String, JSON::Any),
+    ticket : Hash(String, JSON::Any),
+    requested_activity : String,
+    remote_actor : String,
+    workflow_actor : String,
+    local_domain : String,
+    published_at : String
+  ) : Nil
+    publish_result_activity_from_output(
+      workflow_id: workflow_id,
+      run_id: run_id,
+      run_status: run_status,
+      output: output,
+      ticket: ticket,
+      requested_activity: requested_activity,
+      remote_actor: remote_actor,
+      workflow_actor: workflow_actor,
+      local_domain: local_domain,
+      published_at: published_at,
+    )
+  end
+
+  def test_list_outbox_events : Array(Hash(String, JSON::Any))
+    @federation_store.list_outbox_events
+  end
+
+  def test_extract_activities_from_outbox(
+    outbox_doc : Hash(String, JSON::Any)
+  ) : Array(Hash(String, JSON::Any))
+    extract_activities_from_outbox(outbox_doc)
+  end
 end

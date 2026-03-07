@@ -236,6 +236,7 @@ module ACD
           run_status: run_result.status,
           output: run_output,
           ticket: ticket,
+          requested_activity: activity,
           remote_actor: remote_actor,
           workflow_actor: workflow_actor,
           local_domain: local_domain,
