@@ -111,7 +111,31 @@ bun run dev
 ./build/cogni build --release
 ./build/cogni dev --port 4111
 ./build/cogni up --port 4111
+
+# explicit workflow trigger by id
+./build/cogni workflow solver task=deploy env=prod
+
+# agent/function/tool/skill/support triggers
+./build/cogni agent code-reviewer --prompt "review this patch"
+./build/cogni tool project_healthcheck
+./build/cogni support onboarding-check
+
+# alias executable style (workflow id from executable name)
+ln -sf ./build/cogni /usr/local/bin/cogni_example_workflow
+cogni_example_workflow
 ```
+
+Workflow trigger CLI calls `POST /v1/triggers/workflows/:id` and sends:
+- `input.<key>` from `key=value` args (values parsed as JSON when possible).
+- `input.args` from positional args without `=`.
+
+Trigger command mapping:
+- `workflow` -> `/v1/triggers/workflows/:id`
+- `agent` -> `/v1/triggers/agents/:id`
+- `skill`/`support` -> `/v1/triggers/skills/:id`
+- `function`/`tool` -> `/v1/triggers/functions/:id`
+
+Use `COGNI_TRIGGER_BASE_URL` or `--base-url` to target a non-default runtime URL.
 
 ## Runtime APIs
 

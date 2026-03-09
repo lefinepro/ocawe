@@ -16,6 +16,22 @@ crystal build src/cli/main.cr -o build/cogni
 `cogni up` runs auto-build and starts only the runtime server.
 Docs/playground previews are not part of `up`.
 
+Run workflow as CLI command (Trigger API):
+
+```bash
+# explicit workflow command
+./build/cogni workflow solver task=deploy env=prod
+
+# other trigger kinds
+./build/cogni agent code-reviewer --prompt "review this patch"
+./build/cogni tool project_healthcheck
+./build/cogni support onboarding-check
+
+# alias executable
+ln -sf ./build/cogni /usr/local/bin/cogni_example_workflow
+cogni_example_workflow
+```
+
 ## 3) Explore examples
 
 Example bundles are in `shards/examples`:
