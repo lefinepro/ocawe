@@ -26,15 +26,8 @@ module Cogni
           end
 
           if node.kind == NodeKind::Exec || node.kind == NodeKind::Custom
-            if params = node.metadata["params"]?
-              if flat = params.as_h?
-                flat.each do |k, v|
-                  envelope[k] = JSON.parse(v.to_json)
-                end
-              end
-            end
-            if node_kind_parameters = node.metadata["parameters"]?
-              if flat = node_kind_parameters.as_h?
+            if attributes = node.metadata["attributes"]?
+              if flat = attributes.as_h?
                 flat.each do |k, v|
                   envelope[k] = JSON.parse(v.to_json)
                 end

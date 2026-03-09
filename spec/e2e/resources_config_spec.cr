@@ -17,7 +17,7 @@ describe "E2E: Resources and Configuration" do
       # end
       workflow = Cogni::Workflow.create_workflow("simple-model-test", "Model test")
       workflow
-        .use(model: "clipproxyapi/qwen3-coder-plus")
+        .resources(model: "clipproxyapi/qwen3-coder-plus")
         .agent("simple-model-agent")
         .commit
 
@@ -28,7 +28,7 @@ describe "E2E: Resources and Configuration" do
     it "resolves model from workflow default" do
       workflow = Cogni::Workflow.create_workflow("model-resolution-test", "Model resolution test")
       workflow
-        .use(model: "clipproxyapi/qwen3-coder-plus")
+        .resources(model: "clipproxyapi/qwen3-coder-plus")
         .step(Cogni::Workflow::WorkflowNode.new("check-model", Cogni::Workflow::NodeKind::Control) do |_ctx|
           Cogni::Workflow::WorkflowNodeResult.continue({
             "workflow_model" => json_str("clipproxyapi/qwen3-coder-plus"),
@@ -49,7 +49,7 @@ describe "E2E: Resources and Configuration" do
     it "uses model resolution priority (request > agent > workflow default)" do
       workflow = Cogni::Workflow.create_workflow("model-priority-test", "Model priority test")
       workflow
-        .use(model: "default-model")
+        .resources(model: "default-model")
         .step(Cogni::Workflow::WorkflowNode.new("check", Cogni::Workflow::NodeKind::Control) do |_ctx|
           Cogni::Workflow::WorkflowNodeResult.continue({"checked" => json_bool(true)})
         end)
@@ -71,7 +71,7 @@ describe "E2E: Resources and Configuration" do
       # Simulates: @[Resources(model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"])]
       workflow = Cogni::Workflow.create_workflow("unified-resources", "Unified resources test")
       workflow
-        .use(
+        .resources(
           model: "openai/gpt-4.1",
           skill: ["translation", "summarization"],
           tool: ["http-client"])
@@ -86,7 +86,7 @@ describe "E2E: Resources and Configuration" do
       # Simulates full-capabilities workflow with @[Resources(model: "...", skill: [...], tool: [...])]
       workflow = Cogni::Workflow.create_workflow("full-capabilities", "Full capabilities test")
       workflow
-        .use(
+        .resources(
           model: "clipproxyapi/qwen3-coder-plus",
           skill: ["full-skill"],
           tool: ["echo-json"])
@@ -108,7 +108,7 @@ describe "E2E: Resources and Configuration" do
 
       workflow = Cogni::Workflow.create_workflow("unified-pipeline", "Unified pipeline test")
       workflow
-        .use(model: "openai/gpt-4.1")
+        .resources(model: "openai/gpt-4.1")
         .step(Cogni::Workflow::WorkflowNode.new("analyzer", Cogni::Workflow::NodeKind::Control) do |_ctx|
           Cogni::Workflow::WorkflowNodeResult.continue({"analyzed" => json_bool(true)})
         end)
@@ -137,7 +137,7 @@ describe "E2E: Resources and Configuration" do
     it "creates workflow with agent, skill, tool, voice, rag, and suspend nodes" do
       workflow = Cogni::Workflow.create_workflow("full-demo", "Full demo test")
       workflow
-        .use(model: "clipproxyapi/qwen3-coder-plus")
+        .resources(model: "clipproxyapi/qwen3-coder-plus")
         .agent("full-agent",
           input_schema: Cogni::Workflows::DSL::Types.object({"input" => Cogni::Workflows::DSL::Types.any()}, strict: false),
           output_schema: Cogni::Workflows::DSL::Types.object({"last_response" => Cogni::Workflows::DSL::Types.of(String)}, strict: false))

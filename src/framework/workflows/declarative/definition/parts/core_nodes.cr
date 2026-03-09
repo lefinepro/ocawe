@@ -6,7 +6,7 @@ module Cogni
         runtime : AnyHash? = nil,
         env : AnyHash? = nil,
         workflow_root : String? = nil,
-        params : AnyHash? = nil,
+        attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
@@ -18,7 +18,7 @@ module Cogni
           runtime: runtime,
           env: env,
           workflow_root: workflow_root,
-          params: params,
+          attributes: attributes,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -27,7 +27,7 @@ module Cogni
 
       def agent_codex(
         id : String = "agent_codex",
-        params : AnyHash? = nil,
+        attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
@@ -37,7 +37,7 @@ module Cogni
           "node_kind",
           id,
           node_kind_name: "agent_codex",
-          node_kind_parameters: params,
+          node_kind_attributes: attributes,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -46,7 +46,7 @@ module Cogni
 
       def agent_cliproxy(
         id : String = "agent_cliproxy",
-        params : AnyHash? = nil,
+        attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
@@ -56,7 +56,7 @@ module Cogni
           "node_kind",
           id,
           node_kind_name: "agent_cliproxy",
-          node_kind_parameters: params,
+          node_kind_attributes: attributes,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -65,7 +65,7 @@ module Cogni
 
       def agent_opencode(
         id : String = "agent_opencode",
-        params : AnyHash? = nil,
+        attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
@@ -75,7 +75,7 @@ module Cogni
           "node_kind",
           id,
           node_kind_name: "agent_opencode",
-          node_kind_parameters: params,
+          node_kind_attributes: attributes,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -84,7 +84,7 @@ module Cogni
 
       def agent_claude_code(
         id : String = "agent_claude_code",
-        params : AnyHash? = nil,
+        attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
@@ -94,7 +94,7 @@ module Cogni
           "node_kind",
           id,
           node_kind_name: "agent_claude_code",
-          node_kind_parameters: params,
+          node_kind_attributes: attributes,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -103,7 +103,7 @@ module Cogni
 
       def agent_qwen(
         id : String = "agent_qwen",
-        params : AnyHash? = nil,
+        attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
@@ -113,7 +113,7 @@ module Cogni
           "node_kind",
           id,
           node_kind_name: "agent_qwen",
-          node_kind_parameters: params,
+          node_kind_attributes: attributes,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -132,7 +132,7 @@ module Cogni
         runtime : AnyHash? = nil,
         env : AnyHash? = nil,
         workflow_root : String? = nil,
-        params : AnyHash? = nil,
+        attributes : AnyHash? = nil,
         prompt : String? = nil,
         model : String? = nil,
         resume_schema : Cogni::Workflows::DSL::Validator? = nil,
@@ -143,7 +143,7 @@ module Cogni
         config : AnyHash? = nil,
         reason : String? = nil,
         node_kind_name : String? = nil,
-        node_kind_parameters : AnyHash? = nil,
+        node_kind_attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
@@ -155,7 +155,7 @@ module Cogni
           runtime: runtime,
           env: env,
           workflow_root: workflow_root,
-          params: params,
+          attributes: attributes,
           prompt: prompt,
           model: model,
           resume_schema: resume_schema,
@@ -166,7 +166,7 @@ module Cogni
           config: config,
           reason: reason,
           node_kind_name: node_kind_name,
-          node_kind_parameters: node_kind_parameters,
+          node_kind_attributes: node_kind_attributes,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,

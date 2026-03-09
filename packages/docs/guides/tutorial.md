@@ -45,10 +45,10 @@ Example bundles are in `shards/examples`:
 ## 4) Register a node kind
 
 ```crystal
-Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, parameters|
+Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
   {
     "status" => JSON.parse("ok".to_json),
-    "message" => parameters["message"]? || JSON.parse("none".to_json),
+    "message" => attributes["message"]? || JSON.parse("none".to_json),
   }
 end
 ```

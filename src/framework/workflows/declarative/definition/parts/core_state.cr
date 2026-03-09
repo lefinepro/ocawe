@@ -81,7 +81,7 @@ module Cogni
 
       # Unified resource defaults for model, skills, and tools
       # Supports: model: "...", skill: ["..."], tool: ["..."]
-      def use(
+      def resources(
         model : String? = nil,
         skill : (String | Array(String))? = nil,
         tool : (String | Array(String))? = nil
@@ -90,7 +90,7 @@ module Cogni
 
         if model
           normalized = model.strip
-          raise "use requires non-empty model string" if normalized.empty?
+          raise "resources requires non-empty model string" if normalized.empty?
           @default_model = normalized
         end
 
@@ -113,7 +113,7 @@ module Cogni
 
       # Block-scoped resource defaults
       # Applies resources only within the block, then restores previous state
-      def use(
+      def resources(
         model : String? = nil,
         skill : (String | Array(String))? = nil,
         tool : (String | Array(String))? = nil,

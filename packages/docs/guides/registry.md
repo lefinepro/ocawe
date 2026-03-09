@@ -13,10 +13,10 @@ Supported API:
 ## Register NodeKind
 
 ```crystal
-Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, parameters|
+Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
   {
     "status" => JSON.parse("ok".to_json),
-    "message" => parameters["message"]? || JSON.parse("none".to_json),
+    "message" => attributes["message"]? || JSON.parse("none".to_json),
   }
 end
 
@@ -71,7 +71,7 @@ workflow
   .step("voice", "voice-step", config: {"voice_operator" => JSON.parse("openai".to_json)})
   .step("rag", "rag-step", config: {"operation" => JSON.parse("query".to_json)})
   .step("suspend", "approval", reason: "human approval")
-  .step("node_kind", "ext-cliproxy", node_kind_name: "agent_cliproxy", node_kind_parameters: {"model" => JSON.parse("qwen3-coder-plus".to_json)})
+  .step("node_kind", "ext-cliproxy", node_kind_name: "agent_cliproxy", node_kind_attributes: {"model" => JSON.parse("qwen3-coder-plus".to_json)})
   .step("node_kind", "ext-codex", node_kind_name: "agent_codex")
   .step("node_kind", "ext-opencode", node_kind_name: "agent_opencode")
   .commit

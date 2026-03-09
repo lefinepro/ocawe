@@ -3,17 +3,17 @@ require "./spec_helper"
 describe "custom node kinds and resource registrations" do
   it "executes custom node kind from declarative API" do
     Cogni::Workflow.reset_node_kind_registry!
-    Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, parameters|
+    Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
       {
         "kind" => json_str("ok"),
-        "value" => parameters["value"]? || json_str("missing"),
+        "value" => attributes["value"]? || json_str("missing"),
       }
     end
 
     workflow = Cogni::Workflow.create_workflow("wf-custom-kind")
     workflow
       .step(Cogni::NodeKind.new("crystal_native", {
-        "value" => json_str("from-params"),
+        "value" => json_str("from-attributes"),
       }))
       .commit
 
@@ -23,7 +23,7 @@ describe "custom node kinds and resource registrations" do
     result = engine.create_run("wf-custom-kind").start
     result.status.should eq("success")
     result.state.not_nil!["kind"].as_s.should eq("ok")
-    result.state.not_nil!["value"].as_s.should eq("from-params")
+    result.state.not_nil!["value"].as_s.should eq("from-attributes")
   end
 
   it "registers resources from a node kind handler" do

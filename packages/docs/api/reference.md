@@ -36,7 +36,7 @@ Notes:
 - Function registration supports aliases and indexed collision resolution (`name:1`, `name:2`, ...). Base-name resolution prioritizes system functions.
 - RAG DSL supports Mastra-compatible request keys: `vectorStoreName`, `indexName`, `queryText`, `topK`, `filter`, `operation`.
 - Agent frontmatter supports `voice` and `guardrails`; guardrail violations fail workflow runs with `422` (`workflow_error` envelope).
-- Agent schema validation can be configured from workflow DSL params (`input_schema`/`output_schema`) and markdown `crystal` schema blocks via `schema_ref("input"|"output")`.
+- Agent schema validation can be configured from workflow DSL attributes (`input_schema`/`output_schema`) and markdown `crystal` schema blocks via `schema_ref("input"|"output")`.
 - Resume validation supports `resume_schema` and `schema_ref("resume")`.
 - Runs API supports inline `resources` object in both `POST /runs` and `POST /resume`; runtime merges it into `state["resources"]`.
 - Triggers API (`/v1/triggers/*`) is the canonical invocation layer for workflows, agents, skills, and functions.

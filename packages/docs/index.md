@@ -2,6 +2,8 @@
 
 Crystal-first runtime for workflows, agents, triggers, and skills.
 
+Licenses: [ISC](https://spdx.org/licenses/ISC.html) (`LICENSE`) and [0BSD](https://spdx.org/licenses/0BSD.html) (`LICENSE-0BSD`).
+
 ## What You Can Build
 
 - Agent-driven workflows with explicit graph execution.

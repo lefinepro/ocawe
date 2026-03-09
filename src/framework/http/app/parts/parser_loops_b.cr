@@ -17,25 +17,25 @@ module ACD
             agent_id = match[1]
             tail = match[2]? || ""
             loaded = ctx.agent_index[agent_id]?
-            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
-            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
-            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(attributes["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(attributes["prompt"]?) || loaded.try(&.prompt)
             input_schema = resolve_agent_schema(
-              params["input_schema"]?,
+              attributes["input_schema"]?,
               loaded,
               kind: "input",
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             output_schema = resolve_agent_schema(
-              params["output_schema"]?,
+              attributes["output_schema"]?,
               loaded,
               kind: "output",
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             resume_schema = resolve_agent_schema(
-              params["resume_schema"]?,
+              attributes["resume_schema"]?,
               loaded,
               kind: "resume",
               workflow_file: ctx.workflow_file,
@@ -60,18 +60,18 @@ module ACD
           if match = line.match(/^\s*exec\s+"([^"]+)"(.*)$/)
             ref = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "exec #{ref}")
-            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
-            exec_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "exec #{ref}")
+            runtime = attributes["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = attributes["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
+            exec_attributes = extract_attributes(attributes, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
 
             loop_nodes << create_exec_node(
               ref,
               runtime: runtime,
               env: env,
-              params: exec_params,
+              attributes: exec_attributes,
               input_schema: input_schema,
               output_schema: output_schema,
               workflow_root: ctx.workflow_root
@@ -82,14 +82,14 @@ module ACD
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             node_kind = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "node #{node_kind}")
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "node #{node_kind}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "node #{node_kind}", "output")
-            node_params = extract_named_args(params, Set{"input_schema", "output_schema"}, ctx.workflow_file)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "node #{node_kind}")
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "node #{node_kind}", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "node #{node_kind}", "output")
+            node_attributes = extract_attributes(attributes, Set{"input_schema", "output_schema"}, ctx.workflow_file)
             loop_nodes << create_internal_node(
               node_kind,
               node_kind,
-              params: node_params,
+              attributes: node_attributes,
               input_schema: input_schema,
               output_schema: output_schema
             )
@@ -135,7 +135,7 @@ module ACD
         default_model : String? = nil
       ) : Cogni::Workflow::WorkflowNode
         builder = Cogni::Workflow::WorkflowDefinition.new("__registry_builder__")
-        builder.use(model: default_model) if default_model
+        builder.resources(model: default_model) if default_model
         Cogni::RegistryApi.build_node(
           builder,
           "agent",
@@ -154,7 +154,7 @@ module ACD
         ref : String,
         runtime : Cogni::Workflow::AnyHash? = nil,
         env : Cogni::Workflow::AnyHash? = nil,
-        params : Cogni::Workflow::AnyHash? = nil,
+        attributes : Cogni::Workflow::AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil,
         workflow_root : String? = nil
@@ -168,7 +168,7 @@ module ACD
           ref,
           runtime: runtime,
           env: env,
-          params: params,
+          attributes: attributes,
           workflow_root: workflow_root,
           input_schema: input_schema,
           output_schema: output_schema,
@@ -178,7 +178,7 @@ module ACD
       private def create_internal_node(
         node_kind : String,
         id : String,
-        params : Cogni::Workflow::AnyHash? = nil,
+        attributes : Cogni::Workflow::AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
         output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : Cogni::Workflow::WorkflowNode
@@ -188,7 +188,7 @@ module ACD
           "node_kind",
           id,
           node_kind_name: node_kind,
-          node_kind_parameters: params || ({} of String => JSON::Any),
+          node_kind_attributes: attributes || ({} of String => JSON::Any),
           input_schema: input_schema,
           output_schema: output_schema,
         )

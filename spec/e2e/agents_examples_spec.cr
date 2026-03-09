@@ -15,7 +15,7 @@ describe "E2E: Agents and Skills" do
       # end
       workflow = Cogni::Workflow.create_workflow("agents-example", "Agent example test")
       workflow
-        .use(model: "clipproxyapi/qwen3-coder-plus")
+        .resources(model: "clipproxyapi/qwen3-coder-plus")
         .agent("simple-agent")
         .commit
 
@@ -29,7 +29,7 @@ describe "E2E: Agents and Skills" do
     it "executes agent workflow with task input" do
       workflow = Cogni::Workflow.create_workflow("agents-example-run", "Agent run test")
       workflow
-        .use(model: "openai/gpt-4.1-mini")
+        .resources(model: "openai/gpt-4.1-mini")
         .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
           Cogni::Workflow::WorkflowNodeResult.continue({"task" => json_str("test task")})
         end)

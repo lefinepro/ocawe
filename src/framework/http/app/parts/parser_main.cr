@@ -83,28 +83,28 @@ module ACD
             agent_id = match[1]
             tail = match[2]? || ""
             loaded = ctx.agent_index[agent_id]?
-            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
-            if params["custom_fn"]?
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "agent #{agent_id}")
+            if attributes["custom_fn"]?
               raise "#{ctx.workflow_file}: `custom_fn` is not supported for agent. Use internal node calls (`function_name`)."
             end
-            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
-            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            model = parse_optional_string(attributes["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(attributes["prompt"]?) || loaded.try(&.prompt)
             input_schema = resolve_agent_schema(
-              params["input_schema"]?,
+              attributes["input_schema"]?,
               loaded,
               kind: "input",
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             output_schema = resolve_agent_schema(
-              params["output_schema"]?,
+              attributes["output_schema"]?,
               loaded,
               kind: "output",
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             resume_schema = resolve_agent_schema(
-              params["resume_schema"]?,
+              attributes["resume_schema"]?,
               loaded,
               kind: "resume",
               workflow_file: ctx.workflow_file,
@@ -139,11 +139,11 @@ module ACD
             match = resources_annotation.match(/^\s*@\[Resources\((.*)\)\]\s*$/)
             raise "#{ctx.workflow_file}: invalid Resources annotation syntax '#{resources_annotation}'" unless match
 
-            params = parse_resources_annotation_params(match[1])
-            model = params[:model]
-            skill = params[:skill]
-            tool = params[:tool]
-            ctx.workflow.use(model: model, skill: skill, tool: tool)
+            resources = parse_resources_annotation_params(match[1])
+            model = resources[:model]
+            skill = resources[:skill]
+            tool = resources[:tool]
+            ctx.workflow.resources(model: model, skill: skill, tool: tool)
             next
           end
           if line.match(/^\s*@\[Workspace\(/)
@@ -195,10 +195,10 @@ module ACD
           if match = line.match(/^\s*voice\s+"([^"]+)"(.*)$/)
             voice_id = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "voice #{voice_id}")
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "voice #{voice_id}")
 
-            inline_config = params["config"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) } || ({} of String => JSON::Any)
-            requested_agent_id = parse_optional_string(params["agent"]?) || ctx.last_agent_id
+            inline_config = attributes["config"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) } || ({} of String => JSON::Any)
+            requested_agent_id = parse_optional_string(attributes["agent"]?) || ctx.last_agent_id
             agent_voice = requested_agent_id.try { |id| ctx.agent_index[id]?.try(&.voice_config) } || ({} of String => JSON::Any)
             config = agent_voice.merge(inline_config) { |_k, _left, right| right }
 
@@ -213,12 +213,12 @@ module ACD
           if match = line.match(exec_pattern)
             ref = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "exec #{ref}")
-            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
-            exec_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "exec #{ref}")
+            runtime = attributes["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = attributes["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
+            exec_attributes = extract_attributes(attributes, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
 
             raise "#{ctx.workflow_file}: exec #{ref} requires runtime for non-mcp refs" if runtime.nil? && !ref.starts_with?("mcp:")
             ctx.workflow.exec(
@@ -226,7 +226,7 @@ module ACD
               runtime: runtime,
               env: env,
               workflow_root: ctx.workflow_root,
-              params: exec_params,
+              attributes: exec_attributes,
               input_schema: input_schema,
               output_schema: output_schema,
             )
@@ -241,10 +241,10 @@ module ACD
           if match = line.match(suspend_pattern)
             suspend_id = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "suspend #{suspend_id}")
-            reason = parse_optional_string(params["reason"]?) || "human input required"
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "suspend #{suspend_id}")
+            reason = parse_optional_string(attributes["reason"]?) || "human input required"
             resume_schema = resolve_suspend_resume_schema(
-              params["resume_schema"]?,
+              attributes["resume_schema"]?,
               ctx: ctx,
               suspend_id: suspend_id
             )
@@ -259,15 +259,15 @@ module ACD
             fn_name = match[1]
             next if reserved_keywords.includes?(fn_name)
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "node #{fn_name}")
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "node #{fn_name}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "node #{fn_name}", "output")
-            node_params = extract_named_args(params, Set{"input_schema", "output_schema"}, ctx.workflow_file)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "node #{fn_name}")
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "node #{fn_name}", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "node #{fn_name}", "output")
+            node_attributes = extract_attributes(attributes, Set{"input_schema", "output_schema"}, ctx.workflow_file)
             ctx.workflow.step(
               "node_kind",
               fn_name,
               node_kind_name: fn_name,
-              node_kind_parameters: node_params || ({} of String => JSON::Any),
+              node_kind_attributes: node_attributes || ({} of String => JSON::Any),
               input_schema: input_schema,
               output_schema: output_schema,
             )

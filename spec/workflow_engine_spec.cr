@@ -262,7 +262,7 @@ describe Cogni::Workflow::Engine do
     begin
       workflow = Cogni::Workflow.create_workflow("wf-models", "model selection")
       workflow
-        .use(model: "openai/gpt-4.1-mini")
+        .resources(model: "openai/gpt-4.1-mini")
         .agent("model-agent", prompt: "system", model: "openai/gpt-4.1")
         .commit
 
@@ -284,7 +284,7 @@ describe Cogni::Workflow::Engine do
 
       workflow_default_only = Cogni::Workflow.create_workflow("wf-model-default", "model selection default")
       workflow_default_only
-        .use(model: "openai/gpt-4.1-mini")
+        .resources(model: "openai/gpt-4.1-mini")
         .agent("model-agent-default", prompt: "system")
         .commit
       engine.register(workflow_default_only)
