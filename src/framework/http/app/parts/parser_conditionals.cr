@@ -60,25 +60,25 @@ module ACD
             agent_id = match[1]
             tail = match[2]? || ""
             loaded = ctx.agent_index[agent_id]?
-            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
-            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
-            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(attributes["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(attributes["prompt"]?) || loaded.try(&.prompt)
             input_schema = resolve_agent_schema(
-              params["input_schema"]?,
+              attributes["input_schema"]?,
               loaded,
               kind: "input",
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             output_schema = resolve_agent_schema(
-              params["output_schema"]?,
+              attributes["output_schema"]?,
               loaded,
               kind: "output",
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             resume_schema = resolve_agent_schema(
-              params["resume_schema"]?,
+              attributes["resume_schema"]?,
               loaded,
               kind: "resume",
               workflow_file: ctx.workflow_file,
@@ -103,17 +103,17 @@ module ACD
           if match = line.match(/^\s*exec\s+"([^"]+)"(.*)$/)
             ref = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "exec #{ref}")
-            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
-            exec_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "exec #{ref}")
+            runtime = attributes["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = attributes["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
+            exec_attributes = extract_attributes(attributes, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
             current_nodes << create_exec_node(
               ref,
               runtime: runtime,
               env: env,
-              params: exec_params,
+              attributes: exec_attributes,
               input_schema: input_schema,
               output_schema: output_schema,
               workflow_root: ctx.workflow_root
@@ -124,14 +124,14 @@ module ACD
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             node_kind = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "node #{node_kind}")
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "node #{node_kind}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "node #{node_kind}", "output")
-            node_params = extract_named_args(params, Set{"input_schema", "output_schema"}, ctx.workflow_file)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "node #{node_kind}")
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "node #{node_kind}", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "node #{node_kind}", "output")
+            node_attributes = extract_attributes(attributes, Set{"input_schema", "output_schema"}, ctx.workflow_file)
             current_nodes << create_internal_node(
               node_kind,
               node_kind,
-              params: node_params,
+              attributes: node_attributes,
               input_schema: input_schema,
               output_schema: output_schema
             )
@@ -183,25 +183,25 @@ module ACD
             agent_id = match[1]
             tail = match[2]? || ""
             loaded = ctx.agent_index[agent_id]?
-            params = parse_line_params(tail, ctx.workflow_file, "agent #{agent_id}")
-            model = parse_optional_string(params["model"]?) || loaded.try(&.model)
-            prompt = parse_optional_string(params["prompt"]?) || loaded.try(&.prompt)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "agent #{agent_id}")
+            model = parse_optional_string(attributes["model"]?) || loaded.try(&.model)
+            prompt = parse_optional_string(attributes["prompt"]?) || loaded.try(&.prompt)
             input_schema = resolve_agent_schema(
-              params["input_schema"]?,
+              attributes["input_schema"]?,
               loaded,
               kind: "input",
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             output_schema = resolve_agent_schema(
-              params["output_schema"]?,
+              attributes["output_schema"]?,
               loaded,
               kind: "output",
               workflow_file: ctx.workflow_file,
               agent_id: agent_id
             )
             resume_schema = resolve_agent_schema(
-              params["resume_schema"]?,
+              attributes["resume_schema"]?,
               loaded,
               kind: "resume",
               workflow_file: ctx.workflow_file,
@@ -231,18 +231,18 @@ module ACD
           if match = line.match(/^\s*exec\s+"([^"]+)"(.*)$/)
             ref = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "exec #{ref}")
-            runtime = params["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            env = params["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
-            exec_params = extract_named_args(params, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "exec #{ref}")
+            runtime = attributes["runtime"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            env = attributes["env"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) }
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "exec #{ref}", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "exec #{ref}", "output")
+            exec_attributes = extract_attributes(attributes, Set{"runtime", "env", "input_schema", "output_schema"}, ctx.workflow_file)
 
             node = create_exec_node(
               ref,
               runtime: runtime,
               env: env,
-              params: exec_params,
+              attributes: exec_attributes,
               input_schema: input_schema,
               output_schema: output_schema,
               workflow_root: ctx.workflow_root
@@ -259,15 +259,15 @@ module ACD
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             node_kind = match[1]
             tail = match[2]? || ""
-            params = parse_line_params(tail, ctx.workflow_file, "node #{node_kind}")
-            input_schema = compile_optional_function_schema(params["input_schema"]?, ctx.workflow_file, "node #{node_kind}", "input")
-            output_schema = compile_optional_function_schema(params["output_schema"]?, ctx.workflow_file, "node #{node_kind}", "output")
-            node_params = extract_named_args(params, Set{"input_schema", "output_schema"}, ctx.workflow_file)
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "node #{node_kind}")
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "node #{node_kind}", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "node #{node_kind}", "output")
+            node_attributes = extract_attributes(attributes, Set{"input_schema", "output_schema"}, ctx.workflow_file)
 
             node = create_internal_node(
               node_kind,
               node_kind,
-              params: node_params,
+              attributes: node_attributes,
               input_schema: input_schema,
               output_schema: output_schema
             )

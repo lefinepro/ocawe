@@ -13,7 +13,7 @@
 - Markdown may include Crystal schema blocks:
   - ```crystal schema:input ... ```
   - ```crystal schema:output ... ```
-- Schema blocks are resolved by workflow agent params via `schema_ref("input")` and `schema_ref("output")`.
+- Schema blocks are resolved by workflow agent attributes via `schema_ref("input")` and `schema_ref("output")`.
 
 ## Global shared assets
 - Global agents fallback: `agents/*.md`

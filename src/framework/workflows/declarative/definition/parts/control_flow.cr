@@ -39,7 +39,7 @@ module Cogni
           "node_kind",
           node_id,
           node_kind_name: kind.node,
-          node_kind_parameters: kind.parameters,
+          node_kind_attributes: kind.attributes,
           input_schema: input_schema,
           output_schema: output_schema,
         ))

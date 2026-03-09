@@ -17,7 +17,7 @@ describe "E2E: Real Model API Integration" do
 
         workflow = Cogni::Workflow.create_workflow("e2e-real-api", "Real API test")
         workflow
-          .use(model: model)
+          .resources(model: model)
           .agent("api-agent", prompt: "You are a helpful assistant. Respond with exactly: OK")
           .commit
 
@@ -43,7 +43,7 @@ describe "E2E: Real Model API Integration" do
 
       workflow = Cogni::Workflow.create_workflow("e2e-real-api", "Real API test")
       workflow
-        .use(model: model)
+        .resources(model: model)
         .agent("api-agent", prompt: "You are a helpful assistant. Respond with exactly: OK")
         .commit
 

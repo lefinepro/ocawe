@@ -13,10 +13,10 @@ This specification defines the workflow-building API exposed by `Cogni::Workflow
 
 Supported workflow methods:
 
-- `use(model:, skill:, tool:)`
+- `resources(model:, skill:, tool:)`
 - `agent(...)`
 - `skill(...)`
-- `exec(ref, runtime: nil, env: nil, params: nil, input_schema: nil, output_schema: nil)`
+- `exec(ref, runtime: nil, env: nil, attributes: nil, input_schema: nil, output_schema: nil)`
 - `voice(...)`
 - `rag(...)`
 - `suspend(...)`
@@ -64,7 +64,7 @@ For `agent`, `exec`, and internal function-name (`custom`) nodes:
 {"input": <previous-step-output-or-init>, "context": {"workflow_id": "...", "run_id": "...", "state": {...}}}
 ```
 
-If `params` metadata exists for `exec` or internal function-name nodes, those fields are merged at top-level of the input envelope.
+If `attributes` metadata exists for `exec` or internal function-name nodes, those fields are merged at top-level of the input envelope.
 
 ## Loop Semantics
 

@@ -84,7 +84,7 @@ describe "E2E: Agent Interaction" do
       begin
         workflow = Cogni::Workflow.create_workflow("e2e-multi-agent", "Multi-agent chain")
         workflow
-          .use(model: "openai/gpt-4.1-mini")
+          .resources(model: "openai/gpt-4.1-mini")
           .agent("analyzer", prompt: "Analyze input")
           .agent("summarizer", prompt: "Summarize previous analysis")
           .agent("formatter", prompt: "Format for output")

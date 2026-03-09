@@ -72,7 +72,7 @@ module Cogni
       runtime : AnyHash? = nil,
       env : AnyHash? = nil,
       workflow_root : String? = nil,
-      params : AnyHash? = nil,
+      attributes : AnyHash? = nil,
       prompt : String? = nil,
       model : String? = nil,
       resume_schema : Validator? = nil,
@@ -83,7 +83,7 @@ module Cogni
       config : AnyHash? = nil,
       reason : String? = nil,
       node_kind_name : String? = nil,
-      node_kind_parameters : AnyHash? = nil,
+      node_kind_attributes : AnyHash? = nil,
       workspace : AnyHash? = nil,
       input_schema : Validator? = nil,
       output_schema : Validator? = nil
@@ -100,7 +100,7 @@ module Cogni
         metadata["runtime"] = JSON.parse(runtime.to_json) if runtime
         metadata["env"] = JSON.parse(env.to_json) if env
         metadata["workflow_root"] = JSON.parse(workflow_root.to_json) if workflow_root
-        metadata["params"] = JSON.parse(params.to_json) if params
+        metadata["attributes"] = JSON.parse(attributes.to_json) if attributes
         metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
         executor = Cogni::Workflow::ExecExecutor.new
@@ -205,28 +205,28 @@ module Cogni
           })
         end
       when "agent_cliproxy", "agent_codex", "agent_opencode", "agent_claude_code", "agent_qwen"
-        kind_params = params || ({} of String => JSON::Any)
+        kind_attributes = attributes || ({} of String => JSON::Any)
         return build_node(
           workflow,
           "node_kind",
           id,
           node_kind_name: normalized,
-          node_kind_parameters: kind_params,
+          node_kind_attributes: kind_attributes,
           workspace: workspace,
           input_schema: input_schema,
           output_schema: output_schema,
         )
       when "node_kind"
         kind_name = node_kind_name || id
-        kind_params = node_kind_parameters || ({} of String => JSON::Any)
+        kind_attributes = node_kind_attributes || ({} of String => JSON::Any)
         metadata = {
           "node_kind" => JSON.parse(kind_name.to_json),
-          "parameters" => JSON.parse(kind_params.to_json),
+          "attributes" => JSON.parse(kind_attributes.to_json),
         } of String => JSON::Any
         metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
         return WorkflowNode.new(id, NodeKind::Custom, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          raw = Cogni::Workflow.node_kind_registry.call(kind_name, ctx, kind_params)
+          raw = Cogni::Workflow.node_kind_registry.call(kind_name, ctx, kind_attributes)
           case raw
           when WorkflowNodeResult
             raw

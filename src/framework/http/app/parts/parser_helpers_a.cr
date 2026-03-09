@@ -186,10 +186,10 @@ module ACD
         Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema")
       end
 
-      private def parse_line_params(tail : String, workflow_file : String, context : String) : Hash(String, String)
-        params = {} of String => String
+      private def parse_line_attributes(tail : String, workflow_file : String, context : String) : Hash(String, String)
+        attributes = {} of String => String
         stripped = tail.strip
-        return params if stripped.empty?
+        return attributes if stripped.empty?
 
         working = stripped
         working = working[1..] if working.starts_with?(",")
@@ -201,14 +201,14 @@ module ACD
           key = piece[0, separator].strip
           value = piece[separator + 1, piece.size - separator - 1].strip
           raise "#{workflow_file}: invalid #{context} param '#{piece}'" if key.empty? || value.empty?
-          params[key] = value
+          attributes[key] = value
         end
-        params
+        attributes
       end
 
-      private def extract_named_args(params : Hash(String, String), skip_keys : Set(String), workflow_file : String) : Cogni::Workflow::AnyHash?
+      private def extract_attributes(attributes : Hash(String, String), skip_keys : Set(String), workflow_file : String) : Cogni::Workflow::AnyHash?
         args = {} of String => JSON::Any
-        params.each do |key, value|
+        attributes.each do |key, value|
           next if skip_keys.includes?(key)
           args[key] = JSON.parse(value)
         rescue

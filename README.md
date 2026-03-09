@@ -2,6 +2,8 @@
 
 Cogni is a Crystal-first runtime for workflow bundles, agents, tools, and skills.
 
+Licenses: [ISC](https://spdx.org/licenses/ISC.html) (`LICENSE`) and [0BSD](https://spdx.org/licenses/0BSD.html) (`LICENSE-0BSD`).
+
 It includes:
 - A production-oriented HTTP runtime server.
 - A Svelte playground for workflows, tools, skills, and agent chat.

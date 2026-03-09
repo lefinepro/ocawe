@@ -226,9 +226,9 @@ For `agent`, `exec`, and internal function-name nodes, runtime passes a chained 
 {"input": <previous step output>, "context": {"workflow_id": "...", "run_id": "...", "state": {...}}}
 ```
 
-If exec/internal-node params are defined in DSL, runtime includes these params as flat fields in the input envelope.
+If exec/internal-node attributes are defined in DSL, runtime includes these attributes as flat fields in the input envelope.
 
-For internal function-name nodes, `input_schema` and `output_schema` are reserved schema keys; all other named args are passed through as node parameters.
+For internal function-name nodes, `input_schema` and `output_schema` are reserved schema keys; all other named args are passed through as node attributes.
 
 ## Function Resolution and Aliases
 

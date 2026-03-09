@@ -130,7 +130,7 @@ describe "E2E: Workflow Lifecycle" do
       # Simulates e2e-test workflow from shards/examples/e2e-test
       workflow = Cogni::Workflow.create_workflow("e2e-test", "E2E test workflow")
       workflow
-        .use(model: "clipproxyapi/qwen3-coder-model")
+        .resources(model: "clipproxyapi/qwen3-coder-model")
         .agent("e2e-processor",
           input_schema: Cogni::Workflows::DSL::Types.object({"task" => Cogni::Workflows::DSL::Types.of(String)}, strict: false),
           output_schema: Cogni::Workflows::DSL::Types.object({"result" => Cogni::Workflows::DSL::Types.of(String)}, strict: false))
