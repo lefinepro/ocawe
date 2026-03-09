@@ -157,8 +157,6 @@ Compatibility:
 - `POST /v1/chat/completions`
 
 Federation APIs:
-- `POST /federation/follows`
-- `GET /federation/following`
 - `POST /federation/inbox` (S2S inbound activities, signature-verified)
 - `GET /federation/outbox`
 - `POST /federation/outbox`

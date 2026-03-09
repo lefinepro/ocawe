@@ -102,4 +102,11 @@ class ACD::Kemal::App
   ) : Array(Hash(String, JSON::Any))
     extract_activities_from_outbox(outbox_doc)
   end
+
+  def test_validate_contextual_federation_object(
+    body : Hash(String, JSON::Any),
+    expected_kind : String = "object"
+  ) : String?
+    validate_contextual_federation_object(body, expected_kind)
+  end
 end

@@ -1,7 +1,7 @@
 module ACD
   module Kemal
     class App
-      private def fetch_jsonld_activity(url : String, follow : Hash(String, JSON::Any)? = nil) : Hash(String, JSON::Any)
+      private def fetch_jsonld_activity(url : String, follow : Hash(String, JSON::Any)? = nil, expected_kind : String = "object") : Hash(String, JSON::Any)
         headers = ::HTTP::Headers{
           "Accept" => FEDERATION_JSONLD_CONTENT_TYPE,
         }
@@ -11,6 +11,9 @@ module ACD
         raise "HTTP #{response.status_code} GET #{url}" unless response.status_code >= 200 && response.status_code < 300
         parsed = JSON.parse(response.body).as_h?
         raise "invalid JSON-LD from #{url}" unless parsed
+        if error = validate_contextual_federation_object(parsed, expected_kind: expected_kind)
+          raise "invalid JSON-LD from #{url}: #{error}"
+        end
         parsed
       end
 
