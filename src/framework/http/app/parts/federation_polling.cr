@@ -27,7 +27,7 @@ module ACD
           next unless status == "active" || status == "pending"
 
           begin
-            outbox_doc = fetch_jsonld_activity(remote_outbox, follow)
+            outbox_doc = fetch_jsonld_activity(remote_outbox, follow, expected_kind: "collection")
             activities = extract_activities_from_outbox(outbox_doc)
             newest_id = ""
             activities.each do |activity|

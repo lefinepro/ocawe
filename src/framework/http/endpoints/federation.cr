@@ -5,97 +5,17 @@ module ACD
   module Kemal
     class App
       FEDERATION_JSONLD_CONTENT_TYPE = "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
-      FEDERATION_JSONLD_CONTEXT = "https://www.w3.org/ns/activitystreams"
-      FEDERATION_FORGEFED_CONTEXT = "https://forgefed.org/ns"
+      FEDERATION_JSONLD_CONTEXT      = "https://www.w3.org/ns/activitystreams"
+      FEDERATION_FORGEFED_CONTEXT    = "https://forgefed.org/ns"
 
       private def mount_federation_endpoints
-        post "/federation/follows" do |env|
-          body = json_body(env)
-          next invalid_jsonld(env) unless valid_jsonld_request?(env, body)
-          local_actor = resolve_local_actor(body)
-          remote_actor = resolve_remote_actor(body)
-
-          if remote_actor.empty?
-            next federation_error(env, 400, "bad_request", "Follow requires object/remote_actor")
-          end
-          local_actor = @settings.federation.local_actor if local_actor.empty?
-
-          queue = body["queue"]?.try(&.as_s?) || infer_queue_from_actor(remote_actor)
-          capabilities = body["capabilities"]? || JSON.parse(([] of String).to_json)
-          begin
-            remote_actor_doc = fetch_jsonld_activity(remote_actor)
-          rescue ex
-            next federation_error(env, 422, "follow_delivery_error", "failed to fetch remote actor: #{ex.message}")
-          end
-          remote_inbox = remote_actor_doc["inbox"]?.try(&.as_s?).to_s
-          remote_outbox = remote_actor_doc["outbox"]?.try(&.as_s?).to_s
-          endpoints = remote_actor_doc["endpoints"]?.try(&.as_h?) || {} of String => JSON::Any
-          remote_shared_inbox = endpoints["sharedInbox"]?.try(&.as_s?).to_s
-          remote_public_key = remote_actor_doc["publicKey"]?.try(&.as_h?) || {} of String => JSON::Any
-          remote_public_key_id = remote_public_key["id"]?.try(&.as_s?).to_s
-          remote_public_key_pem = remote_public_key["publicKeyPem"]?.try(&.as_s?).to_s
-
-          if remote_inbox.empty? || remote_outbox.empty?
-            next federation_error(env, 400, "bad_request", "remote actor must expose inbox and outbox")
-          end
-
-          suffix = Random.rand(UInt64::MAX).to_s(16)
-          activity_id = body["id"]?.try(&.as_s?) || "#{local_actor}/follows/#{suffix}"
-          follow_activity = JSON.parse({
-            "@context" => FEDERATION_JSONLD_CONTEXT,
-            "id" => activity_id,
-            "type" => "Follow",
-            "actor" => local_actor,
-            "object" => remote_actor,
-          }.to_json).as_h
-
-          delivery_target = remote_shared_inbox.empty? ? remote_inbox : remote_shared_inbox
-          begin
-            deliver_activity!(delivery_target, follow_activity)
-          rescue ex
-            next federation_error(env, 422, "follow_delivery_error", "failed to deliver Follow: #{ex.message}")
-          end
-
-          record = @federation_store.upsert_follow(
-            local_actor: local_actor,
-            remote_actor: remote_actor,
-            queue: queue,
-            capabilities: capabilities,
-            status: "pending",
-            remote_inbox: remote_inbox,
-            remote_outbox: remote_outbox,
-            remote_shared_inbox: remote_shared_inbox,
-            remote_public_key_id: remote_public_key_id,
-            remote_public_key_pem: remote_public_key_pem,
-            follow_activity_id: activity_id,
-          )
-
-          env.response.status_code = 201
-          env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
-          {
-            "@context" => FEDERATION_JSONLD_CONTEXT,
-            "status" => "pending",
-            "follow" => record,
-            "activity" => follow_activity,
-          }.to_json
-        end
-
-        get "/federation/following" do |env|
-          items = @federation_store.list_following
-          env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
-          {
-            "@context" => FEDERATION_JSONLD_CONTEXT,
-            "type" => "OrderedCollection",
-            "totalItems" => items.size,
-            "orderedItems" => items.map { |entry| entry["remote_actor"]?.try(&.as_s?) || "" },
-            "following" => items,
-          }.to_json
-        end
-
         post "/federation/inbox" do |env|
           body = json_body(env)
           next invalid_jsonld(env) unless valid_jsonld_request?(env, body)
           next federation_error(env, 401, "unauthorized", "missing or invalid HTTP Signature") unless valid_http_signature?(env, body)
+          if error = validate_contextual_federation_object(body, expected_kind: "activity")
+            next federation_error(env, 422, "invalid_activitypub_type", error)
+          end
 
           activity_type = body["type"]?.try(&.as_s?).to_s.strip
           actor = body["actor"]?.try(&.as_s?) || body["remote_actor"]?.try(&.as_s?) || ""
@@ -131,8 +51,8 @@ module ACD
           env.response.status_code = 202
           env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
           {
-            "@context" => FEDERATION_JSONLD_CONTEXT,
-            "status" => "accepted",
+            "@context"    => FEDERATION_JSONLD_CONTEXT,
+            "status"      => "accepted",
             "received_at" => received_at,
           }.to_json
         end
@@ -142,18 +62,21 @@ module ACD
           items = events.map { |entry| entry["activity"]? || JSON.parse("{}") }
           env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
           {
-            "@context" => FEDERATION_JSONLD_CONTEXT,
-            "type" => "OrderedCollection",
-            "totalItems" => events.size,
-            "items" => items,
+            "@context"     => FEDERATION_JSONLD_CONTEXT,
+            "type"         => "OrderedCollection",
+            "totalItems"   => events.size,
+            "items"        => items,
             "orderedItems" => items,
-            "outbox" => events,
+            "outbox"       => events,
           }.to_json
         end
 
         post "/federation/outbox" do |env|
           body = json_body(env)
           next invalid_jsonld(env) unless valid_jsonld_request?(env, body)
+          if error = validate_contextual_federation_object(body, expected_kind: "activity")
+            next federation_error(env, 422, "invalid_activitypub_type", error)
+          end
           suffix = Random.rand(UInt64::MAX).to_s(16)
           event = @federation_store.append_outbox_event(
             activity: body,
@@ -165,8 +88,8 @@ module ACD
           env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
           {
             "@context" => FEDERATION_JSONLD_CONTEXT,
-            "status" => "queued",
-            "event" => event,
+            "status"   => "queued",
+            "event"    => event,
           }.to_json
         end
       end
@@ -194,11 +117,10 @@ module ACD
         env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
         {
           "@context" => FEDERATION_JSONLD_CONTEXT,
-          "type" => "Error",
-          "error" => {"type" => type, "message" => message},
+          "type"     => "Error",
+          "error"    => {"type" => type, "message" => message},
         }.to_json
       end
-
     end
   end
 end

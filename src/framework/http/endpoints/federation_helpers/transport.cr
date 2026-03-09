@@ -18,20 +18,20 @@ module ACD
       private def extract_activities_from_outbox(outbox_doc : Hash(String, JSON::Any)) : Array(Hash(String, JSON::Any))
         items = [] of Hash(String, JSON::Any)
         ordered_items = outbox_doc["orderedItems"]?.try(&.as_a?) ||
-          outbox_doc["items"]?.try(&.as_a?) ||
-          [] of JSON::Any
+                        outbox_doc["items"]?.try(&.as_a?) ||
+                        [] of JSON::Any
         if ordered_items.empty?
           if first = outbox_doc["first"]?
             first_doc = if first_hash = first.as_h?
                           first_hash
                         elsif first_url = first.as_s?
-                          fetch_jsonld_activity(first_url)
+                          fetch_jsonld_activity(first_url, expected_kind: "collection")
                         else
                           {} of String => JSON::Any
                         end
             ordered_items = first_doc["orderedItems"]?.try(&.as_a?) ||
-              first_doc["items"]?.try(&.as_a?) ||
-              [] of JSON::Any
+                            first_doc["items"]?.try(&.as_a?) ||
+                            [] of JSON::Any
           end
         end
         ordered_items.each do |entry|
