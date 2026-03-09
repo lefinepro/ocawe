@@ -5,23 +5,7 @@ module ACD
         post "/v1/workflows/:workflowId/runs" do |env|
           workflow_id = env.params.url["workflowId"]
           body = json_body(env)
-          input_data = body["input_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body.dup
-          resources = body["resources"]?.try(&.as_h?)
-          input_data.delete("resources")
-          run_id = body["run_id"]?.try(&.as_s?)
-          resource_id = body["resource_id"]?.try(&.as_s?)
-
-          result_or_error = with_workflow_errors(env) do
-            @workflow_service.start_run(workflow_id, run_id: run_id, resource_id: resource_id, input_data: input_data, resources: resources)
-          end
-          if result_or_error.is_a?(String)
-            next result_or_error
-          end
-          run_result = result_or_error.as(Cogni::Workflow::WorkflowRunResult)
-
-          env.response.status_code = 201
-          env.response.content_type = "application/json"
-          @workflow_service.load_snapshot(workflow_id, run_result.run_id).try(&.to_json) || run_result.to_json
+          start_workflow_run_from_body(env, workflow_id, body)
         end
 
         get "/v1/workflows/:workflowId/runs" do |env|
@@ -33,10 +17,10 @@ module ACD
           {
             "runs" => runs.map { |run|
               {
-                "run_id" => run.run_id,
+                "run_id"      => run.run_id,
                 "workflow_id" => run.workflow_id,
-                "status" => run.status,
-                "updated_at" => run.updated_at,
+                "status"      => run.status,
+                "updated_at"  => run.updated_at,
               }
             },
           }.to_json
@@ -48,9 +32,7 @@ module ACD
           snapshot = @workflow_service.load_snapshot(workflow_id, run_id)
 
           unless snapshot
-            env.response.status_code = 404
-            env.response.content_type = "application/json"
-            next({error: {type: "not_found", message: "run not found: #{workflow_id}/#{run_id}"}}.to_json)
+            next run_not_found(env, workflow_id, run_id)
           end
 
           env.response.content_type = "application/json"
@@ -61,22 +43,15 @@ module ACD
           workflow_id = env.params.url["workflowId"]
           run_id = env.params.url["runId"]
           body = json_body(env)
-          resume_data = body["resume_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body.dup
-          resources = body["resources"]?.try(&.as_h?)
-          resume_data.delete("resources")
           node = parse_node_selector(body["node"]?)
           wait_for_all = body["wait_for_all_paths"]?.try(&.as_bool?) || false
 
-          result_or_error = with_workflow_errors(env) do
-            @workflow_service.resume_run(workflow_id, run_id, resume_data: resume_data, resources: resources, node: node, wait_for_all_paths: wait_for_all)
-          end
-          if result_or_error.is_a?(String)
+          result_or_error = resume_workflow_run_from_body(env, workflow_id, run_id, body, node: node, wait_for_all_paths: wait_for_all)
+          if result_or_error
             next result_or_error
           end
 
-          snapshot = @workflow_service.load_snapshot(workflow_id, run_id)
-          env.response.content_type = "application/json"
-          snapshot.try(&.to_json) || {"status" => "ok"}.to_json
+          run_snapshot_or_ok_json(env, workflow_id, run_id)
         end
 
         post "/v1/workflows/:workflowId/runs/:runId/restart" do |env|
@@ -90,9 +65,7 @@ module ACD
             next result_or_error
           end
 
-          snapshot = @workflow_service.load_snapshot(workflow_id, run_id)
-          env.response.content_type = "application/json"
-          snapshot.try(&.to_json) || {"status" => "ok"}.to_json
+          run_snapshot_or_ok_json(env, workflow_id, run_id)
         end
 
         post "/v1/workflows/:workflowId/runs/:runId/time-travel" do |env|
@@ -101,9 +74,7 @@ module ACD
           body = json_body(env)
           node = parse_node_selector(body["node"]?)
           unless node
-            env.response.status_code = 400
-            env.response.content_type = "application/json"
-            next({error: {type: "bad_request", message: "time-travel requires node"}}.to_json)
+            next time_travel_requires_node(env)
           end
 
           input_data = body["input_data"]?.try(&.as_h?)
@@ -124,25 +95,19 @@ module ACD
             next result_or_error
           end
 
-          snapshot = @workflow_service.load_snapshot(workflow_id, run_id)
-          env.response.content_type = "application/json"
-          snapshot.try(&.to_json) || {"status" => "ok"}.to_json
+          run_snapshot_or_ok_json(env, workflow_id, run_id)
         end
 
         post "/v1/workflows/:workflowId/runs/:runId/cancel" do |env|
           workflow_id = env.params.url["workflowId"]
           run_id = env.params.url["runId"]
 
-          result_or_error = with_workflow_errors(env) do
-            @workflow_service.cancel_run(workflow_id, run_id)
-          end
-          if result_or_error.is_a?(String)
+          result_or_error = cancel_workflow_run(env, workflow_id, run_id)
+          if result_or_error
             next result_or_error
           end
 
-          snapshot = @workflow_service.load_snapshot(workflow_id, run_id)
-          env.response.content_type = "application/json"
-          snapshot.try(&.to_json) || {"status" => "ok"}.to_json
+          run_snapshot_or_ok_json(env, workflow_id, run_id)
         end
       end
     end

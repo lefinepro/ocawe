@@ -45,9 +45,7 @@ module ACD
       end
 
       private def not_implemented(env, message : String) : String
-        env.response.status_code = 501
-        env.response.content_type = "application/json"
-        {error: {type: "not_implemented", message: message}}.to_json
+        json_error(env, 501, "not_implemented", message)
       end
 
       private def json_body(env) : Cogni::Workflow::AnyHash
@@ -75,18 +73,12 @@ module ACD
       rescue ex
         message = ex.message || "workflow request failed"
         if message.includes?("unknown workflow") || message.includes?("unknown workflow bundle")
-          env.response.status_code = 404
-          env.response.content_type = "application/json"
-          return {error: {type: "not_found", message: message}}.to_json
+          return json_error(env, 404, "not_found", message)
         end
         if message.includes?("unknown node") || message.includes?("requires node")
-          env.response.status_code = 400
-          env.response.content_type = "application/json"
-          return {error: {type: "bad_request", message: message}}.to_json
+          return json_error(env, 400, "bad_request", message)
         end
-        env.response.status_code = 422
-        env.response.content_type = "application/json"
-        return {error: {type: "workflow_error", message: message}}.to_json
+        return json_error(env, 422, "workflow_error", message)
       end
 
       private def load_workflow_definition(bundle : Discovery::WorkflowBundle, loaded_agents : Array(Agents::LoadedAgent)) : Cogni::Workflow::WorkflowDefinition
