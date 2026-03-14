@@ -157,8 +157,7 @@ module ACD
               voice_config: loaded.try(&.voice_config),
               guardrails_config: loaded.try(&.guardrails_config),
               input_schema: input_schema,
-              output_schema: output_schema,
-              default_model: ctx.workflow.default_model
+              output_schema: output_schema
             )
             parallel_nodes << node
             next

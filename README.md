@@ -193,7 +193,7 @@ See `shards/examples`:
 Run all examples:
 
 ```bash
-./build/cogni up --port 4111 --workflows-root ./shards/examples --fallback-workflows-root ./shards/examples
+./build/cogni up --port 4111 --workflows-root ./shards/examples
 ```
 
 ## Crystal Configuration
@@ -210,7 +210,7 @@ Static config file `./cogni.config.rcl` is auto-loaded when present.
 Example `config.rcl`:
 
 ```rcl
-api = "lefine"
+api = "federation"
 
 federation do
   adapter = "memory"
@@ -224,16 +224,16 @@ end
 
 workflows do
   preferred_workflows_root = "./workflows"
-  fallback_workflows_root = "./workflows"
 end
 ```
 
 Default static file in repo: `cogni.config.rcl`.
 
 `api` supports string or array of strings:
-- `"lefine"`: ForgeFed-only mode (mounts only `/federation/*` plus health/docs)
-- `"mastra"`: default runtime APIs (`/v1/*`)
-- `["mastra", "lefine"]`: enable both groups
+- `"federation"`: ForgeFed-only mode (mounts only `/federation/*` plus health/docs)
+- `"classic"`: default runtime APIs (`/v1/*`)
+- `"mastra"`: backward-compatible alias for `"classic"`
+- `["classic", "federation"]`: enable both groups
 
 Federation persistence modes:
 - `adapter = "memory"` (default): state in process memory (reset on restart)
@@ -247,7 +247,7 @@ Agent CLI defaults:
 - `agent_codex`, `agent_claude_code`, `agent_opencode`, `agent_qwen` can auto-install their CLI on first use.
 - `CODEX_BIN` / `CLAUDE_BIN` / `OPENCODE_BIN` / `QWEN_BIN` are optional executable overrides.
 - per-provider credentials/config paths can be set in node params (`path_to_credentials`, `path_to_config`, `path_to_config_codex`) or via env.
-- federation merge runs (`api=lefine`, `activity=merge`) inject strict prompt instructions for `agent_*` to return ForgeFed `Offer(Ticket)` JSON only.
+- federation merge runs (`api=federation`, `activity=merge`) inject strict prompt instructions for `agent_*` to return ForgeFed `Offer(Ticket)` JSON only.
 
 Minimal workflow snippets:
 

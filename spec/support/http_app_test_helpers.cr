@@ -25,12 +25,23 @@ class ACD::Kemal::App
     workflow_id_from_actor(actor)
   end
 
+  def test_set_workflow_ids(ids : Array(String)) : Nil
+    @cache_lock.synchronize do
+      @workflow_ids = ids.dup
+    end
+  end
+
   def test_resolve_ticket_workflow_actor(
     body : Hash(String, JSON::Any),
     ticket : Hash(String, JSON::Any),
-    local_domain : String
+    local_domain : String,
+    default_actor : String = ""
   ) : String
-    resolve_ticket_workflow_actor(body, ticket, local_domain)
+    resolve_ticket_workflow_actor(body, ticket, local_domain, default_actor)
+  end
+
+  def test_local_actor_document(workflow_id : String) : Hash(String, JSON::Any)
+    local_actor_document(workflow_id)
   end
 
   def test_extract_ticket_activity_payload(

@@ -13,7 +13,6 @@ This specification defines the workflow-building API exposed by `Cogni::Workflow
 
 Supported workflow methods:
 
-- `resources(model:, skill:, tool:)`
 - `agent(...)`
 - `skill(...)`
 - `exec(ref, runtime: nil, env: nil, attributes: nil, input_schema: nil, output_schema: nil)`

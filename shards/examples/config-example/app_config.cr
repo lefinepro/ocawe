@@ -4,7 +4,6 @@ module Cogni
       Cogni::Config::Settings.new(
         workflows: Cogni::Config::WorkflowSettings.new(
           preferred_workflows_root: "./shards/examples/full-capabilities",
-          fallback_workflows_root: "./shards/examples"
         ),
         node_kinds: Cogni::Config::NodeKindSettings.new(enabled: ["exec", "agent", "skill", "voice", "rag", "suspend", "control", "custom"]),
         functions: {

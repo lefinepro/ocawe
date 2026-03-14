@@ -1,193 +1,130 @@
 require "./e2e_spec_helper"
 
-# E2E Tests for Resources and Configuration
-#
-# Tests resource management and configuration patterns:
-# - Unified @[Resources(...)] annotation (model, skill, tool)
-# - Model selection and resolution
-# - Full capabilities workflow
-# - Crystal-native configuration
+describe "E2E: Workflow Configuration" do
+  it "uses explicit agent model from workflow DSL" do
+    ENV["COGNICORE_MOCK_LLM"] = "1"
 
-describe "E2E: Resources and Configuration" do
-  describe "model selection" do
-    it "creates workflow with model default from resource annotation" do
-      # Simulates: workflow "simple-model-test" do
-      #   @[Resources(model: "cliproxyapi/qwen3-coder-plus")]
-      #   agent "simple-model-agent"
-      # end
-      workflow = Cogni::Workflow.create_workflow("simple-model-test", "Model test")
+    begin
+      workflow = Cogni::Workflow.create_workflow("workflow-model-inline", "Model inline")
       workflow
-        .resources(model: "clipproxyapi/qwen3-coder-plus")
-        .agent("simple-model-agent")
-        .commit
-
-      workflow.default_model.should eq("clipproxyapi/qwen3-coder-plus")
-      workflow.nodes.size.should eq(1)
-    end
-
-    it "resolves model from workflow default" do
-      workflow = Cogni::Workflow.create_workflow("model-resolution-test", "Model resolution test")
-      workflow
-        .resources(model: "clipproxyapi/qwen3-coder-plus")
-        .step(Cogni::Workflow::WorkflowNode.new("check-model", Cogni::Workflow::NodeKind::Control) do |_ctx|
-          Cogni::Workflow::WorkflowNodeResult.continue({
-            "workflow_model" => json_str("clipproxyapi/qwen3-coder-plus"),
-            "resolved"       => json_bool(true),
-          })
-        end)
+        .agent("model-agent",
+          model: "openai/gpt-4.1-mini",
+          prompt: "Test",
+        )
         .commit
 
       engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
-      run = engine.create_run("model-resolution-test")
-      result = run.start
+      result = engine.create_run("workflow-model-inline").start(input_data: {"task" => json_str("test")})
       result.status.should eq("success")
-      result.state.not_nil!["resolved"].raw.should eq(true)
-    end
-
-    it "uses model resolution priority (request > agent > workflow default)" do
-      workflow = Cogni::Workflow.create_workflow("model-priority-test", "Model priority test")
-      workflow
-        .resources(model: "default-model")
-        .step(Cogni::Workflow::WorkflowNode.new("check", Cogni::Workflow::NodeKind::Control) do |_ctx|
-          Cogni::Workflow::WorkflowNodeResult.continue({"checked" => json_bool(true)})
-        end)
-        .commit
-
-      workflow.default_model.should eq("default-model")
-
-      engine = Cogni::Workflow::Engine.new
-      engine.register(workflow)
-
-      run = engine.create_run("model-priority-test")
-      result = run.start
-      result.status.should eq("success")
+      result.state.not_nil!["last_model"].as_s.should eq("openai/gpt-4.1-mini")
+    ensure
+      ENV.delete("COGNICORE_MOCK_LLM")
     end
   end
 
-  describe "unified resources" do
-    it "creates workflow with combined resource annotation" do
-      # Simulates: @[Resources(model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"])]
-      workflow = Cogni::Workflow.create_workflow("unified-resources", "Unified resources test")
+  it "gives request model higher priority than agent model" do
+    ENV["COGNICORE_MOCK_LLM"] = "1"
+
+    begin
+      workflow = Cogni::Workflow.create_workflow("workflow-model-priority", "Model priority")
       workflow
-        .resources(
-          model: "openai/gpt-4.1",
-          skill: ["translation", "summarization"],
-          tool: ["http-client"])
-        .commit
-
-      workflow.default_model.should eq("openai/gpt-4.1")
-      workflow.default_skills.should eq(["translation", "summarization"])
-      workflow.default_tools.should eq(["http-client"])
-    end
-
-    it "creates workflow with unified resource annotation" do
-      # Simulates full-capabilities workflow with @[Resources(model: "...", skill: [...], tool: [...])]
-      workflow = Cogni::Workflow.create_workflow("full-capabilities", "Full capabilities test")
-      workflow
-        .resources(
-          model: "clipproxyapi/qwen3-coder-plus",
-          skill: ["full-skill"],
-          tool: ["echo-json"])
-        .commit
-
-      workflow.default_model.should eq("clipproxyapi/qwen3-coder-plus")
-      workflow.default_skills.should eq(["full-skill"])
-      workflow.default_tools.should eq(["echo-json"])
-    end
-
-    it "creates workflow with sequential and parallel agents" do
-      translator = Cogni::Workflow::WorkflowNode.new("translator", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"translated" => json_bool(true)})
-      end
-
-      summarizer = Cogni::Workflow::WorkflowNode.new("summarizer", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"summarized" => json_bool(true)})
-      end
-
-      workflow = Cogni::Workflow.create_workflow("unified-pipeline", "Unified pipeline test")
-      workflow
-        .resources(model: "openai/gpt-4.1")
-        .step(Cogni::Workflow::WorkflowNode.new("analyzer", Cogni::Workflow::NodeKind::Control) do |_ctx|
-          Cogni::Workflow::WorkflowNodeResult.continue({"analyzed" => json_bool(true)})
-        end)
-        .step(Cogni::Workflow::WorkflowNode.new("processor", Cogni::Workflow::NodeKind::Control) do |_ctx|
-          Cogni::Workflow::WorkflowNodeResult.continue({"processed" => json_bool(true)})
-        end)
-        .parallel([translator, summarizer])
-        .step(Cogni::Workflow::WorkflowNode.new("synthesizer", Cogni::Workflow::NodeKind::Control) do |ctx|
-          translated = ctx.state["translated"]?.try(&.raw) == true
-          summarized = ctx.state["summarized"]?.try(&.raw) == true
-          Cogni::Workflow::WorkflowNodeResult.continue({"synthesized" => json_bool(translated && summarized)})
-        end)
+        .agent("priority-agent", model: "openai/gpt-4.1", prompt: "Test")
         .commit
 
       engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
-      run = engine.create_run("unified-pipeline")
-      result = run.start
+      result = engine.create_run("workflow-model-priority").start(input_data: {
+        "task"  => json_str("override"),
+        "model" => json_str("openai/gpt-4.1-nano"),
+      })
       result.status.should eq("success")
-      result.state.not_nil!["synthesized"].raw.should eq(true)
+      result.state.not_nil!["last_model"].as_s.should eq("openai/gpt-4.1-nano")
+    ensure
+      ENV.delete("COGNICORE_MOCK_LLM")
     end
   end
 
-  describe "full-capabilities" do
-    it "creates workflow with agent, skill, tool, voice, rag, and suspend nodes" do
-      workflow = Cogni::Workflow.create_workflow("full-demo", "Full demo test")
-      workflow
-        .resources(model: "clipproxyapi/qwen3-coder-plus")
-        .agent("full-agent",
-          input_schema: Cogni::Workflows::DSL::Types.object({"input" => Cogni::Workflows::DSL::Types.any()}, strict: false),
-          output_schema: Cogni::Workflows::DSL::Types.object({"last_response" => Cogni::Workflows::DSL::Types.of(String)}, strict: false))
-        .skill("full-skill", agent: "full-agent")
-        .voice("voice-step", config: {"provider" => json_str("openai"), "speaker" => json_str("alloy")})
-        .rag("rag-step", config: {
-          "operation"       => json_str("query"),
-          "vectorStoreName" => json_str("memory"),
-          "indexName"       => json_str("full-capabilities-index"),
-          "topK"            => JSON.parse(3.to_json),
-        })
-        .suspend("manual-approval", reason: "Confirm run output")
-        .commit
+  it "stores per-agent models in pipeline flow" do
+    ENV["COGNICORE_MOCK_LLM"] = "1"
 
-      workflow.nodes.size.should eq(5)
-      workflow.nodes[0].kind.should eq(Cogni::Workflow::NodeKind::Agent)
-      workflow.nodes[1].kind.should eq(Cogni::Workflow::NodeKind::Skill)
-      workflow.nodes[2].kind.should eq(Cogni::Workflow::NodeKind::Voice)
-      workflow.nodes[3].kind.should eq(Cogni::Workflow::NodeKind::Rag)
-      workflow.nodes[4].kind.should eq(Cogni::Workflow::NodeKind::Suspend)
-    end
-
-    it "executes full workflow up to approval suspension" do
-      workflow = Cogni::Workflow.create_workflow("full-approval-test", "Full approval test")
+    begin
+      workflow = Cogni::Workflow.create_workflow("workflow-agent-matrix", "Agent matrix")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
-          Cogni::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        .agent("first-agent", model: "openai/gpt-4.1-mini", prompt: "First step")
+        .step(Cogni::Workflow::WorkflowNode.new("capture-model", Cogni::Workflow::NodeKind::Control) do |ctx|
+          first_model = ctx.state["last_model"]?.try(&.as_s?) || ""
+          Cogni::Workflow::WorkflowNodeResult.continue({"first_model" => json_str(first_model)})
         end)
-        .voice("voice", config: {"provider" => json_str("openai")})
-        .rag("rag", config: {
-          "operation"       => json_str("query"),
-          "vectorStoreName" => json_str("memory"),
-          "indexName"       => json_str("test-index"),
-        })
-        .suspend("confirm", reason: "Confirm output")
+        .agent("second-agent", model: "openai/gpt-4.1", prompt: "Second step")
         .commit
 
       engine = Cogni::Workflow::Engine.new
       engine.register(workflow)
 
-      run = engine.create_run("full-approval-test")
-      result = run.start(input_data: {"text" => json_str("test"), "queryText" => json_str("test query")})
-      result.status.should eq("suspended")
-      result.resume_labels.should eq(["confirm"])
+      result = engine.create_run("workflow-agent-matrix").start(input_data: {"task" => json_str("pipeline")})
+      result.status.should eq("success")
+      result.state.not_nil!["first_model"].as_s.should eq("openai/gpt-4.1-mini")
+      result.state.not_nil!["last_model"].as_s.should eq("openai/gpt-4.1")
+    ensure
+      ENV.delete("COGNICORE_MOCK_LLM")
     end
+  end
+
+  it "creates workflow with agent, skill, voice, rag, and suspend nodes" do
+    workflow = Cogni::Workflow.create_workflow("full-demo", "Full demo test")
+    workflow
+      .agent("full-agent",
+        model: "clipproxyapi/qwen3-coder-plus",
+        input_schema: Cogni::Workflows::DSL::Types.object({"input" => Cogni::Workflows::DSL::Types.any()}, strict: false),
+        output_schema: Cogni::Workflows::DSL::Types.object({"last_response" => Cogni::Workflows::DSL::Types.of(String)}, strict: false))
+      .skill("full-skill", agent: "full-agent")
+      .voice("voice-step", config: {"provider" => json_str("openai"), "speaker" => json_str("alloy")})
+      .rag("rag-step", config: {
+        "operation"       => json_str("query"),
+        "vectorStoreName" => json_str("memory"),
+        "indexName"       => json_str("full-capabilities-index"),
+        "topK"            => JSON.parse(3.to_json),
+      })
+      .suspend("manual-approval", reason: "Confirm run output")
+      .commit
+
+    workflow.nodes.size.should eq(5)
+    workflow.nodes[0].kind.should eq(Cogni::Workflow::NodeKind::Agent)
+    workflow.nodes[1].kind.should eq(Cogni::Workflow::NodeKind::Skill)
+    workflow.nodes[2].kind.should eq(Cogni::Workflow::NodeKind::Voice)
+    workflow.nodes[3].kind.should eq(Cogni::Workflow::NodeKind::Rag)
+    workflow.nodes[4].kind.should eq(Cogni::Workflow::NodeKind::Suspend)
+  end
+
+  it "executes full workflow up to approval suspension" do
+    workflow = Cogni::Workflow.create_workflow("full-approval-test", "Full approval test")
+    workflow
+      .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
+        Cogni::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+      end)
+      .voice("voice", config: {"provider" => json_str("openai")})
+      .rag("rag", config: {
+        "operation"       => json_str("query"),
+        "vectorStoreName" => json_str("memory"),
+        "indexName"       => json_str("test-index"),
+      })
+      .suspend("confirm", reason: "Confirm output")
+      .commit
+
+    engine = Cogni::Workflow::Engine.new
+    engine.register(workflow)
+
+    run = engine.create_run("full-approval-test")
+    result = run.start(input_data: {"text" => json_str("test"), "queryText" => json_str("test query")})
+    result.status.should eq("suspended")
+    result.resume_labels.should eq(["confirm"])
   end
 
   describe "config-example (Crystal-native configuration)" do
     it "demonstrates app configuration usage in tests" do
-      # This tests that configuration patterns work correctly
       config = {
         "api_key"      => json_str("test-key"),
         "model"        => json_str("clipproxyapi/qwen3-coder-model"),

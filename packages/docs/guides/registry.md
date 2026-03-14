@@ -76,3 +76,23 @@ workflow
   .step("node_kind", "ext-opencode", node_kind_name: "agent_opencode")
   .commit
 ```
+
+Built-in federation helper node kinds can be used the same way. Example:
+
+```crystal
+workflow = Cogni::Workflow.build("federation-subscribe")
+workflow
+  .step("node_kind", "subscribe-default-actor",
+    node_kind_name: "forgefed_subscribe",
+    node_kind_attributes: {
+      "name" => JSON.parse("@oq.col.pub".to_json),
+    })
+  .commit
+```
+
+`forgefed_subscribe` accepts `name` in one of these forms:
+- `@domain` -> subscribes to `https://domain/actors/default`
+- `@actor@domain` -> subscribes to `https://domain/actors/actor`
+- `https://...` -> uses the actor URL directly
+
+For startup-time federation bootstrap, the same resolution path is available in RCL config with `federation.auto_subscribe = ["@oq.col.pub"]`.

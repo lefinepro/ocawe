@@ -1,5 +1,6 @@
 require "http/headers"
 require "base64"
+require "uri"
 
 module ACD
   module Kemal
@@ -9,6 +10,23 @@ module ACD
       FEDERATION_FORGEFED_CONTEXT    = "https://forgefed.org/ns"
 
       private def mount_federation_endpoints
+        get "/actors/:workflow_id" do |env|
+          workflow_id = env.params.url["workflow_id"]?.to_s
+          document = local_actor_document(workflow_id)
+          if document.empty?
+            env.response.status_code = 404
+            env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
+            next({
+              "@context" => FEDERATION_JSONLD_CONTEXT,
+              "type"     => "Error",
+              "error"    => {"type" => "not_found", "message" => "unknown workflow actor"},
+            }.to_json)
+          end
+
+          env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
+          document.to_json
+        end
+
         post "/federation/inbox" do |env|
           body = json_body(env)
           next invalid_jsonld(env) unless valid_jsonld_request?(env, body)
@@ -92,6 +110,52 @@ module ACD
             "event"    => event,
           }.to_json
         end
+      end
+
+      private def local_actor_document(workflow_id : String) : Hash(String, JSON::Any)
+        return {} of String => JSON::Any if workflow_id.strip.empty?
+        return {} of String => JSON::Any unless workflow_ids.includes?(workflow_id)
+
+        actor_url = "#{local_domain_from_actor_url(@settings.federation.local_actor)}/actors/#{workflow_id}"
+        inbox_url = "#{local_domain_from_actor_url(@settings.federation.local_actor)}/federation/inbox"
+        outbox_url = "#{local_domain_from_actor_url(@settings.federation.local_actor)}/federation/outbox"
+        public_key_id = "#{actor_url}#main-key"
+        public_key_pem = local_actor_public_key_pem
+        return {} of String => JSON::Any if public_key_pem.empty?
+
+        JSON.parse({
+          "@context" => FEDERATION_JSONLD_CONTEXT,
+          "id" => actor_url,
+          "type" => "Application",
+          "preferredUsername" => workflow_id,
+          "name" => workflow_id,
+          "inbox" => inbox_url,
+          "outbox" => outbox_url,
+          "publicKey" => {
+            "id" => public_key_id,
+            "owner" => actor_url,
+            "publicKeyPem" => public_key_pem,
+          },
+        }.to_json).as_h
+      end
+
+      private def local_actor_public_key_pem : String
+        key_path = @settings.federation.local_private_key_path
+        return "" unless File.exists?(key_path)
+
+        output = IO::Memory.new
+        errors = IO::Memory.new
+        status = Process.run(
+          "openssl",
+          args: ["rsa", "-in", key_path, "-pubout"],
+          output: output,
+          error: errors
+        )
+        return "" unless status.success?
+
+        output.to_s
+      rescue
+        ""
       end
 
       private def valid_jsonld_request?(env, body : Hash(String, JSON::Any)) : Bool

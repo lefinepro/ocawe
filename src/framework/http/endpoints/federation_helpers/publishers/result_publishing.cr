@@ -29,8 +29,39 @@ module ACD
           )
         )
         suffix = Random.rand(UInt64::MAX).to_s(16)
+        explicit_activity = extract_federation_result_activity(effective_output)
 
-        activity = if requested_activity == "merge"
+        activity = if explicit_activity
+                     if requested_activity == "merge"
+                       merge_error = validate_merge_offer_activity(explicit_activity)
+                       if merge_error.nil?
+                         normalize_merge_offer_activity(
+                           explicit_activity.not_nil!,
+                           suffix: suffix,
+                           workflow_actor: workflow_actor,
+                           local_domain: local_domain,
+                         )
+                       else
+                         build_note_result_activity(
+                           suffix: suffix,
+                           ticket: ticket,
+                           remote_actor: remote_actor,
+                           workflow_actor: workflow_actor,
+                           local_domain: local_domain,
+                           workflow_id: workflow_id,
+                           run_id: run_id,
+                           result_text: "merge output rejected: #{merge_error}",
+                         )
+                       end
+                     else
+                       normalize_federation_result_activity(
+                         explicit_activity.not_nil!,
+                         suffix: suffix,
+                         workflow_actor: workflow_actor,
+                         local_domain: local_domain,
+                       )
+                     end
+                   elsif requested_activity == "merge"
                      merge_offer = extract_merge_offer_activity(effective_output)
                      merge_error = validate_merge_offer_activity(merge_offer)
                      if merge_error.nil?
@@ -98,6 +129,42 @@ module ACD
           # Keep original output when embedded payload is not valid JSON.
         end
         merged
+      end
+
+      private def extract_federation_result_activity(output : Hash(String, JSON::Any)) : Hash(String, JSON::Any)?
+        federation_output = output["federation_output"]?.try(&.as_h?)
+        return nil unless federation_output
+        activity = federation_output["activity"]?
+        return nil unless activity
+        parse_federation_activity_candidate(activity)
+      end
+
+      private def parse_federation_activity_candidate(candidate : JSON::Any) : Hash(String, JSON::Any)?
+        if hash = candidate.as_h?
+          return hash if hash["type"]?.try(&.as_s?)
+          nested = hash["activity"]?.try(&.as_h?)
+          return nested if nested && nested["type"]?.try(&.as_s?)
+        end
+
+        raw = candidate.as_s?
+        return nil unless raw
+        parsed = JSON.parse(raw)
+        parse_federation_activity_candidate(parsed)
+      rescue
+        nil
+      end
+
+      private def normalize_federation_result_activity(
+        source : Hash(String, JSON::Any),
+        suffix : String,
+        workflow_actor : String,
+        local_domain : String
+      ) : Hash(String, JSON::Any)
+        activity = source.dup
+        activity["@context"] = source["@context"]? || JSON.parse([FEDERATION_JSONLD_CONTEXT, FEDERATION_FORGEFED_CONTEXT].to_json)
+        activity["id"] = source["id"]? || JSON.parse("#{local_domain}/activities/result-#{suffix}".to_json)
+        activity["actor"] = source["actor"]? || JSON.parse(workflow_actor.to_json)
+        activity
       end
 
       private def build_note_result_activity(

@@ -1,7 +1,8 @@
-api = "mastra"
+api = "federation"
 
 federation do
   adapter = "memory"
+  auto_subscribe = ["@oq.col.pub"]
   sqlite_path = "./.cogni/federation.sqlite3"
 end
 
@@ -12,5 +13,4 @@ end
 
 workflows do
   preferred_workflows_root = "./workflows"
-  fallback_workflows_root = "./workflows"
 end

@@ -21,7 +21,8 @@ module ACD
       private def resolve_ticket_workflow_actor(
         body : Hash(String, JSON::Any),
         ticket : Hash(String, JSON::Any),
-        local_domain : String
+        local_domain : String,
+        default_actor : String = ""
       ) : String
         assignee = ticket["assignee"]?
         attributed_to = ticket["attributedTo"]?
@@ -32,7 +33,7 @@ module ACD
         )
         return workflow_actor unless workflow_actor.empty?
         workflow_id = pick_first_non_empty(body["workflow_id"]?.try(&.as_s?))
-        return "" if workflow_id.empty?
+        return default_actor if workflow_id.empty?
         "#{local_domain}/actors/#{workflow_id}"
       end
 
@@ -155,7 +156,7 @@ module ACD
 
         local_actor = follow["local_actor"]?.try(&.as_s?).to_s
         local_domain = local_domain_from_actor_url(local_actor)
-        workflow_actor = resolve_ticket_workflow_actor(activity_doc, ticket, local_domain)
+        workflow_actor = resolve_ticket_workflow_actor(activity_doc, ticket, local_domain, local_actor)
         if workflow_actor.empty?
           unless remote_actor.empty?
             @federation_store.upsert_follow_sync_state(
@@ -213,19 +214,34 @@ module ACD
         )
 
         input_data = {
-          "input"          => JSON.parse(ticket.to_json),
-          "task"           => JSON.parse(task.to_json),
-          "content"        => JSON.parse(content.to_json),
-          "ticket_id"      => JSON.parse(ticket_id.to_json),
-          "ticket"         => JSON.parse(ticket.to_json),
-          "repo_url"       => JSON.parse(repo_url.to_json),
-          "repo_ref"       => JSON.parse(repo_ref.to_json),
-          "provider"       => JSON.parse(provider.to_json),
-          "remote_actor"   => JSON.parse(remote_actor.to_json),
-          "local_actor"    => JSON.parse(local_actor.to_json),
-          "workflow_actor" => JSON.parse(workflow_actor.to_json),
-          "api"            => JSON.parse("lefine".to_json),
-          "activity"       => JSON.parse(activity.to_json),
+          "input"            => JSON.parse(ticket.to_json),
+          "task"             => JSON.parse(task.to_json),
+          "content"          => JSON.parse(content.to_json),
+          "ticket_id"        => JSON.parse(ticket_id.to_json),
+          "ticket"           => JSON.parse(ticket.to_json),
+          "repo_url"         => JSON.parse(repo_url.to_json),
+          "repo_ref"         => JSON.parse(repo_ref.to_json),
+          "provider"         => JSON.parse(provider.to_json),
+          "remote_actor"     => JSON.parse(remote_actor.to_json),
+          "local_actor"      => JSON.parse(local_actor.to_json),
+          "workflow_actor"   => JSON.parse(workflow_actor.to_json),
+          "api"              => JSON.parse("federation".to_json),
+          "activity"         => JSON.parse(activity.to_json),
+          "federation_input" => JSON.parse({
+            "api"                    => "federation",
+            "requested_activity"     => activity,
+            "incoming_activity_type" => incoming_activity_type,
+            "activity"               => activity_doc,
+            "ticket"                 => ticket,
+            "task"                   => task,
+            "content"                => content,
+            "ticket_id"              => ticket_id,
+            "repo_url"               => repo_url,
+            "repo_ref"               => repo_ref,
+            "remote_actor"           => remote_actor,
+            "local_actor"            => local_actor,
+            "workflow_actor"         => workflow_actor,
+          }.to_json),
         } of String => JSON::Any
 
         run_result = @workflow_service.start_run(workflow_id, input_data: input_data)

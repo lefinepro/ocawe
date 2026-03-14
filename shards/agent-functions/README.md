@@ -18,7 +18,7 @@ Notes:
   - `path_to_credentials`
   - `path_to_config`
   - provider-specific variants like `path_to_config_codex`.
-- In federation runs with `api=lefine` and `activity=merge`, handlers prepend a strict prompt contract:
+- In federation runs with `api=federation` and `activity=merge`, handlers prepend a strict prompt contract:
   - output must be a ForgeFed `Offer(Ticket)` JSON object only (no prose/markdown).
 
 ## Workflow examples

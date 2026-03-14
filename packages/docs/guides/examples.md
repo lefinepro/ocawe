@@ -5,7 +5,7 @@ Examples live under `shards/examples` and are designed for direct reuse.
 ## Run all examples
 
 ```bash
-./build/cogni up --port 4111 --workflows-root ./shards/examples --fallback-workflows-root ./shards/examples
+./build/cogni up --port 4111 --workflows-root ./shards/examples
 ```
 
 ## Bundles

@@ -223,18 +223,5 @@ module Cogni
       end
     end
 
-    # Represents a scoped resource context for workflow resource defaults
-    struct ResourceScope
-      getter model : String?
-      getter skills : Array(String)?
-      getter tools : Array(String)?
-
-      def initialize(
-        @model : String? = nil,
-        @skills : Array(String)? = nil,
-        @tools : Array(String)? = nil
-      )
-      end
-    end
   end
 end

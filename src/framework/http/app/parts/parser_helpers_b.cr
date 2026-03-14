@@ -198,54 +198,10 @@ module ACD
         raise "#{workflow_file}: invalid runtime object '#{literal}': #{ex.message}"
       end
 
-      # Parse Resources annotation body: model: "...", skill: ["..."], tool: ["..."]
-      private def parse_resources_annotation_params(content : String) : NamedTuple(model: String?, skill: (String | Array(String))?, tool: (String | Array(String))?)
-
-        model = nil.as(String?)
-        skill = nil.as((String | Array(String))?)
-        tool = nil.as((String | Array(String))?)
-
-        # Parse model: "..."
-        if match = content.match(/model:\s*"([^"]+)"/)
-          model = match[1]
-        end
-
-        # Parse skill: "..." or skill: ["...", "..."]
-        if match = content.match(/skill:\s*\[([^\]]*)\]/)
-          # Array syntax
-          arr_content = match[1]
-          skills = parse_string_array(arr_content)
-          skill = skills unless skills.empty?
-        elsif match = content.match(/skill:\s*"([^"]+)"/)
-          # Single string syntax
-          skill = match[1]
-        end
-
-        # Parse tool: "..." or tool: ["...", "..."]
-        if match = content.match(/tool:\s*\[([^\]]*)\]/)
-          # Array syntax
-          arr_content = match[1]
-          tools = parse_string_array(arr_content)
-          tool = tools unless tools.empty?
-        elsif match = content.match(/tool:\s*"([^"]+)"/)
-          # Single string syntax
-          tool = match[1]
-        end
-
-        {model: model, skill: skill, tool: tool}
-      end
-
       private def parse_workspace_annotation_params(content : String, workflow_file : String) : Cogni::Workflow::AnyHash
         parse_runtime_object("{#{content}}", workflow_file)
       end
 
-      private def parse_string_array(content : String) : Array(String)
-        result = [] of String
-        content.scan(/"([^"]+)"/) do |match|
-          result << match[1]
-        end
-        result
-      end
     end
   end
 end

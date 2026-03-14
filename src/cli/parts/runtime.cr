@@ -56,13 +56,11 @@ module CogniCore
       private def up(args : Array(String)) : Nil
         port = DEFAULT_PORT
         workflows_root = nil.as(String?)
-        fallback_workflows_root = nil.as(String?)
         config_rcl = nil.as(String?)
 
         OptionParser.parse(args) do |parser|
           parser.on("--port PORT", "Runtime port") { |v| port = v.to_i }
           parser.on("--workflows-root PATH", "Preferred workflows root path") { |v| workflows_root = v }
-          parser.on("--fallback-workflows-root PATH", "Fallback workflows root path") { |v| fallback_workflows_root = v }
           parser.on("--config-rcl PATH", "RCL config path") { |v| config_rcl = v }
         end
 
@@ -72,7 +70,6 @@ module CogniCore
           io << RUNTIME_BIN
           io << " --port #{port}"
           io << " --workflows-root=#{workflows_root}" if workflows_root
-          io << " --fallback-workflows-root=#{fallback_workflows_root}" if fallback_workflows_root
           io << " --config-rcl=#{config_rcl}" if config_rcl
         end
 
