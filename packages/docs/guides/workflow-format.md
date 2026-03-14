@@ -6,35 +6,19 @@ Example:
 
 ```crystal
 workflow "agents-example" do
-  @[Resources(model: "cliproxyapi/qwen3-coder-plus")]
-  agent "simple-agent"
+  agent "simple-agent", model: "clipproxyapi/qwen3-coder-plus"
 end
 ```
 
-## Resource Management
+## Agent Configuration
 
-### `@[Resources(...)]` Annotation
-
-The `@[Resources(...)]` annotation provides a unified way to declare models, skills, and tools:
+Set model and schema options per-agent directly on each `agent` node:
 
 ```crystal
 workflow "example" do
-  # Single model
-  @[Resources(model: "openai/gpt-4.1")]
-
-  # Single skill
-  @[Resources(skill: "translation")]
-
-  # Multiple skills (array syntax)
-  @[Resources(skill: ["translation", "summarization"])]
-
-  # Multiple tools
-  @[Resources(tool: ["http-client", "file-reader"])]
-
-  # Combined declaration
-  @[Resources(model: "openai/gpt-4.1", skill: ["translation", "summarization"], tool: ["http-client"])]
-
-  agent "my-agent"
+  agent "my-agent",
+    model: "openai/gpt-4.1",
+    prompt: "Your agent prompt"
 end
 ```
 
@@ -90,7 +74,6 @@ Execute multiple agents concurrently using `parallel do...end`:
 
 ```crystal
 workflow "parallel-workflow" do
-  @[Resources(model: "openai/gpt-4.1")]
 
   parallel do
     agent "analyzer-1"
@@ -108,7 +91,6 @@ Use Crystal-native `if/elsif/else` for conditional branching:
 
 ```crystal
 workflow "conditional-workflow" do
-  @[Resources(model: "openai/gpt-4.1")]
 
   if input.task == "translate"
     agent "translator-agent"
@@ -130,7 +112,6 @@ Use `unless` for inverted conditional logic (execute when condition is false):
 
 ```crystal
 workflow "unless-workflow" do
-  @[Resources(model: "openai/gpt-4.1")]
 
   unless input.language == "en"
     agent "translator"
@@ -146,7 +127,6 @@ Use `while condition do...end` to repeat execution while condition is true:
 
 ```crystal
 workflow "while-workflow" do
-  @[Resources(model: "openai/gpt-4.1")]
 
   while state.needs_refinement do
     agent "refiner"
@@ -160,7 +140,6 @@ Use `until condition do...end` to repeat execution until condition becomes true:
 
 ```crystal
 workflow "until-workflow" do
-  @[Resources(model: "openai/gpt-4.1")]
 
   until state.quality_score > 0.9 do
     agent "improver"
@@ -174,9 +153,6 @@ end
 
 | Directive | Description |
 |-----------|-------------|
-| `@[Resources(model: "...")]` | Set default model for workflow |
-| `@[Resources(skill: "...")]` or `@[Resources(skill: [...])]` | Declare skills |
-| `@[Resources(tool: "...")]` or `@[Resources(tool: [...])]` | Declare tools |
 | `@[Logger(...)]` | Configure workflow/node logging metadata and runtime log level/shape |
 | `@[Workspace(...)]` | Configure workflow-level or next-node workspace metadata |
 | `agent "..."` | Define agent node |
@@ -248,7 +224,6 @@ Register runtime extensions through `Cogni::RegistryApi`:
 
 ```crystal
 workflow "basic" do
-  @[Resources(model: "openai/gpt-4.1")]
   agent "assistant"
 end
 ```
@@ -257,7 +232,6 @@ end
 
 ```crystal
 workflow "pipeline" do
-  @[Resources(model: "openai/gpt-4.1")]
 
   agent "researcher"
   agent "analyzer"
@@ -269,7 +243,6 @@ end
 
 ```crystal
 workflow "parallel-analysis" do
-  @[Resources(model: "openai/gpt-4.1")]
 
   parallel do
     agent "sentiment-analyzer"
@@ -285,7 +258,6 @@ end
 
 ```crystal
 workflow "smart-router" do
-  @[Resources(model: "openai/gpt-4.1")]
 
   if input.language != "en"
     agent "translator"

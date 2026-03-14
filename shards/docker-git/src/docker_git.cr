@@ -23,7 +23,7 @@ module CogniDockerGit
     ACD::HTTP::App.new(
       port,
       workflows_root: root,
-      fallback_workflows_root: root,
+      preferred_workflows_root: root,
       settings: settings,
     ).start
   end

@@ -5,9 +5,8 @@ module Cogni
   module Config
     struct WorkflowSettings
       getter preferred_workflows_root : String
-      getter fallback_workflows_root : String
 
-      def initialize(@preferred_workflows_root : String, @fallback_workflows_root : String)
+      def initialize(@preferred_workflows_root : String)
       end
     end
 
@@ -29,6 +28,7 @@ module Cogni
     struct FederationSettings
       getter adapter : String
       getter sqlite_path : String
+      getter auto_subscribe : Array(String)
       getter s2s_poll_interval_seconds : Int32
       getter s2s_http_timeout_seconds : Int32
       getter signatures_required : Bool
@@ -39,6 +39,7 @@ module Cogni
       def initialize(
         @adapter : String = "memory",
         @sqlite_path : String = "./.cogni/federation.sqlite3",
+        @auto_subscribe : Array(String) = [] of String,
         @s2s_poll_interval_seconds : Int32 = 15,
         @s2s_http_timeout_seconds : Int32 = 10,
         @signatures_required : Bool = true,
@@ -52,17 +53,28 @@ module Cogni
     struct ApiSettings
       getter enabled : Array(String)
 
-      def initialize(enabled : Array(String) = ["mastra"] of String)
+      def initialize(enabled : Array(String) = ["classic"] of String)
         normalized = enabled.map(&.strip.downcase).reject(&.empty?).uniq
-        @enabled = normalized.empty? ? ["mastra"] of String : normalized
+        normalized = normalized.map do |name|
+          case name
+          when "mastra"
+            "classic"
+          when "lefine"
+            "federation"
+          else
+            name
+          end
+        end
+        normalized = normalized.uniq
+        @enabled = normalized.empty? ? ["classic"] of String : normalized
       end
 
       def enable?(name : String) : Bool
         @enabled.includes?(name.strip.downcase)
       end
 
-      def lefine_only? : Bool
-        @enabled.size == 1 && @enabled[0] == "lefine"
+      def federation_only? : Bool
+        @enabled.size == 1 && @enabled[0] == "federation"
       end
     end
 
@@ -93,8 +105,7 @@ module Cogni
 
         new(
           workflows: WorkflowSettings.new(
-            preferred_workflows_root: "./src/workflows",
-            fallback_workflows_root: "./src/workflows"
+            preferred_workflows_root: "./src/workflows"
           ),
           node_kinds: NodeKindSettings.new,
           datasets: DatasetSettings.new,

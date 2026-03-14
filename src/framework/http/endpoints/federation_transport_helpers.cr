@@ -155,7 +155,15 @@ module ACD
         if actor_index >= 0 && actor_index + 1 < parts.size
           return parts[actor_index + 1]
         end
-        parts.last? || ""
+
+        fallback = parts.last? || ""
+        return fallback if fallback.empty?
+
+        ids = workflow_ids
+        return fallback if ids.empty? || ids.includes?(fallback)
+        return ids.first if ids.size == 1
+
+        fallback
       end
 
       private def resolve_local_actor(body : Hash(String, JSON::Any)) : String

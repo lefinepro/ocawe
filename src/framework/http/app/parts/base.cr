@@ -7,13 +7,11 @@ module ACD
       def initialize(
         @port : Int32,
         workflows_root : String? = nil,
-        fallback_workflows_root : String? = nil,
         @settings : Cogni::Config::Settings = Cogni::Config::Settings.default
       )
         config = @settings.workflows
         preferred_root = workflows_root || config.preferred_workflows_root
-        fallback_root = fallback_workflows_root || config.fallback_workflows_root
-        @locator = Discovery::WorkflowLocator.new(preferred_root, fallback_root)
+        @locator = Discovery::WorkflowLocator.new(preferred_root)
         @agent_loader = Agents::Loader.new
         @skill_loader = Skills::Loader.new
         @workflow_engine = Cogni::Workflow::Engine.new
@@ -65,7 +63,7 @@ module ACD
         ::Kemal.config.port = @port
         mount_health_endpoints
         mount_docs_endpoints
-        unless @settings.api.lefine_only?
+        unless @settings.api.federation_only?
           mount_workflow_endpoints
           mount_agent_endpoints
           mount_tool_endpoints
@@ -78,10 +76,11 @@ module ACD
           mount_mcp_endpoints
           mount_mcp_server_endpoint
         end
-        mount_federation_endpoints if @settings.api.enable?("lefine")
-        start_federation_poller if @settings.api.enable?("lefine")
+        mount_federation_endpoints if @settings.api.enable?("federation")
+        bootstrap_federation_subscriptions if @settings.api.enable?("federation")
+        start_federation_poller if @settings.api.enable?("federation")
 
-        ::Kemal.run
+        ::Kemal.run(trap_signal: false)
       end
 
       private def start_reload_watcher
@@ -149,7 +148,6 @@ module ACD
           definition = load_workflow_definition(bundle, loaded_agents)
           rebuilt_engine.register(definition)
           tool_ids = [] of String
-          definition.default_tools.each { |id| tool_ids << id unless tool_ids.includes?(id) }
           definition.nodes.each do |node|
             next unless node.kind == Cogni::Workflow::NodeKind::Exec
             next unless node.metadata["runtime"]?
@@ -159,44 +157,44 @@ module ACD
           loaded_skills.each do |skill|
             qualified_id = "#{bundle.id}:#{skill.id}"
             skills_index[qualified_id] = {
-              id: qualified_id,
+              id:          qualified_id,
               workflow_id: bundle.id,
-              name: skill.name,
+              name:        skill.name,
               description: skill.description,
-              file_path: skill.file_path,
+              file_path:   skill.file_path,
             }
           end
 
           loaded_agents.each do |agent|
             qualified_id = "#{bundle.id}:#{agent.id}"
             agents_index[qualified_id] = {
-              id: qualified_id,
-              workflow_id: bundle.id,
-              name: agent.id,
-              description: agent.description,
-              prompt: agent.prompt,
-              model: agent.model,
+              id:            qualified_id,
+              workflow_id:   bundle.id,
+              name:          agent.id,
+              description:   agent.description,
+              prompt:        agent.prompt,
+              model:         agent.model,
               default_model: definition.default_model,
-              file_path: agent.file_path,
+              file_path:     agent.file_path,
             }
           end
 
           tool_ids.each do |tool_id|
             tools_index << {
-              id: tool_id,
+              id:          tool_id,
               workflow_id: bundle.id,
             }
           end
 
           index[bundle.id] = {
             source_root_type: bundle.source_root_type,
-            workflow_file: bundle.workflow_file,
-            agents: loaded_agents.map(&.id),
-            skills: loaded_skills.map(&.id),
-            tools: tool_ids,
-            default_model: definition.default_model,
-            logger: definition.default_logger,
-            node_loggers: definition.node_loggers,
+            workflow_file:    bundle.workflow_file,
+            agents:           loaded_agents.map(&.id),
+            skills:           loaded_skills.map(&.id),
+            tools:            tool_ids,
+            default_model:    definition.default_model,
+            logger:           definition.default_logger,
+            node_loggers:     definition.node_loggers,
           }
         end
 
@@ -259,6 +257,20 @@ module ACD
         config.workspace_bootstrap.try(&.call)
       end
 
+      private def bootstrap_federation_subscriptions : Nil
+        @settings.federation.auto_subscribe.each do |entry|
+          normalized = entry.strip
+          next if normalized.empty?
+
+          begin
+            record = Cogni::Federation::Subscriptions.ensure(@settings, @federation_store, normalized)
+            STDERR.puts "[federation] subscribed #{normalized} -> #{record["remote_actor"]?.try(&.as_s?) || normalized}"
+          rescue ex
+            STDERR.puts "[federation] auto_subscribe failed for #{normalized}: #{ex.message || ex.class.name}"
+          end
+        end
+      end
+
       private def build_dataset_store(config : Cogni::Config::DatasetSettings) : Cogni::Dataset::Store::Base
         case config.adapter.strip.downcase
         when "", "memory"
@@ -280,8 +292,6 @@ module ACD
           raise "unsupported federation adapter: #{config.adapter}"
         end
       end
-
-
     end
   end
 end

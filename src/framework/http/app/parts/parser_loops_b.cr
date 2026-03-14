@@ -50,8 +50,7 @@ module ACD
               voice_config: loaded.try(&.voice_config),
               guardrails_config: loaded.try(&.guardrails_config),
               input_schema: input_schema,
-              output_schema: output_schema,
-              default_model: ctx.workflow.default_model
+              output_schema: output_schema
             )
             loop_nodes << node
             next
@@ -131,11 +130,9 @@ module ACD
         voice_config : Cogni::Workflow::AnyHash? = nil,
         guardrails_config : Cogni::Workflow::AnyHash? = nil,
         input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil,
-        default_model : String? = nil
+        output_schema : Cogni::Workflows::DSL::Validator? = nil
       ) : Cogni::Workflow::WorkflowNode
         builder = Cogni::Workflow::WorkflowDefinition.new("__registry_builder__")
-        builder.resources(model: default_model) if default_model
         Cogni::RegistryApi.build_node(
           builder,
           "agent",

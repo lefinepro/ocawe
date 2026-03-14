@@ -10,26 +10,26 @@ describe "E2E: Agents and Skills" do
   describe "agents-example" do
     it "creates workflow with model configuration and agent" do
       # Simulates: workflow "agents-example" do
-      #   @[Resources(model: "cliproxyapi/qwen3-coder-plus")]
-      #   agent "simple-agent"
+      #   agent "simple-agent", model: "clipproxyapi/qwen3-coder-plus"
       # end
       workflow = Cogni::Workflow.create_workflow("agents-example", "Agent example test")
       workflow
-        .resources(model: "clipproxyapi/qwen3-coder-plus")
-        .agent("simple-agent")
+        .agent("simple-agent", model: "clipproxyapi/qwen3-coder-plus")
         .commit
 
       workflow.id.should eq("agents-example")
-      workflow.default_model.should eq("clipproxyapi/qwen3-coder-plus")
       workflow.nodes.size.should eq(1)
       workflow.nodes[0].id.should eq("simple-agent")
       workflow.nodes[0].kind.should eq(Cogni::Workflow::NodeKind::Agent)
     end
 
     it "executes agent workflow with task input" do
+      ENV["COGNICORE_MOCK_LLM"] = "1"
+
+      begin
       workflow = Cogni::Workflow.create_workflow("agents-example-run", "Agent run test")
       workflow
-        .resources(model: "openai/gpt-4.1-mini")
+        .agent("simple-agent", model: "openai/gpt-4.1-mini")
         .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
           Cogni::Workflow::WorkflowNodeResult.continue({"task" => json_str("test task")})
         end)
@@ -42,6 +42,9 @@ describe "E2E: Agents and Skills" do
       result = run.start
       result.status.should eq("success")
       result.state.not_nil!["task"].as_s.should eq("test task")
+      ensure
+        ENV.delete("COGNICORE_MOCK_LLM")
+      end
     end
   end
 

@@ -81,7 +81,7 @@ TEXT
 
     private def federation_merge_contract_required?(ctx : Cogni::Workflow::NodeContext) : Bool
       api = context_string_param(ctx, "api").downcase
-      return false unless api == "lefine"
+      return false unless api == "federation"
 
       activity = context_string_param(ctx, "activity").downcase
       activity == "merge" || activity == "mergerequest"

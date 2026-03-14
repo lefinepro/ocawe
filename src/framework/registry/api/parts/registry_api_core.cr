@@ -9,13 +9,19 @@ module Cogni
     alias WorkflowNodeResult = Cogni::Workflow::WorkflowNodeResult
     alias NodeContext = Cogni::Workflow::NodeContext
     alias NodeKind = Cogni::Workflow::NodeKind
+    @@bootstrap_actions = [] of Proc(Nil)
+    @@capture_bootstrap_actions = true
 
     def reset_all! : Nil
+      previous_capture = @@capture_bootstrap_actions
+      @@capture_bootstrap_actions = false
       Cogni::Workflow.reset_node_kind_registry!
       Cogni::Workflow.reset_resource_registry!
       Cogni::Workflow.reset_function_registry!
       Cogni::Workflow.reset_workspace_registry!
       register_default_node_kinds!
+      replay_bootstrap_actions!
+      @@capture_bootstrap_actions = previous_capture
     end
 
     def register_system_function(
@@ -32,7 +38,7 @@ module Cogni
       source : Cogni::Workflow::FunctionSource = Cogni::Workflow::FunctionSource::User,
       &block : NodeContext -> Cogni::Workflow::RunnableResult
     ) : String
-      Cogni::Workflow.register_function(name, alias_name: alias_name, source: source, &block)
+      register_function_internal(name, alias_name: alias_name, source: source, persist: true, &block)
     end
 
     def call_function(name : String, ctx : NodeContext) : AnyHash
@@ -43,26 +49,122 @@ module Cogni
       kind : String,
       &block : NodeContext, AnyHash -> Cogni::Workflow::NodeKindResult
     ) : Nil
-      Cogni::Workflow.register_node_kind(kind, &block)
+      register_node_kind_internal(kind, persist: true, &block)
     end
 
     def resource(
       name : String,
       &block : NodeContext, AnyHash -> AnyHash
     ) : Nil
-      Cogni::Workflow.register_resource(name, &block)
+      register_resource_internal(name, persist: true, &block)
     end
 
     def workspace_schema(name : String, &block : AnyHash -> Nil) : Nil
-      Cogni::Workflow.workspace_registry.register_schema(name, &block)
+      register_workspace_schema_internal(name, persist: true, &block)
     end
 
     def workspace_resolver(&block : AnyHash -> AnyHash) : Nil
-      Cogni::Workflow.workspace_registry.register_resolver(&block)
+      register_workspace_resolver_internal(persist: true, &block)
     end
 
     def workspace_hook(event : String, &block : NodeContext, AnyHash -> Nil) : Nil
+      register_workspace_hook_internal(event, persist: true, &block)
+    end
+
+    private def replay_bootstrap_actions! : Nil
+      @@bootstrap_actions.each(&.call)
+    end
+
+    private def register_function_internal(
+      name : String,
+      alias_name : String? = nil,
+      source : Cogni::Workflow::FunctionSource = Cogni::Workflow::FunctionSource::User,
+      persist : Bool = false,
+      &block : NodeContext -> Cogni::Workflow::RunnableResult
+    ) : String
+      canonical = Cogni::Workflow.register_function(name, alias_name: alias_name, source: source, &block)
+      if persist && @@capture_bootstrap_actions
+        handler = block
+        @@bootstrap_actions << ->{
+          register_function_internal(name, alias_name: alias_name, source: source, persist: false, &handler)
+          nil
+        }
+      end
+      canonical
+    end
+
+    private def register_node_kind_internal(
+      kind : String,
+      persist : Bool = false,
+      &block : NodeContext, AnyHash -> Cogni::Workflow::NodeKindResult
+    ) : Nil
+      Cogni::Workflow.register_node_kind(kind, &block)
+      if persist && @@capture_bootstrap_actions
+        handler = block
+        @@bootstrap_actions << ->{
+          register_node_kind_internal(kind, persist: false, &handler)
+          nil
+        }
+      end
+    end
+
+    private def register_resource_internal(
+      name : String,
+      persist : Bool = false,
+      &block : NodeContext, AnyHash -> AnyHash
+    ) : Nil
+      Cogni::Workflow.register_resource(name, &block)
+      if persist && @@capture_bootstrap_actions
+        handler = block
+        @@bootstrap_actions << ->{
+          register_resource_internal(name, persist: false, &handler)
+          nil
+        }
+      end
+    end
+
+    private def register_workspace_schema_internal(
+      name : String,
+      persist : Bool = false,
+      &block : AnyHash -> Nil
+    ) : Nil
+      Cogni::Workflow.workspace_registry.register_schema(name, &block)
+      if persist && @@capture_bootstrap_actions
+        handler = block
+        @@bootstrap_actions << ->{
+          register_workspace_schema_internal(name, persist: false, &handler)
+          nil
+        }
+      end
+    end
+
+    private def register_workspace_resolver_internal(
+      persist : Bool = false,
+      &block : AnyHash -> AnyHash
+    ) : Nil
+      Cogni::Workflow.workspace_registry.register_resolver(&block)
+      if persist && @@capture_bootstrap_actions
+        handler = block
+        @@bootstrap_actions << ->{
+          register_workspace_resolver_internal(persist: false, &handler)
+          nil
+        }
+      end
+    end
+
+    private def register_workspace_hook_internal(
+      event : String,
+      persist : Bool = false,
+      &block : NodeContext, AnyHash -> Nil
+    ) : Nil
       Cogni::Workflow.workspace_registry.register_hook(event, &block)
+      if persist && @@capture_bootstrap_actions
+        handler = block
+        @@bootstrap_actions << ->{
+          register_workspace_hook_internal(event, persist: false, &handler)
+          nil
+        }
+      end
     end
 
     def build_node(
@@ -118,38 +220,48 @@ module Cogni
 
           resolved_model = resolve_model(workflow, ctx, model)
           system_prompt = prompt || "You are agent #{id}."
+          metadata = {
+            "workflow_id" => JSON.parse(ctx.workflow_id.to_json),
+            "run_id"      => JSON.parse(ctx.run_id.to_json),
+            "node_id"     => JSON.parse(ctx.node_id.to_json),
+            "agent_id"    => JSON.parse(id.to_json),
+          } of String => JSON::Any
+
           response = CogniCore::AI::Client.new.generate_text(
             model_spec: resolved_model,
             prompt: user_prompt,
             system: system_prompt,
-            metadata: {
-              "workflow_id" => JSON.parse(ctx.workflow_id.to_json),
-              "run_id" => JSON.parse(ctx.run_id.to_json),
-              "node_id" => JSON.parse(ctx.node_id.to_json),
-              "agent_id" => JSON.parse(id.to_json),
-            },
+            metadata: metadata,
           )
-          agent_result = Cogni::Workflow::AgentResult.new(
+          agent_payload = Cogni::Workflow::AgentResult.new(
             agent_type: "default-agent",
             content: response.text,
             provider: response.provider,
             model: "#{response.provider}/#{response.model}",
-          )
+          ).to_any_hash
 
-          Cogni::Workflow::Guardrails.validate_output!(id, agent_result.content, guardrails_config)
+          agent_content = agent_payload["content"]?.try(&.as_s?) || ""
+
+          Cogni::Workflow::Guardrails.validate_output!(id, agent_content, guardrails_config)
 
           outputs = ctx.state["agent_outputs"]?.try(&.as_h?) || {} of String => JSON::Any
           outputs = outputs.dup
-          outputs[id] = JSON.parse(agent_result.to_any_hash.to_json)
+          outputs[id] = JSON.parse(agent_payload.to_json)
 
           result = {
             "agent_outputs" => JSON.parse(outputs.to_json),
-            "agent_result" => JSON.parse(agent_result.to_any_hash.to_json),
-            "last_agent" => JSON.parse(id.to_json),
-            "last_model" => JSON.parse((agent_result.model || "").to_json),
-            "last_response" => JSON.parse(agent_result.content.to_json),
-            "active_agent" => JSON.parse(id.to_json),
+            "agent_result"  => JSON.parse(agent_payload.to_json),
+            "last_agent"    => JSON.parse(id.to_json),
+            "last_model"    => JSON.parse((agent_payload["model"]?.try(&.as_s?) || resolved_model).to_json),
+            "last_response" => JSON.parse(agent_content.to_json),
+            "active_agent"  => JSON.parse(id.to_json),
           } of String => JSON::Any
+
+          if parsed_payload = parse_agent_json_payload(agent_content)
+            parsed_payload.each do |k, v|
+              result[k] = JSON.parse(v.to_json)
+            end
+          end
 
           if voice = voice_config
             result["active_voice"] = JSON.parse(voice.to_json)
@@ -166,7 +278,7 @@ module Cogni
         resolved_config = config || ({} of String => JSON::Any)
         return WorkflowNode.new(id, NodeKind::Voice, metadata: {
           "dsl_kind" => JSON.parse("voice".to_json),
-          "config" => JSON.parse(resolved_config.to_json),
+          "config"   => JSON.parse(resolved_config.to_json),
         } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
           WorkflowNodeResult.continue(run_voice_node(ctx, resolved_config))
         end
@@ -174,7 +286,7 @@ module Cogni
         resolved_config = config || ({} of String => JSON::Any)
         return WorkflowNode.new(id, NodeKind::Rag, metadata: {
           "dsl_kind" => JSON.parse("rag".to_json),
-          "config" => JSON.parse(resolved_config.to_json),
+          "config"   => JSON.parse(resolved_config.to_json),
         } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
           WorkflowNodeResult.continue(Cogni::Workflow::RagRuntime.execute(ctx, resolved_config))
         end
@@ -188,9 +300,9 @@ module Cogni
           if resume.empty?
             next WorkflowNodeResult.suspend(
               {
-                "type" => JSON.parse("suspend".to_json),
+                "type"    => JSON.parse("suspend".to_json),
                 "node_id" => JSON.parse(id.to_json),
-                "reason" => JSON.parse(suspend_reason.to_json),
+                "reason"  => JSON.parse(suspend_reason.to_json),
               },
               id,
             )
@@ -220,7 +332,7 @@ module Cogni
         kind_name = node_kind_name || id
         kind_attributes = node_kind_attributes || ({} of String => JSON::Any)
         metadata = {
-          "node_kind" => JSON.parse(kind_name.to_json),
+          "node_kind"  => JSON.parse(kind_name.to_json),
           "attributes" => JSON.parse(kind_attributes.to_json),
         } of String => JSON::Any
         metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
@@ -256,6 +368,9 @@ module Cogni
       end
       node_kind("agent_qwen") do |ctx, _parameters|
         call_function("agent_qwen", ctx)
+      end
+      node_kind("forgefed_subscribe") do |ctx, parameters|
+        run_forgefed_subscribe_node(ctx, parameters)
       end
     end
   end

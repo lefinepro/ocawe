@@ -85,7 +85,7 @@ module CogniCore
                 Build runtime binary.
             dev [--port N] [--interval SECONDS] [--config-rcl PATH]
                 Watch workflows/global agents/tools, recompile and restart runtime in dev mode.
-            up [--port N] [--workflows-root PATH] [--fallback-workflows-root PATH] [--config-rcl PATH]
+            up [--port N] [--workflows-root PATH] [--config-rcl PATH]
                 Auto-build release runtime binary and start server.
             workflow <workflow_id> [args ...] [--base-url URL] [--run-id ID] [--resource-id ID] [--input-json JSON]
                 Trigger workflow by id.

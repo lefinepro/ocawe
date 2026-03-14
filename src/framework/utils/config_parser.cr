@@ -82,7 +82,7 @@ module CogniCore
         end
       end
 
-      # Backward-compatible support for root `api = "mastra"|["mastra","lefine"]`.
+      # Backward-compatible support for root `api = "classic"|["classic","federation"]`.
       # Vendor RCL parser expects top-level blocks, so rewrite to an equivalent block.
       private def self.normalize_legacy_api_assignment(content : String) : String
         lines = content.lines
@@ -114,8 +114,7 @@ module CogniCore
         if wf_raw = tree["workflows"]?
           if wf = wf_raw.as?(Hash(String, RCL::Value))
             preferred = string_or_nil(wf["preferred_workflows_root"]?) || workflows.preferred_workflows_root
-            fallback = string_or_nil(wf["fallback_workflows_root"]?) || workflows.fallback_workflows_root
-            workflows = Cogni::Config::WorkflowSettings.new(preferred, fallback)
+            workflows = Cogni::Config::WorkflowSettings.new(preferred)
           end
         end
 
@@ -133,6 +132,8 @@ module CogniCore
           if fed = fed_raw.as?(Hash(String, RCL::Value))
             adapter = string_or_nil(fed["adapter"]?) || federation.adapter
             sqlite_path = string_or_nil(fed["sqlite_path"]?) || federation.sqlite_path
+            auto_subscribe = parse_string_list_value(fed["auto_subscribe"]?)
+            auto_subscribe = federation.auto_subscribe if auto_subscribe.empty?
             poll_interval = int32_or_nil(fed["s2s_poll_interval_seconds"]?) || federation.s2s_poll_interval_seconds
             http_timeout = int32_or_nil(fed["s2s_http_timeout_seconds"]?) || federation.s2s_http_timeout_seconds
             signatures_required = bool_or_nil(fed["signatures_required"]?)
@@ -141,7 +142,7 @@ module CogniCore
             local_key_id = string_or_nil(fed["local_key_id"]?) || federation.local_key_id
             local_private_key_path = string_or_nil(fed["local_private_key_path"]?) || federation.local_private_key_path
             federation = Cogni::Config::FederationSettings.new(
-              adapter, sqlite_path, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path
+              adapter, sqlite_path, auto_subscribe, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path
             )
           end
         end
@@ -232,6 +233,10 @@ module CogniCore
       end
 
       private def self.parse_functions_value(value : RCL::Value?) : Array(String)
+        parse_string_list_value(value)
+      end
+
+      private def self.parse_string_list_value(value : RCL::Value?) : Array(String)
         return [] of String unless value
 
         case value

@@ -14,7 +14,6 @@ module CogniDockerGit
       Cogni::Config::Settings.new(
         workflows: Cogni::Config::WorkflowSettings.new(
           preferred_workflows_root: workflows_root,
-          fallback_workflows_root: workflows_root,
         ),
         functions: {
           "docker_workspace_create" => docker_workspace_create,

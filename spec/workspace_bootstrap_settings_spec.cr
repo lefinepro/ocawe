@@ -6,7 +6,6 @@ describe "workspace bootstrap in settings" do
     settings = Cogni::Config::Settings.new(
       workflows: Cogni::Config::WorkflowSettings.new(
         preferred_workflows_root: "./shards/examples",
-        fallback_workflows_root: "./shards/examples",
       ),
       workspace_bootstrap: -> : Nil do
         called = true

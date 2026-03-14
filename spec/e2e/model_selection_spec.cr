@@ -8,7 +8,6 @@ describe "E2E: Model Selection and AI Integration" do
       begin
         workflow = Cogni::Workflow.create_workflow("e2e-model-override", "Model override")
         workflow
-          .resources(model: "openai/gpt-4.1-mini") # workflow default
           .agent("model-agent", prompt: "Test", model: "openai/gpt-4.1") # agent model
           .commit
 
@@ -40,8 +39,7 @@ describe "E2E: Model Selection and AI Integration" do
       begin
         workflow = Cogni::Workflow.create_workflow("e2e-model-fallback", "Model fallback")
         workflow
-          .resources(model: "openai/gpt-4.1-mini")
-          .agent("fallback-agent", prompt: "Test") # no model specified
+          .agent("fallback-agent", prompt: "Test", model: "openai/gpt-4.1-mini") # no model specified
           .commit
 
         engine = Cogni::Workflow::Engine.new
@@ -58,24 +56,15 @@ describe "E2E: Model Selection and AI Integration" do
     end
   end
 
-  describe "resources attribute" do
-    it "applies model, skills, and tools from resources attribute" do
+  describe "agent model and execution" do
+    it "uses explicit agent model" do
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       begin
         workflow = Cogni::Workflow.create_workflow("e2e-use-unified", "Unified use")
         workflow
-          .resources(
-            model: "openai/gpt-4.1-mini",
-            skill: ["skill-a", "skill-b"],
-            tool: ["tool-a"]
-          )
-          .agent("unified-agent", prompt: "Test")
+          .agent("unified-agent", prompt: "Test", model: "openai/gpt-4.1-mini")
           .commit
-
-        workflow.default_model.should eq("openai/gpt-4.1-mini")
-        workflow.default_skills.should eq(["skill-a", "skill-b"])
-        workflow.default_tools.should eq(["tool-a"])
 
         engine = Cogni::Workflow::Engine.new
         engine.register(workflow)

@@ -20,14 +20,12 @@ module CogniCore
 
     port = DEFAULT_PORT
     workflows_root = nil.as(String?)
-    fallback_workflows_root = nil.as(String?)
     config_rcl = nil.as(String?)
 
     OptionParser.parse do |parser|
       parser.banner = "Usage: cognicore [arguments]"
       parser.on("-p PORT", "--port=PORT", "HTTP port") { |value| port = value.to_i }
       parser.on("--workflows-root=PATH", "Preferred workflows root path") { |value| workflows_root = value }
-      parser.on("--fallback-workflows-root=PATH", "Fallback workflows root path") { |value| fallback_workflows_root = value }
       parser.on("--config-rcl=PATH", "RCL config file path (alternative to Crystal-only defaults)") { |value| config_rcl = value }
       parser.on("-v", "--version", "Print version") do
         puts VERSION
@@ -43,12 +41,11 @@ module CogniCore
 
     # Use default config values if not overridden by command line
     workflows_root ||= settings.workflows.preferred_workflows_root
-    fallback_workflows_root ||= settings.workflows.fallback_workflows_root
+    
 
     ACD::Kemal::App.new(
       port,
       workflows_root: workflows_root,
-      fallback_workflows_root: fallback_workflows_root,
       settings: settings,
     ).start
   end

@@ -1,5 +1,8 @@
 require "../workflows/declarative/run"
 require "../cognicore/ai/client"
+require "../config/settings"
+require "../utils/config_parser"
+require "../federation/subscriptions"
 require "./api/parts/registry_api_core"
 require "./api/parts/registry_api_helpers"
 require "./api/parts/registry_facade"

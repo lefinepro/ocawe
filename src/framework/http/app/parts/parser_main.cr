@@ -124,28 +124,6 @@ module ACD
             ctx.last_agent_id = agent_id
             next
           end
-          # Resource allocation annotation: @[Resources(model: "...", skill: ["..."], tool: ["..."])]
-          if line.match(/^\s*@\[Resources\(/)
-            resources_annotation = line
-            unless resources_annotation.includes?(")]")
-              while i < end_line
-                continuation = ctx.lines[i].strip
-                resources_annotation = "#{resources_annotation} #{continuation}"
-                i += 1
-                break if continuation.includes?(")]")
-              end
-            end
-
-            match = resources_annotation.match(/^\s*@\[Resources\((.*)\)\]\s*$/)
-            raise "#{ctx.workflow_file}: invalid Resources annotation syntax '#{resources_annotation}'" unless match
-
-            resources = parse_resources_annotation_params(match[1])
-            model = resources[:model]
-            skill = resources[:skill]
-            tool = resources[:tool]
-            ctx.workflow.resources(model: model, skill: skill, tool: tool)
-            next
-          end
           if line.match(/^\s*@\[Workspace\(/)
             workspace_annotation = line
             unless workspace_annotation.includes?(")]")
@@ -179,14 +157,11 @@ module ACD
             end
             next
           end
-          if line.match(/^\s*@resources\s+/)
-            raise "#{ctx.workflow_file}: `@resources` is not a Crystal annotation. Use `@[Resources(model: \"...\", skill: [...], tool: [...])]`."
-          end
           if line.match(/^\s*docker\s+use\s+/)
             raise "#{ctx.workflow_file}: `docker use` is deprecated. Use `@[Workspace(...)]`."
           end
           if line.match(/^\s*use\s+/)
-            raise "#{ctx.workflow_file}: `use` keyword is deprecated. Use `@[Resources(model: \"...\", skill: [...], tool: [...])]`."
+            raise "#{ctx.workflow_file}: `use` keyword is deprecated. Use `@[Workspace(...)]`."
           end
           if match = line.match(skill_pattern)
             ctx.workflow.skill(match[1], agent: match[2]?)

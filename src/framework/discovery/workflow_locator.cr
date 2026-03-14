@@ -15,14 +15,13 @@ module ACD
     end
 
     class WorkflowLocator
-      def initialize(@preferred_root : String = "./src/workflows", @fallback_root : String = "./workflows")
-      end
+    def initialize(@preferred_root : String = "./src/workflows")
+    end
 
-      def list_workflows : Array(WorkflowBundle)
-        ids = Set(String).new
+    def list_workflows : Array(WorkflowBundle)
+      ids = Set(String).new
 
-        each_bundle_dir(@preferred_root) { |name| ids << name }
-        each_bundle_dir(@fallback_root) { |name| ids << name }
+      each_bundle_dir(@preferred_root) { |name| ids << name }
 
         ids.to_a.sort.compact_map { |id| resolve?(id) }
       end
@@ -35,11 +34,6 @@ module ACD
         preferred_dir = File.join(@preferred_root, id)
         if Dir.exists?(preferred_dir)
           return bundle_from_dir(id, preferred_dir, "preferred")
-        end
-
-        fallback_dir = File.join(@fallback_root, id)
-        if Dir.exists?(fallback_dir)
-          return bundle_from_dir(id, fallback_dir, "fallback")
         end
 
         nil
