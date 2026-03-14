@@ -1,4 +1,4 @@
-require "./engine/parts/run_handle_core"
-require "./engine/parts/run_handle_state"
-require "./engine/parts/run_handle_helpers"
-require "./engine/parts/engine_core"
+require "./engine/endpoints/run_handle_core"
+require "./engine/endpoints/run_handle_state"
+require "./engine/endpoints/run_handle_helpers"
+require "./engine/endpoints/engine_core"
