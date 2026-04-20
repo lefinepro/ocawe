@@ -22,6 +22,7 @@ module ACD
       ACTIVITYSTREAMS_INTRANSITIVE_ACTIVITY_TYPES = Set{"Arrive", "Question", "Travel"}
       ACTIVITYSTREAMS_ACTOR_TYPES                 = Set{"Actor", "Application", "Group", "Organization", "Person", "Service"}
       ACTIVITYSTREAMS_COLLECTION_TYPES            = Set{"Collection", "OrderedCollection", "CollectionPage", "OrderedCollectionPage"}
+      ACTIVITYSTREAMS_ATTACHMENT_COMPATIBILITY_TYPE_NAMES = Set{"PropertyValue", "Status"}
       FORGEFED_TYPE_NAMES                         = Set{
         "Branch", "Commit", "Factory", "MergeRequest", "Patch", "PatchTracker",
         "Project", "Push", "Repository", "Team", "Ticket", "TicketTracker",
