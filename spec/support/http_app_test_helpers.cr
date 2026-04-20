@@ -88,7 +88,8 @@ class ACD::Kemal::App
     remote_actor : String,
     workflow_actor : String,
     local_domain : String,
-    published_at : String
+    published_at : String,
+    local_actor : String = ""
   ) : Nil
     publish_result_activity_from_output(
       workflow_id: workflow_id,
@@ -98,6 +99,7 @@ class ACD::Kemal::App
       ticket: ticket,
       requested_activity: requested_activity,
       remote_actor: remote_actor,
+      local_actor: local_actor,
       workflow_actor: workflow_actor,
       local_domain: local_domain,
       published_at: published_at,

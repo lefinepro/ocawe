@@ -40,21 +40,41 @@ module ACD
           end
 
           received_at = Time.utc.to_s("%Y-%m-%dT%H:%M:%SZ")
-          @federation_store.append_inbox_event(
-            actor: actor,
-            activity_type: activity_type,
-            payload: body,
-            received_at: received_at,
-          )
+          follows = @federation_store.list_following.select { |entry| entry["remote_actor"]?.try(&.as_s?) == actor }
+          processed = false
 
           if activity_type == "Accept"
+            @federation_store.append_inbox_event(
+              actor: actor,
+              activity_type: activity_type,
+              payload: body,
+              received_at: received_at,
+            )
             object_id = resolve_activity_object_id(body)
-            follows = @federation_store.list_following.select { |entry| entry["remote_actor"]?.try(&.as_s?) == actor }
             follows.each do |follow|
               expected = follow["follow_activity_id"]?.try(&.as_s?).to_s
               next if expected.empty? || object_id != expected
               @federation_store.upsert_follow_sync_state(remote_actor: actor, status: "active", error: "")
             end
+          elsif ticket_payload = extract_ticket_activity_payload(body)
+            follows.each do |follow|
+              next unless follow["status"]?.try(&.as_s?) == "active"
+              processed ||= process_ticket_create_activity(
+                follow,
+                body,
+                ticket_payload[:ticket],
+                ticket_payload[:activity_type],
+              )
+            end
+          end
+
+          unless processed
+            @federation_store.append_inbox_event(
+              actor: actor,
+              activity_type: activity_type,
+              payload: body,
+              received_at: received_at,
+            )
           end
 
           env.response.status_code = 202

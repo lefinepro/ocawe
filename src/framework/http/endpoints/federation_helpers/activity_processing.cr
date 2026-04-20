@@ -254,6 +254,7 @@ module ACD
           ticket: ticket,
           requested_activity: activity,
           remote_actor: remote_actor,
+          local_actor: local_actor,
           workflow_actor: workflow_actor,
           local_domain: local_domain,
           published_at: received_at,
