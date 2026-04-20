@@ -56,10 +56,21 @@ module ACD
         %w(actor attributedTo attachment first formerType instrument items next object oneOf anyOf orderedItems origin previous result subject target).includes?(key)
       end
 
-      private def type_allowed_for_contexts?(type_name : String, contexts : Set(String)) : Bool
+      private def type_allowed_for_contexts?(type_name : String, contexts : Set(String), path : String) : Bool
         return true if contexts.includes?(ACTIVITYSTREAMS_CONTEXT_URL) && ACTIVITYSTREAMS_TYPE_NAMES.includes?(type_name)
         return true if contexts.includes?(FORGEFED_CONTEXT_URL) && FORGEFED_TYPE_NAMES.includes?(type_name)
+        return true if attachment_compatibility_type_allowed?(type_name, contexts, path)
         false
+      end
+
+      private def attachment_compatibility_type_allowed?(type_name : String, contexts : Set(String), path : String) : Bool
+        return false unless contexts.includes?(ACTIVITYSTREAMS_CONTEXT_URL)
+        return false unless ACTIVITYSTREAMS_ATTACHMENT_COMPATIBILITY_TYPE_NAMES.includes?(type_name)
+        attachment_entry_path?(path)
+      end
+
+      private def attachment_entry_path?(path : String) : Bool
+        path.ends_with?(".attachment") || !!(path =~ /\.attachment\[\d+\]$/)
       end
     end
   end

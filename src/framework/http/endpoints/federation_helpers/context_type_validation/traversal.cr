@@ -16,7 +16,7 @@ module ACD
           end
           if !types.empty? && !contexts.empty?
             types.each do |type_name|
-              next if type_allowed_for_contexts?(type_name, contexts)
+              next if type_allowed_for_contexts?(type_name, contexts, path)
               errors << "#{path}.type=#{type_name} is not allowed by #{context_label(contexts)}"
             end
           end
