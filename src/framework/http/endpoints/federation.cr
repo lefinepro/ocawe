@@ -10,21 +10,12 @@ module ACD
       FEDERATION_FORGEFED_CONTEXT    = "https://forgefed.org/ns"
 
       private def mount_federation_endpoints
-        get "/actors/:workflow_id" do |env|
-          workflow_id = env.params.url["workflow_id"]?.to_s
-          document = local_actor_document(workflow_id)
-          if document.empty?
-            env.response.status_code = 404
-            env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
-            next({
-              "@context" => FEDERATION_JSONLD_CONTEXT,
-              "type"     => "Error",
-              "error"    => {"type" => "not_found", "message" => "unknown workflow actor"},
-            }.to_json)
-          end
+        get "/actor/:workflowId" do |env|
+          render_local_actor(env, env.params.url["workflowId"]?.to_s)
+        end
 
-          env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
-          document.to_json
+        get "/actors/:workflow_id" do |env|
+          render_local_actor(env, env.params.url["workflow_id"]?.to_s)
         end
 
         post "/federation/inbox" do |env|
@@ -75,6 +66,37 @@ module ACD
           }.to_json
         end
 
+        get "/federation/following" do |env|
+          follows = @federation_store.list_following
+          env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
+          {
+            "@context"     => FEDERATION_JSONLD_CONTEXT,
+            "type"         => "OrderedCollection",
+            "totalItems"   => follows.size,
+            "items"        => follows,
+            "orderedItems" => follows,
+          }.to_json
+        end
+
+        post "/federation/follows" do |env|
+          body = json_body(env)
+          remote_actor = first_non_empty(
+            body["actor"]?.try(&.as_s?),
+            body["remote_actor"]?.try(&.as_s?),
+            body["target"]?.try(&.as_s?),
+          )
+          next federation_error(env, 400, "bad_request", "actor is required") if remote_actor.empty?
+
+          record = Cogni::Federation::Subscriptions.ensure(@settings, @federation_store, remote_actor)
+          env.response.status_code = 201
+          env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
+          {
+            "@context" => FEDERATION_JSONLD_CONTEXT,
+            "status"   => "subscribed",
+            "follow"   => record,
+          }.to_json
+        end
+
         get "/federation/outbox" do |env|
           events = @federation_store.list_outbox_events
           items = events.map { |entry| entry["activity"]? || JSON.parse("{}") }
@@ -112,11 +134,27 @@ module ACD
         end
       end
 
+      private def render_local_actor(env, workflow_id : String) : String
+        document = local_actor_document(workflow_id)
+        if document.empty?
+          env.response.status_code = 404
+          env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
+          return({
+            "@context" => FEDERATION_JSONLD_CONTEXT,
+            "type"     => "Error",
+            "error"    => {"type" => "not_found", "message" => "unknown workflow actor"},
+          }.to_json)
+        end
+
+        env.response.content_type = FEDERATION_JSONLD_CONTENT_TYPE
+        document.to_json
+      end
+
       private def local_actor_document(workflow_id : String) : Hash(String, JSON::Any)
         return {} of String => JSON::Any if workflow_id.strip.empty?
         return {} of String => JSON::Any unless workflow_ids.includes?(workflow_id)
 
-        actor_url = "#{local_domain_from_actor_url(@settings.federation.local_actor)}/actors/#{workflow_id}"
+        actor_url = local_actor_url(workflow_id)
         inbox_url = "#{local_domain_from_actor_url(@settings.federation.local_actor)}/federation/inbox"
         outbox_url = "#{local_domain_from_actor_url(@settings.federation.local_actor)}/federation/outbox"
         public_key_id = "#{actor_url}#main-key"
@@ -137,6 +175,16 @@ module ACD
             "publicKeyPem" => public_key_pem,
           },
         }.to_json).as_h
+      end
+
+      private def local_actor_url(workflow_id : String) : String
+        base = local_domain_from_actor_url(@settings.federation.local_actor)
+        configured = @settings.federation.local_actor
+        if configured.includes?("/actor/")
+          "#{base}/actor/#{workflow_id}"
+        else
+          "#{base}/actors/#{workflow_id}"
+        end
       end
 
       private def local_actor_public_key_pem : String
@@ -184,6 +232,15 @@ module ACD
           "type"     => "Error",
           "error"    => {"type" => type, "message" => message},
         }.to_json
+      end
+
+      private def first_non_empty(*values : String?) : String
+        values.each do |value|
+          next unless value
+          stripped = value.strip
+          return stripped unless stripped.empty?
+        end
+        ""
       end
     end
   end
