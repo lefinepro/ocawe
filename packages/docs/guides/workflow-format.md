@@ -30,6 +30,55 @@ workflow "example" do
 end
 ```
 
+## ML Registry And Training
+
+ML definitions stay in `.acd.cr` as explicit directives. `model` declares a registry entry, and `train`, `embed`, `infer`, `eval` are executable nodes.
+
+```crystal
+workflow "ml-pipeline" do
+  dataset "tickets" do
+    item({"id": "1", "text": "urgent outage"})
+    item({"id": "2", "text": "billing issue"})
+  end
+
+  model "ticket-embedder",
+    task: "embedding",
+    runtime: {"adapter": "cogni_ml", "backends": ["cuda", "amd", "metal"]}
+
+  model "ticket-classifier",
+    task: "classification",
+    runtime: {"adapter": "cogni_ml"}
+
+  train "fit-classifier",
+    model: "ticket-classifier",
+    dataset: "tickets",
+    epochs: 2
+
+  embed "index-tickets",
+    model: "ticket-embedder",
+    dataset: "tickets",
+    field: "text",
+    persist: true,
+    dimensions: 8
+
+  infer "score-ticket",
+    model: "ticket-classifier",
+    labels: ["urgent", "normal"]
+
+  eval "check-ticket",
+    model: "ticket-classifier",
+    expected: ["urgent"]
+end
+```
+
+Current runtime behavior:
+
+- model declarations are stored in the ML registry during workflow load
+- backend preference defaults to `cuda`, then `amd`, then `metal`
+- `train` records a checkpoint artifact in the ML registry
+- `embed` can persist an embedding-index artifact when `persist: true`
+- `infer` and `eval` run through the same registry-managed model definition
+
 ### `@[Logger(...)]` Annotation
 
 `@[Logger(...)]` supports Mastra-compatible logger config keys:
@@ -165,10 +214,15 @@ end
 | `@[Workspace(...)]` | Configure workflow-level or next-node workspace metadata |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
+| `model "..."` | Declare an ML model in the registry |
 | `exec "path_or_inline", runtime: {...}, env: {...}` | Execute external script path or inline script |
 | `voice "..."` | Voice node |
 | `rag "..."` | RAG node |
 | `suspend "..."` | Suspend-and-resume node (`reason`, `resume_schema`) |
+| `train "..."` | Run a registry-managed training step |
+| `embed "..."` | Produce embeddings from inline text or a dataset |
+| `infer "..."` | Run deterministic inference using the declared model |
+| `eval "..."` | Evaluate predictions against expected labels |
 
 ### Agent Options
 

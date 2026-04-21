@@ -125,6 +125,14 @@ module Cogni
         } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
           WorkflowNodeResult.continue(Cogni::Workflow::RagRuntime.execute(ctx, resolved_config))
         end
+      when "train", "infer", "embed", "eval"
+        ml_config = attributes || config || ({} of String => JSON::Any)
+        return WorkflowNode.new(id, NodeKind::Custom, metadata: {
+          "dsl_kind" => JSON.parse(normalized.to_json),
+          "config"   => JSON.parse(ml_config.to_json),
+        } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          WorkflowNodeResult.continue(Cogni::ML.runtime.execute(normalized, id, ctx, ml_config))
+        end
       when "suspend"
         suspend_reason = reason || "human input required"
         return WorkflowNode.new(id, NodeKind::Suspend, metadata: {

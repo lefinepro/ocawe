@@ -10,7 +10,8 @@ module ACD
           "workflow", "do", "end", "struct", "class", "module",
           "include", "extend", "getter", "setter", "property",
           "alias", "enum", "lib", "fun", "require",
-          "agent", "skill", "exec", "voice", "rag", "suspend", "dataset",
+          "agent", "skill", "exec", "voice", "rag", "suspend", "dataset", "model",
+          "train", "infer", "embed", "eval",
           "input_type", "output_type", "input_validate", "output_validate",
           "parallel", "if", "elsif", "else", "while", "unless", "until", "loop",
         }
@@ -76,6 +77,11 @@ module ACD
             block_end = find_block_end(ctx.lines, i, end_line)
             parse_dataset_block(ctx, dataset_id, i, block_end)
             i = block_end + 1
+            next
+          end
+
+          if match = line.match(/^\s*model\s+"([^"]+)"(.*)$/)
+            parse_model_declaration(ctx, match[1], match[2]? || "")
             next
           end
 
@@ -229,6 +235,13 @@ module ACD
           if line.match(/^\s*approve\s+/)
             raise "#{ctx.workflow_file}: `approve` is deprecated. Use `suspend \"id\", reason: \"...\", resume_schema: ...`."
             next
+          end
+          if match = line.match(/^([a-z][a-z0-9_]*)\s+"([^"]+)"(.*)$/)
+            node_type = match[1]
+            if ml_node_type?(node_type)
+              parse_ml_node(ctx, node_type, match[2], match[3]? || "")
+              next
+            end
           end
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             fn_name = match[1]

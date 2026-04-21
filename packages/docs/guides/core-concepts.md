@@ -28,6 +28,8 @@ Use `.acd.cr` for runtime bundles, user workflows, and examples.
 
 Programmatic construction with `Cogni::Workflow.build(...)` remains available for internal framework assembly, tests, and advanced embedding. In that API, `Workflow#step(type, id, ...)` is still the unified entry for built-in and external nodes.
 
+ML is part of the same surface. Models are declared with `model`, then executed through `train`, `embed`, `infer`, and `eval` nodes. The registry owns model metadata and produced artifacts, while backend preference is resolved in `cuda -> amd -> metal` order by default.
+
 ## Node Kinds
 
 Node kinds are runtime handlers registered in Crystal. They are the extension point for custom behavior and for built-in external agent integrations.

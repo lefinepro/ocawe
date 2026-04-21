@@ -8,6 +8,7 @@ require "./framework/workflows/declarative/run"
 require "./framework/workflows/declarative/api"
 require "./framework/registry/api"
 require "./framework/config/settings"
+require "./framework/ml"
 require "./framework/trigger/public_api"
 require "./framework/http/app"
 

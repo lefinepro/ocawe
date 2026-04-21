@@ -184,6 +184,16 @@ module ACD
             next
           end
 
+          if match = line.match(/^([a-z][a-z0-9_]*)\s+"([^"]+)"(.*)$/)
+            node_type = match[1]
+            if ml_node_type?(node_type)
+              attributes = parse_line_attributes(match[3]? || "", ctx.workflow_file, "#{node_type} #{match[2]}")
+              config = extract_attributes(attributes, Set(String).new, ctx.workflow_file) || ({} of String => JSON::Any)
+              parallel_nodes << Cogni::RegistryApi.build_node(ctx.workflow, node_type, match[2], attributes: config)
+              next
+            end
+          end
+
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             node_kind = match[1]
             tail = match[2]? || ""

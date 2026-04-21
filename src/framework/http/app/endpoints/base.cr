@@ -17,7 +17,13 @@ module ACD
         @workflow_engine = Cogni::Workflow::Engine.new
         @workflow_service = Cogni::Workflow::Service.new(@workflow_engine)
         @dataset_service = Cogni::Dataset::Service.new(build_dataset_store(@settings.datasets))
+        @ml_service = Cogni::ML::Service.new(
+          build_ml_store(@settings.ml),
+          default_adapter: @settings.ml.default_runtime_adapter,
+          backend_priority: @settings.ml.backend_priority
+        )
         @federation_store = build_federation_store(@settings.federation)
+        Cogni::ML.configure!(@ml_service, Cogni::ML::Runtime.new(@ml_service, @dataset_service))
         @mcp_manager = Cogni::MCP.manager
         @workflow_ids = [] of String
         @workflow_index = {} of String => NamedTuple(
@@ -105,6 +111,7 @@ module ACD
       private def reload_cache!
         bundles = @locator.list_workflows
         @dataset_service.reset_dsl_sources!
+        @ml_service.reset_dsl_sources!
         rebuilt_engine = Cogni::Workflow::Engine.new
         ids = [] of String
         index = {} of String => NamedTuple(
@@ -235,62 +242,6 @@ module ACD
 
       private def agent_by_id(agent_id : String)
         @cache_lock.synchronize { @agents_index[agent_id]? }
-      end
-
-      private def merge_agents(
-        global_agents : Array(ACD::Agents::LoadedAgent),
-        local_agents : Array(ACD::Agents::LoadedAgent)
-      ) : Array(ACD::Agents::LoadedAgent)
-        merged = {} of String => ACD::Agents::LoadedAgent
-        global_agents.each { |agent| merged[agent.id] = agent }
-        local_agents.each { |agent| merged[agent.id] = agent }
-        merged.values.to_a
-      end
-
-      private def register_configured_functions! : Nil
-        config = @settings
-        Cogni::RegistryApi.reset_all!
-
-        config.functions.each do |name, handler|
-          Cogni::RegistryApi.register_system_function(name, &handler)
-        end
-        config.workspace_bootstrap.try(&.call)
-      end
-
-      private def bootstrap_federation_subscriptions : Nil
-        @settings.federation.auto_subscribe.each do |entry|
-          normalized = entry.strip
-          next if normalized.empty?
-
-          begin
-            record = Cogni::Federation::Subscriptions.ensure(@settings, @federation_store, normalized)
-            STDERR.puts "[federation] subscribed #{normalized} -> #{record["remote_actor"]?.try(&.as_s?) || normalized}"
-          rescue ex
-            STDERR.puts "[federation] auto_subscribe failed for #{normalized}: #{ex.message || ex.class.name}"
-          end
-        end
-      end
-
-      private def build_dataset_store(config : Cogni::Config::DatasetSettings) : Cogni::Dataset::Store::Base
-        case config.adapter.strip.downcase
-        when "", "memory"
-          Cogni::Dataset::Store::InMemory.new
-        when "file"
-          Cogni::Dataset::Store::File.new(config.file_root)
-        else
-          raise "unsupported dataset adapter: #{config.adapter}"
-        end
-      end
-
-      private def build_federation_store(config : Cogni::Config::FederationSettings) : Cogni::Federation::Store::Base
-        case config.adapter.strip.downcase
-        when "", "memory"
-          Cogni::Federation::Store::Memory.new
-        when "sqlite"
-          Cogni::Federation::Store::SQLite.new(config.sqlite_path)
-        else
-          raise "unsupported federation adapter: #{config.adapter}"
-        end
       end
     end
   end

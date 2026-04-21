@@ -43,6 +43,18 @@ module CogniCore
           end
         end
 
+        ml = base.ml
+        if ml_raw = tree["ml"]?
+          if ml_tree = ml_raw.as?(Hash(String, RCL::Value))
+            registry_adapter = string_or_nil(ml_tree["registry_adapter"]?) || string_or_nil(ml_tree["adapter"]?) || ml.registry_adapter
+            file_root = string_or_nil(ml_tree["file_root"]?) || ml.file_root
+            default_runtime_adapter = string_or_nil(ml_tree["default_runtime_adapter"]?) || ml.default_runtime_adapter
+            backend_priority = parse_string_list_value(ml_tree["backend_priority"]?)
+            backend_priority = ml.backend_priority if backend_priority.empty?
+            ml = Cogni::Config::MLSettings.new(registry_adapter, file_root, default_runtime_adapter, backend_priority)
+          end
+        end
+
         api = base.api
         if api_raw = tree["api"]?
           parsed_api = parse_api_value(api_raw)
@@ -72,6 +84,7 @@ module CogniCore
           node_kinds: base.node_kinds,
           datasets: datasets,
           federation: federation,
+          ml: ml,
           api: api,
           functions: functions,
           workspace_bootstrap: base.workspace_bootstrap,

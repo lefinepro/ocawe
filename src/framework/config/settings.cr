@@ -50,6 +50,21 @@ module Cogni
       end
     end
 
+    struct MLSettings
+      getter registry_adapter : String
+      getter file_root : String
+      getter default_runtime_adapter : String
+      getter backend_priority : Array(String)
+
+      def initialize(
+        @registry_adapter : String = "memory",
+        @file_root : String = "./.cogni/ml",
+        @default_runtime_adapter : String = "cogni_ml",
+        @backend_priority : Array(String) = ["cuda", "amd", "metal"] of String
+      )
+      end
+    end
+
     struct ApiSettings
       getter enabled : Array(String)
 
@@ -83,6 +98,7 @@ module Cogni
       getter node_kinds : NodeKindSettings
       getter datasets : DatasetSettings
       getter federation : FederationSettings
+      getter ml : MLSettings
       getter api : ApiSettings
       getter functions : Hash(String, Cogni::Workflow::FunctionHandler)
       getter workspace_bootstrap : Proc(Nil)?
@@ -93,6 +109,7 @@ module Cogni
         @node_kinds : NodeKindSettings = NodeKindSettings.new,
         @datasets : DatasetSettings = DatasetSettings.new,
         @federation : FederationSettings = FederationSettings.new,
+        @ml : MLSettings = MLSettings.new,
         @api : ApiSettings = ApiSettings.new,
         @functions : Hash(String, Cogni::Workflow::FunctionHandler) = {} of String => Cogni::Workflow::FunctionHandler,
         @workspace_bootstrap : Proc(Nil)? = nil,
@@ -110,6 +127,7 @@ module Cogni
           node_kinds: NodeKindSettings.new,
           datasets: DatasetSettings.new,
           federation: FederationSettings.new,
+          ml: MLSettings.new,
           api: ApiSettings.new,
           functions: functions,
           workspace_bootstrap: nil,

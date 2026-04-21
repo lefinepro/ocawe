@@ -19,4 +19,23 @@ describe Cogni::Config::Settings do
   ensure
     File.delete(path) if path && File.exists?(path)
   end
+
+  it "loads ml registry and backend priority from rcl config" do
+    path = File.tempname("cogni-ml-config", ".rcl")
+    File.write(path, <<-RCL)
+      ml do
+        registry_adapter = "file"
+        file_root = "./tmp/ml"
+        default_runtime_adapter = "cogni_ml"
+        backend_priority = ["cuda", "amd", "metal"]
+      end
+    RCL
+
+    config = CogniCore::Utils::ConfigParser.load_settings(Cogni::Config::Settings.default, rcl_path: path)
+    config.ml.registry_adapter.should eq("file")
+    config.ml.file_root.should eq("./tmp/ml")
+    config.ml.backend_priority.should eq(["cuda", "amd", "metal"])
+  ensure
+    File.delete(path) if path && File.exists?(path)
+  end
 end

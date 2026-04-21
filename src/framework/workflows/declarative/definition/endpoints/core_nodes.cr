@@ -120,6 +120,22 @@ module Cogni
         ))
       end
 
+      def train(id : String, attributes : AnyHash? = nil) : self
+        append_node(Cogni::RegistryApi.build_node(self, "train", id, attributes: attributes))
+      end
+
+      def infer(id : String, attributes : AnyHash? = nil) : self
+        append_node(Cogni::RegistryApi.build_node(self, "infer", id, attributes: attributes))
+      end
+
+      def embed(id : String, attributes : AnyHash? = nil) : self
+        append_node(Cogni::RegistryApi.build_node(self, "embed", id, attributes: attributes))
+      end
+
+      def eval(id : String, attributes : AnyHash? = nil) : self
+        append_node(Cogni::RegistryApi.build_node(self, "eval", id, attributes: attributes))
+      end
+
       # Low-level chaining for explicit workflow nodes (used by control-flow internals).
       def step(node : WorkflowNode) : self
         append_node(node)

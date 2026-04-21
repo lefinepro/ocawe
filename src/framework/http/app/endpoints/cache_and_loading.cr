@@ -96,7 +96,8 @@ module ACD
           workflow_file: bundle.workflow_file,
           workflow_root: bundle.root_path,
           lines: lines,
-          dataset_service: @dataset_service
+          dataset_service: @dataset_service,
+          ml_service: @ml_service
         )
 
         parse_workflow_body(ctx, 0, lines.size)
@@ -127,6 +128,7 @@ module ACD
         getter workflow_root : String
         getter lines : Array(String)
         getter dataset_service : Cogni::Dataset::Service
+        getter ml_service : Cogni::ML::Service
         property last_agent_id : String?
 
         def initialize(
@@ -135,7 +137,8 @@ module ACD
           @workflow_file : String,
           @workflow_root : String,
           @lines : Array(String),
-          @dataset_service : Cogni::Dataset::Service
+          @dataset_service : Cogni::Dataset::Service,
+          @ml_service : Cogni::ML::Service
         )
           @last_agent_id = nil
         end

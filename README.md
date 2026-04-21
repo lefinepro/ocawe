@@ -89,6 +89,29 @@ end
 
 Use `.acd.cr` when you are building runnable workflows and bundles.
 
+ML and training are also declared in `.acd.cr` through explicit registry-managed directives:
+
+```crystal
+workflow "ml-pipeline" do
+  dataset "tickets" do
+    item({"id": "1", "text": "urgent outage"})
+  end
+
+  model "ticket-classifier",
+    task: "classification",
+    runtime: {"adapter": "cogni_ml", "backends": ["cuda", "amd", "metal"]}
+
+  train "fit-ticket-classifier",
+    model: "ticket-classifier",
+    dataset: "tickets",
+    epochs: 2
+
+  infer "score-ticket",
+    model: "ticket-classifier",
+    labels: ["urgent", "normal"]
+end
+```
+
 Programmatic construction through `Cogni::Workflow.build(...)` remains available for framework internals, tests, and advanced embedding. When using that API, the preferred entry is still `Workflow#step(type, id, ...)`.
 
 ### Registry Extensions
@@ -158,6 +181,7 @@ The runtime direction is additive and explicit:
 - prefer `.acd.cr` for workflow authoring
 - use `Workflow#step(type, id, ...)` when you need programmatic construction
 - use `agent_cliproxy`, `agent_codex`, and `agent_opencode` as external agent step types
+- use `model`, `train`, `embed`, `infer`, and `eval` when you need registry-managed ML flows in `.acd.cr`
 - use `Cogni::NodeKind.new(...)` when you need an explicit node kind object
 - keep runtime behavior deterministic
 
