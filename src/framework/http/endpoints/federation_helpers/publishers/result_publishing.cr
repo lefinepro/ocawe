@@ -9,6 +9,7 @@ module ACD
         ticket : Hash(String, JSON::Any),
         requested_activity : String,
         remote_actor : String,
+        local_actor : String,
         workflow_actor : String,
         local_domain : String,
         published_at : String
@@ -30,6 +31,12 @@ module ACD
         )
         suffix = Random.rand(UInt64::MAX).to_s(16)
         explicit_activity = extract_federation_result_activity(effective_output)
+        delivery_mode = resolve_result_delivery_mode(
+          effective_output: effective_output,
+          ticket: ticket,
+          remote_actor: remote_actor,
+        )
+        result_actor = pick_first_non_empty(local_actor, workflow_actor)
 
         activity = if explicit_activity
                      if requested_activity == "merge"
@@ -46,7 +53,7 @@ module ACD
                            suffix: suffix,
                            ticket: ticket,
                            remote_actor: remote_actor,
-                           workflow_actor: workflow_actor,
+                           result_actor: result_actor,
                            local_domain: local_domain,
                            workflow_id: workflow_id,
                            run_id: run_id,
@@ -57,7 +64,7 @@ module ACD
                        normalize_federation_result_activity(
                          explicit_activity.not_nil!,
                          suffix: suffix,
-                         workflow_actor: workflow_actor,
+                         result_actor: result_actor,
                          local_domain: local_domain,
                        )
                      end
@@ -76,7 +83,7 @@ module ACD
                          suffix: suffix,
                          ticket: ticket,
                          remote_actor: remote_actor,
-                         workflow_actor: workflow_actor,
+                         result_actor: result_actor,
                          local_domain: local_domain,
                          workflow_id: workflow_id,
                          run_id: run_id,
@@ -94,16 +101,27 @@ module ACD
                      )
                      return if result_text.empty? && status == "ok"
                      resolved_text = result_text.empty? ? "workflow #{workflow_id} finished with status #{status}" : result_text
-                     build_note_result_activity(
-                       suffix: suffix,
-                       ticket: ticket,
-                       remote_actor: remote_actor,
-                       workflow_actor: workflow_actor,
-                       local_domain: local_domain,
-                       workflow_id: workflow_id,
-                       run_id: run_id,
-                       result_text: resolved_text,
-                     )
+                     if delivery_mode == "exchange_update"
+                       build_exchange_update_result_activity(
+                         suffix: suffix,
+                         ticket: ticket,
+                         result_actor: result_actor,
+                         local_domain: local_domain,
+                         result_text: resolved_text,
+                         status: normalize_exchange_result_status(status),
+                       )
+                     else
+                       build_note_result_activity(
+                         suffix: suffix,
+                         ticket: ticket,
+                         remote_actor: remote_actor,
+                         result_actor: result_actor,
+                         local_domain: local_domain,
+                         workflow_id: workflow_id,
+                         run_id: run_id,
+                         result_text: resolved_text,
+                       )
+                     end
                    end
         activity["to"] = JSON.parse([remote_actor].to_json) unless remote_actor.empty? || activity.has_key?("to")
 
@@ -112,6 +130,18 @@ module ACD
           event_id: "outbox-result-#{suffix}",
           published_at: published_at,
         )
+        return if remote_actor.empty?
+
+        follow = @federation_store.list_following.find { |entry| entry["remote_actor"]?.try(&.as_s?) == remote_actor }
+        return unless follow
+
+        remote_inbox = pick_first_non_empty(
+          follow["remote_shared_inbox"]?.try(&.as_s?),
+          follow["remote_inbox"]?.try(&.as_s?),
+        )
+        return if remote_inbox.empty?
+
+        deliver_activity!(remote_inbox, JSON.parse(activity.to_json).as_h)
       rescue
       end
 
@@ -157,13 +187,13 @@ module ACD
       private def normalize_federation_result_activity(
         source : Hash(String, JSON::Any),
         suffix : String,
-        workflow_actor : String,
+        result_actor : String,
         local_domain : String
       ) : Hash(String, JSON::Any)
         activity = source.dup
         activity["@context"] = source["@context"]? || JSON.parse([FEDERATION_JSONLD_CONTEXT, FEDERATION_FORGEFED_CONTEXT].to_json)
         activity["id"] = source["id"]? || JSON.parse("#{local_domain}/activities/result-#{suffix}".to_json)
-        activity["actor"] = source["actor"]? || JSON.parse(workflow_actor.to_json)
+        activity["actor"] = source["actor"]? || JSON.parse(result_actor.to_json)
         activity
       end
 
@@ -171,7 +201,7 @@ module ACD
         suffix : String,
         ticket : Hash(String, JSON::Any),
         remote_actor : String,
-        workflow_actor : String,
+        result_actor : String,
         local_domain : String,
         workflow_id : String,
         run_id : String,
@@ -191,10 +221,11 @@ module ACD
           "@context" => JSON.parse(FEDERATION_JSONLD_CONTEXT.to_json),
           "id"       => JSON.parse("#{local_domain}/activities/result-#{suffix}".to_json),
           "type"     => JSON.parse("Create".to_json),
-          "actor"    => JSON.parse(workflow_actor.to_json),
+          "actor"    => JSON.parse(result_actor.to_json),
           "object"   => JSON.parse(note.to_json),
         } of String => JSON::Any
       end
+
     end
   end
 end
