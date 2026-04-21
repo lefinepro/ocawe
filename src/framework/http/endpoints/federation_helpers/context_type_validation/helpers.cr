@@ -12,17 +12,13 @@ module ACD
         return [context.as_s.not_nil!] if context.as_s?
         if values = context.as_a?
           return values.flat_map do |entry|
-            if text = entry.as_s?
-              [text]
-            elsif hash = entry.as_h?
-              hash.values.compact_map(&.as_s?)
-            else
-              [] of String
-            end
+            extract_context_urls(entry)
           end
         end
         if hash = context.as_h?
-          return hash.values.compact_map(&.as_s?)
+          return hash.values.flat_map do |value|
+            extract_context_urls(value)
+          end
         end
         [] of String
       end

@@ -82,6 +82,44 @@ describe "ACD::Kemal::App federation context type validation" do
     error.not_nil!.should contain("$.type=BogusActivity is not allowed")
   end
 
+  it "accepts object-shaped @context when it resolves to ActivityStreams URL" do
+    app = ACD::Kemal::App.new(0)
+    body = JSON.parse(%({
+      "@context": {"as": "https://www.w3.org/ns/activitystreams"},
+      "type": "Create",
+      "actor": "https://remote.example/actors/alice",
+      "object": {"type": "Note", "content": "hello"}
+    })).as_h
+
+    app.test_validate_contextual_federation_object(body, "activity").should be_nil
+  end
+
+  it "accepts mixed @context arrays when URL entries resolve to known contexts" do
+    app = ACD::Kemal::App.new(0)
+    body = JSON.parse(%({
+      "@context": ["https://www.w3.org/ns/activitystreams", {"forgefed": "https://forgefed.org/ns"}],
+      "type": "Offer",
+      "actor": "https://remote.example/actors/alice",
+      "object": {"type": "Ticket", "summary": "hello"}
+    })).as_h
+
+    app.test_validate_contextual_federation_object(body, "activity").should be_nil
+  end
+
+  it "still rejects types that are not allowed by extracted context URLs" do
+    app = ACD::Kemal::App.new(0)
+    body = JSON.parse(%({
+      "@context": {"as": "https://www.w3.org/ns/activitystreams"},
+      "type": "Ticket",
+      "actor": "https://remote.example/actors/alice",
+      "object": {"type": "Note", "content": "hello"}
+    })).as_h
+
+    error = app.test_validate_contextual_federation_object(body, "activity")
+    error.should_not be_nil
+    error.not_nil!.should contain("$.type=Ticket is not allowed")
+  end
+
   it "still rejects PropertyValue outside attachment compatibility paths" do
     app = ACD::Kemal::App.new(0)
     body = JSON.parse(%({
