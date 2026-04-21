@@ -4,21 +4,29 @@ Use this page when you need the shortest explanation of how Cogni is organized.
 
 ## Workflows
 
-Cogni executes workflows as explicit node graphs. You can define them in `.acd.cr` bundles or construct them programmatically with `Cogni::Workflow.build(...)`.
+Cogni executes workflows as explicit node graphs. The main authoring format is `.acd.cr`.
 
 Preferred direction:
 
 ```crystal
-workflow = Cogni::Workflow.build("assistant")
-workflow
-  .step("agent", "planner", prompt: "Plan the work")
-  .step("skill", "translator", agent_id: "planner")
-  .step("exec", "tools/report.sh", runtime: {"shell" => JSON.parse("bash".to_json)})
-  .step("node_kind", "delegate", node_kind_name: "agent_codex")
-  .commit
+workflow "assistant" do
+  agent "planner",
+    prompt: "Plan the work"
+
+  skill "translator",
+    agent_id: "planner"
+
+  exec "tools/report.sh",
+    runtime: {shell: "bash"}
+
+  node_kind "delegate",
+    node_kind_name: "agent_codex"
+end
 ```
 
-Use `Workflow#step(type, id, ...)` as the unified node entry for built-in and external nodes.
+Use `.acd.cr` for runtime bundles, user workflows, and examples.
+
+Programmatic construction with `Cogni::Workflow.build(...)` remains available for internal framework assembly, tests, and advanced embedding. In that API, `Workflow#step(type, id, ...)` is still the unified entry for built-in and external nodes.
 
 ## Node Kinds
 

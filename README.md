@@ -32,6 +32,26 @@ List workflows:
 curl -sS http://127.0.0.1:4111/v1/workflows | jq
 ```
 
+Create a workflow bundle:
+
+```crystal
+# shards/examples/hello/hello.acd.cr
+workflow "hello" do
+  agent "assistant",
+    model: "openai/gpt-4.1",
+    prompt: "Reply briefly and clearly"
+end
+```
+
+Run it:
+
+```bash
+./build/cogni up --port 4111 --workflows-root ./shards/examples
+curl -sS -X POST http://127.0.0.1:4111/v1/workflows/hello/runs \
+  -H 'content-type: application/json' \
+  -d '{"input":{"content":"hello"}}' | jq
+```
+
 Run the Svelte playground:
 
 ```bash
@@ -52,18 +72,24 @@ bun run dev
 
 ### Workflows
 
-Cogni workflows are declared in `.acd.cr` bundles or built programmatically with `Cogni::Workflow.build(...)`. The preferred workflow API is the unified step model:
+Cogni workflows are primarily authored as `.acd.cr` bundles. This is the main format for application workflows, examples, and HTTP-loaded bundles:
 
 ```crystal
-workflow = Cogni::Workflow.build("review")
-workflow
-  .step("agent", "triage", prompt: "Classify the request")
-  .step("exec", "tools/analyze.sh", runtime: {"shell" => JSON.parse("bash".to_json)})
-  .step("node_kind", "delegate", node_kind_name: "agent_codex")
-  .commit
+workflow "review" do
+  agent "triage",
+    prompt: "Classify the request"
+
+  exec "tools/analyze.sh",
+    runtime: {shell: "bash"}
+
+  node_kind "delegate",
+    node_kind_name: "agent_codex"
+end
 ```
 
-Use `Workflow#step(type, id, ...)` for built-in nodes and external node kinds. For custom node kind instances, use `Workflow#step(Cogni::NodeKind.new(...), id: ...)`.
+Use `.acd.cr` when you are building runnable workflows and bundles.
+
+Programmatic construction through `Cogni::Workflow.build(...)` remains available for framework internals, tests, and advanced embedding. When using that API, the preferred entry is still `Workflow#step(type, id, ...)`.
 
 ### Registry Extensions
 
@@ -129,7 +155,8 @@ Cogni is organized around a few extension surfaces:
 
 The runtime direction is additive and explicit:
 
-- prefer `Workflow#step(type, id, ...)`
+- prefer `.acd.cr` for workflow authoring
+- use `Workflow#step(type, id, ...)` when you need programmatic construction
 - use `agent_cliproxy`, `agent_codex`, and `agent_opencode` as external agent step types
 - use `Cogni::NodeKind.new(...)` when you need an explicit node kind object
 - keep runtime behavior deterministic

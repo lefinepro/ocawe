@@ -20,6 +20,18 @@ crystal build src/cli/main.cr -o build/cogni
 curl -sS http://127.0.0.1:4111/v1/workflows | jq
 ```
 
+Author workflows as `.acd.cr` bundles:
+
+```crystal
+workflow "assistant" do
+  agent "planner",
+    prompt: "Plan the next step"
+
+  node_kind "delegate",
+    node_kind_name: "agent_codex"
+end
+```
+
 Continue with:
 
 - [Quickstart](/guides/quickstart)
@@ -29,17 +41,9 @@ Continue with:
 - [Examples](/guides/examples)
 - [API Reference](/api/reference)
 
-## Core API Direction
+## Core Authoring Direction
 
-Use the unified workflow step model:
-
-```crystal
-workflow = Cogni::Workflow.build("assistant")
-workflow
-  .step("agent", "planner", prompt: "Plan the next step")
-  .step("node_kind", "delegate", node_kind_name: "agent_codex")
-  .commit
-```
+Use `.acd.cr` as the primary workflow format. Programmatic workflow construction is still available, but it is a secondary path for framework code, tests, and embedded integrations.
 
 Register runtime extensions only through:
 

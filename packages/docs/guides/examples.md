@@ -20,10 +20,14 @@ Use the example bundles to learn one Cogni concept at a time.
 - `full-capabilities`: broad survey of supported directives
 - `config-example`: Crystal-native runtime config template
 
+The primary learning path is through these `.acd.cr` bundles under `shards/examples`.
+
 ## Programmatic Examples
 
-- `src/control_flow_workflow_example.cr`: programmatic control flow, events, and explicit schemas
+- `src/control_flow_workflow_example.cr`: lower-level programmatic control flow and events
 - `src/custom_provider_example.cr`: custom provider registration and `AI::Client` wiring
+
+These are framework-oriented examples, not the primary authoring format for end-user workflows.
 
 ## Workspace Extension Example
 

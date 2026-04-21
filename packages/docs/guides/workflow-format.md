@@ -1,6 +1,6 @@
 # Workflow Format (`.acd.cr`)
 
-Use this page when you are authoring declarative workflow bundles.
+Use this page when you are authoring workflow bundles. For most Cogni usage, `.acd.cr` is the primary workflow format.
 
 Cogni workflows use Crystal DSL files with extension `.acd.cr`.
 
@@ -14,7 +14,9 @@ end
 
 ## Preferred Direction
 
-The framework direction is a unified node model. In programmatic workflows, prefer `Workflow#step(type, id, ...)` for new workflow construction. In `.acd.cr`, keep node definitions explicit and close to runtime behavior.
+The preferred direction is to author workflows directly in `.acd.cr` and keep node definitions explicit and close to runtime behavior.
+
+Programmatic workflows still exist for framework internals, tests, and advanced embedding. In that API, prefer `Workflow#step(type, id, ...)`.
 
 ## Agent Configuration
 
@@ -281,5 +283,6 @@ See `shards/examples/full-capabilities/full-capabilities.acd.cr`.
 
 ## Programmatic Control-Flow
 
-`parallel`, `then`, `wait_for_event`, and `send_event` remain available via programmatic workflow DSL in
-`shards/examples/src/control_flow_workflow_example.cr`.
+Lower-level control-flow APIs such as `then`, `wait_for_event`, and `send_event` remain available in programmatic workflow code for framework-oriented cases.
+
+See `shards/examples/src/control_flow_workflow_example.cr`.

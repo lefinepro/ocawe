@@ -16,7 +16,8 @@ Important direction:
 
 - Register node kinds only via `Cogni::RegistryApi.node_kind`
 - Register resources only via `Cogni::RegistryApi.resource`
-- Prefer `Workflow#step(type, id, ...)` as the workflow construction entry
+- Prefer `.acd.cr` as the workflow authoring format
+- Use `Workflow#step(type, id, ...)` only when you need programmatic construction
 
 ## Register A Node Kind
 
@@ -29,20 +30,19 @@ Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
 end
 ```
 
-Use it from a workflow:
+Use it from a workflow bundle:
 
 ```crystal
-workflow = Cogni::Workflow.build("node-kind")
-workflow
-  .step("node_kind", "native-step",
+workflow "node-kind" do
+  node_kind "native-step",
     node_kind_name: "crystal_native",
     node_kind_attributes: {
-      "message" => JSON.parse("hello".to_json),
-    })
-  .commit
+      "message" => "hello",
+    }
+end
 ```
 
-For explicit NodeKind construction, use `Workflow#step(Cogni::NodeKind.new(...), id: ...)`.
+For explicit NodeKind construction in programmatic code, use `Workflow#step(Cogni::NodeKind.new(...), id: ...)`.
 
 ## Register A Resource
 
@@ -76,21 +76,37 @@ end
 
 ## Unified Step Model
 
-All built-in and external nodes should be described through one entry:
+In `.acd.cr`, built-in and external nodes use a consistent directive style:
 
 ```crystal
-workflow = Cogni::Workflow.build("unified")
-workflow
-  .step("agent", "assistant", prompt: "You are helpful")
-  .step("exec", "tools/tool.sh", runtime: {"shell" => JSON.parse("bash".to_json)})
-  .step("skill", "translator", agent_id: "assistant")
-  .step("voice", "voice-step", config: {"voice_operator" => JSON.parse("openai".to_json)})
-  .step("rag", "rag-step", config: {"operation" => JSON.parse("query".to_json)})
-  .step("suspend", "approval", reason: "human approval")
-  .step("node_kind", "ext-cliproxy", node_kind_name: "agent_cliproxy")
-  .step("node_kind", "ext-codex", node_kind_name: "agent_codex")
-  .step("node_kind", "ext-opencode", node_kind_name: "agent_opencode")
-  .commit
+workflow "unified" do
+  agent "assistant",
+    prompt: "You are helpful"
+
+  exec "tools/tool.sh",
+    runtime: {shell: "bash"}
+
+  skill "translator",
+    agent_id: "assistant"
+
+  voice "voice-step",
+    config: {"voice_operator" => "openai"}
+
+  rag "rag-step",
+    config: {"operation" => "query"}
+
+  suspend "approval",
+    reason: "human approval"
+
+  node_kind "ext-cliproxy",
+    node_kind_name: "agent_cliproxy"
+
+  node_kind "ext-codex",
+    node_kind_name: "agent_codex"
+
+  node_kind "ext-opencode",
+    node_kind_name: "agent_opencode"
+end
 ```
 
 Related pages:

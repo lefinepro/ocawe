@@ -16,6 +16,18 @@ crystal build src/cli/main.cr -o build/cogni
 
 The runtime starts the HTTP server and loads workflows from the current workspace.
 
+## Author A Workflow Bundle
+
+Create a `.acd.cr` file in your workspace:
+
+```crystal
+workflow "hello" do
+  agent "assistant",
+    model: "openai/gpt-4.1",
+    prompt: "Reply briefly and clearly"
+end
+```
+
 ## Inspect The Runtime
 
 List available workflows:
@@ -27,7 +39,7 @@ curl -sS http://127.0.0.1:4111/v1/workflows | jq
 Run a workflow:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:4111/v1/workflows/agents-example/runs \
+curl -sS -X POST http://127.0.0.1:4111/v1/workflows/hello/runs \
   -H 'content-type: application/json' \
   -d '{"input":{"content":"hello"}}' | jq
 ```
