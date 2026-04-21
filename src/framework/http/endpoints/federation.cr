@@ -230,13 +230,7 @@ module ACD
         content_type = env.request.headers["Content-Type"]?.to_s.downcase
         has_jsonld_content_type = content_type.includes?("application/ld+json")
         context = body["@context"]?
-        has_context = if context_string = context.try(&.as_s?)
-                        context_string == FEDERATION_JSONLD_CONTEXT
-                      elsif context_array = context.try(&.as_a?)
-                        context_array.any? { |entry| entry.as_s? == FEDERATION_JSONLD_CONTEXT }
-                      else
-                        false
-                      end
+        has_context = extract_context_urls(context).includes?(FEDERATION_JSONLD_CONTEXT)
         has_jsonld_content_type && has_context
       end
 
