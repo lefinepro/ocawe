@@ -57,6 +57,7 @@ describe "E2E: Real Model API Integration" do
       if result.status == "failed"
         error_msg = result.error.try(&.message) || "Unknown API error"
         pending!("Real API call failed (API may be unavailable): #{error_msg}")
+        next
       end
 
       result.status.should eq("success")

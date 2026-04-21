@@ -84,8 +84,9 @@ module Cogni
         }
         uri = URI.parse(url)
         client = ::HTTP::Client.new(uri)
-        client.connect_timeout = timeout_seconds
-        client.read_timeout = timeout_seconds
+        timeout = timeout_seconds.seconds
+        client.connect_timeout = timeout
+        client.read_timeout = timeout
         path = uri.request_target
         path = "/" if path.empty?
         response = client.get(path, headers: headers)

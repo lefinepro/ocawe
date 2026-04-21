@@ -37,7 +37,7 @@ module CogniCore
         end
 
         loop do
-          sleep interval
+          sleep interval.seconds
           current = compute_fingerprint(tracked)
           next if current == fingerprint
 
