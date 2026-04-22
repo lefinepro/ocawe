@@ -13,6 +13,10 @@ class ACD::Kemal::App
     wrap_nodes_in_control(nodes, name)
   end
 
+  def test_dataset_service : Cogni::Dataset::Service
+    @dataset_service
+  end
+
   def test_register_configured_functions! : Nil
     register_configured_functions!
   end

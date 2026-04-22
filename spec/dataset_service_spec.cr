@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "file_utils"
 
 describe Cogni::Dataset::Service do
   it "creates and lists datasets" do
@@ -61,5 +62,54 @@ describe Cogni::Dataset::Service do
 
     service.delete_item("events", "evt-1").should eq(true)
     service.list_items("events").size.should eq(0)
+  end
+
+  it "imports dataset items from json and stores schema description metadata" do
+    dir = "/tmp/cogni_dataset_json_#{Random.rand(1_000_000)}"
+    Dir.mkdir_p(dir)
+    path = File.join(dir, "tickets.json")
+    File.write(path, %([{"id":"t1","title":"Outage","priority":1},{"id":"t2","title":"Billing","priority":2}]))
+
+    service = Cogni::Dataset::Service.new
+    dataset = service.create_dataset(
+      "tickets",
+      description: "Imported tickets",
+      schema_description: "Support ticket payload with numeric priority",
+      schema_source: "Schema::Types.object({\"title\" => Schema::Types.of(String), \"priority\" => Schema::Types.of(Int32)})",
+      source_path: path,
+      source_format: "json",
+    )
+
+    dataset.schema_description.should eq("Support ticket payload with numeric priority")
+    dataset.source_path.should eq(path)
+    dataset.source_format.should eq("json")
+    service.list_items("tickets").size.should eq(2)
+  ensure
+    FileUtils.rm_rf(dir) if dir
+  end
+
+  it "imports dataset items from csv and infers scalar values" do
+    dir = "/tmp/cogni_dataset_csv_#{Random.rand(1_000_000)}"
+    Dir.mkdir_p(dir)
+    path = File.join(dir, "scores.csv")
+    File.write(path, "id,name,score,active\nu1,Ada,10,true\nu2,Linus,7,false\n")
+
+    service = Cogni::Dataset::Service.new
+    dataset = service.register_from_dsl(
+      "scores",
+      source_file: File.join(dir, "scores.acd.cr"),
+      source_path: path,
+      source_format: "csv",
+      schema_source: "Schema::Types.object({\"name\" => Schema::Types.of(String), \"score\" => Schema::Types.of(Int32), \"active\" => Schema::Types.of(Bool)})",
+      base_dir: dir,
+    )
+
+    dataset.source_format.should eq("csv")
+    items = service.list_items("scores")
+    items.size.should eq(2)
+    items.first.payload["score"].as_i.should eq(10)
+    items.first.payload["active"].raw.should eq(true)
+  ensure
+    FileUtils.rm_rf(dir) if dir
   end
 end

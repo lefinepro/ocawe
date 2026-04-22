@@ -15,10 +15,22 @@ module ACD
           body = json_body(env)
           id = body["id"]?.try(&.as_s?) || body["name"]?.try(&.as_s?) || ""
           description = body["description"]?.try(&.as_s?)
+          schema_description = body["schema_description"]?.try(&.as_s?)
           schema_source = body["schema"]?.try(&.as_s?)
+          source_path = body["source_path"]?.try(&.as_s?)
+          source_format = body["source_format"]?.try(&.as_s?)
+          source_options = body["source_options"]?.try(&.as_h?)
 
           response = with_dataset_errors(env) do
-            @dataset_service.create_dataset(id, description: description, schema_source: schema_source)
+            @dataset_service.create_dataset(
+              id,
+              description: description,
+              schema_description: schema_description,
+              schema_source: schema_source,
+              source_path: source_path,
+              source_format: source_format,
+              source_options: source_options,
+            )
           end
           next response if response.is_a?(String)
 
@@ -44,10 +56,22 @@ module ACD
           body = json_body(env)
 
           description = body["description"]?.try(&.as_s?)
+          schema_description = body["schema_description"]?.try(&.as_s?)
           schema_source = body["schema"]?.try(&.as_s?)
+          source_path = body["source_path"]?.try(&.as_s?)
+          source_format = body["source_format"]?.try(&.as_s?)
+          source_options = body["source_options"]?.try(&.as_h?)
 
           response = with_dataset_errors(env) do
-            @dataset_service.update_dataset(dataset_id, description: description, schema_source: schema_source)
+            @dataset_service.update_dataset(
+              dataset_id,
+              description: description,
+              schema_description: schema_description,
+              schema_source: schema_source,
+              source_path: source_path,
+              source_format: source_format,
+              source_options: source_options,
+            )
           end
           next response if response.is_a?(String)
 

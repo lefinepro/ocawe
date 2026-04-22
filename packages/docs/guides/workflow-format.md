@@ -79,6 +79,50 @@ Current runtime behavior:
 - `embed` can persist an embedding-index artifact when `persist: true`
 - `infer` and `eval` run through the same registry-managed model definition
 
+## Dataset Sources
+
+Datasets can be declared inline or imported from files. The most practical pattern is:
+
+- use `json "file.json"` for structured seed data
+- use `csv "file.csv"` for tabular data
+- use `file "path", format: "json" | "csv"` when the format must be explicit
+- add `schema_description` for human-readable dataset contract notes
+
+```crystal
+workflow "dataset-imports" do
+  dataset "tickets" do
+    description "Support tickets"
+    schema_description "Each item contains free-text ticket content and numeric priority"
+    schema Schema::Types.object({
+      "text" => Schema::Types.of(String),
+      "priority" => Schema::Types.of(Int32),
+    })
+
+    json "fixtures/tickets.json", root_key: "items"
+  end
+
+  dataset "scores" do
+    schema_description "CSV row with learner name and score"
+    schema Schema::Types.object({
+      "name" => Schema::Types.of(String),
+      "score" => Schema::Types.of(Int32),
+    })
+
+    csv "fixtures/scores.csv"
+  end
+end
+```
+
+Supported dataset directives inside a `dataset "..." do` block:
+
+- `description "..."` sets dataset description metadata
+- `schema_description "..."` stores human-readable schema notes
+- `schema ...` defines the validation schema used for imported and API-added items
+- `item({...})` and `items([...])` keep inline seed data available
+- `json "path", root_key: "items"` loads objects from JSON
+- `csv "path", headers: true, separator: ";"` loads rows from CSV
+- `file "path", format: "json"` is the generic import form
+
 ### `@[Logger(...)]` Annotation
 
 `@[Logger(...)]` supports Mastra-compatible logger config keys:

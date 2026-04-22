@@ -2,6 +2,7 @@ require "json"
 require "set"
 require "uuid"
 require "../workflows/dsl/crystal_dsl"
+require "./importer"
 require "./store"
 
 module Cogni
@@ -22,8 +23,13 @@ module Cogni
         id : String,
         source_file : String,
         description : String? = nil,
+        schema_description : String? = nil,
         schema_source : String? = nil,
-        seed_items : Array(AnyHash) = [] of AnyHash
+        seed_items : Array(AnyHash) = [] of AnyHash,
+        source_path : String? = nil,
+        source_format : String? = nil,
+        source_options : AnyHash? = nil,
+        base_dir : String? = nil
       ) : DatasetRecord
         dataset_id = normalize_dataset_id(id)
 
@@ -36,12 +42,21 @@ module Cogni
         end
 
         existing = @store.get_dataset(dataset_id)
+        imported_items = [] of AnyHash
+        if path = source_path
+          imported_items = Importer.load(path, source_format, base_dir, source_options)
+        end
+        all_seed_items = seed_items + imported_items
         if existing
           updated = DatasetRecord.new(
             id: existing.id,
             description: description || existing.description,
+            schema_description: schema_description || existing.schema_description,
             schema_source: schema_source || existing.schema_source,
             source: "dsl",
+            source_path: source_path || existing.source_path,
+            source_format: normalize_source_format(source_format || existing.source_format),
+            source_options: source_options || existing.source_options,
             created_at: existing.created_at,
             updated_at: Time.utc.to_s,
           )
@@ -54,15 +69,19 @@ module Cogni
         created = DatasetRecord.new(
           id: dataset_id,
           description: description,
+          schema_description: schema_description,
           schema_source: schema_source,
           source: "dsl",
+          source_path: source_path,
+          source_format: normalize_source_format(source_format),
+          source_options: source_options,
           created_at: Time.utc.to_s,
           updated_at: Time.utc.to_s,
         )
         @store.upsert_dataset(created)
 
-        unless seed_items.empty?
-          normalized = normalize_items(seed_items, dataset_id, schema_source)
+        unless all_seed_items.empty?
+          normalized = normalize_items(all_seed_items, dataset_id, schema_source)
           @store.add_items(dataset_id, normalized)
         end
 
@@ -77,7 +96,16 @@ module Cogni
         @store.get_dataset(normalize_dataset_id(id))
       end
 
-      def create_dataset(id : String, description : String? = nil, schema_source : String? = nil) : DatasetRecord
+      def create_dataset(
+        id : String,
+        description : String? = nil,
+        schema_description : String? = nil,
+        schema_source : String? = nil,
+        source_path : String? = nil,
+        source_format : String? = nil,
+        source_options : AnyHash? = nil,
+        base_dir : String? = nil
+      ) : DatasetRecord
         dataset_id = normalize_dataset_id(id)
         raise "dataset already exists: #{dataset_id}" if @store.get_dataset(dataset_id)
 
@@ -85,15 +113,34 @@ module Cogni
         created = DatasetRecord.new(
           id: dataset_id,
           description: description,
+          schema_description: schema_description,
           schema_source: schema_source,
           source: "api",
+          source_path: source_path,
+          source_format: normalize_source_format(source_format),
+          source_options: source_options,
           created_at: Time.utc.to_s,
           updated_at: Time.utc.to_s,
         )
         @store.upsert_dataset(created)
+
+        if source_path
+          imported = Importer.load(source_path, source_format, base_dir, source_options)
+          @store.add_items(dataset_id, normalize_items(imported, dataset_id, schema_source))
+        end
+
+        created
       end
 
-      def update_dataset(id : String, description : String?, schema_source : String?) : DatasetRecord
+      def update_dataset(
+        id : String,
+        description : String?,
+        schema_description : String?,
+        schema_source : String?,
+        source_path : String? = nil,
+        source_format : String? = nil,
+        source_options : AnyHash? = nil
+      ) : DatasetRecord
         dataset_id = normalize_dataset_id(id)
         current = @store.get_dataset(dataset_id)
         raise "dataset not found: #{dataset_id}" unless current
@@ -106,8 +153,12 @@ module Cogni
         updated = DatasetRecord.new(
           id: current.id,
           description: next_description,
+          schema_description: schema_description.nil? ? current.schema_description : schema_description,
           schema_source: next_schema,
           source: current.source,
+          source_path: source_path.nil? ? current.source_path : source_path,
+          source_format: normalize_source_format(source_format.nil? ? current.source_format : source_format),
+          source_options: source_options || current.source_options,
           created_at: current.created_at,
           updated_at: Time.utc.to_s,
         )
@@ -162,6 +213,11 @@ module Cogni
         normalized = raw.strip
         raise "dataset id is required" if normalized.empty?
         normalized
+      end
+
+      private def normalize_source_format(value : String?) : String?
+        normalized = value.to_s.strip.downcase
+        normalized.empty? ? nil : normalized
       end
 
       private def normalize_items(raw_items : Array(AnyHash), dataset_id : String, schema_source : String?) : Array(ItemRecord)

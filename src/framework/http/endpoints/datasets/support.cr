@@ -31,12 +31,16 @@ module ACD
 
       private def dataset_to_json(dataset : Cogni::Dataset::DatasetRecord) : Hash(String, JSON::Any)
         {
-          "id"          => JSON.parse(dataset.id.to_json),
-          "description" => JSON.parse(dataset.description.to_json),
-          "schema"      => JSON.parse(dataset.schema_source.to_json),
-          "source"      => JSON.parse(dataset.source.to_json),
-          "created_at"  => JSON.parse(dataset.created_at.to_json),
-          "updated_at"  => JSON.parse(dataset.updated_at.to_json),
+          "id"                 => JSON.parse(dataset.id.to_json),
+          "description"        => JSON.parse(dataset.description.to_json),
+          "schema"             => JSON.parse(dataset.schema_source.to_json),
+          "schema_description" => JSON.parse(dataset.schema_description.to_json),
+          "source"             => JSON.parse(dataset.source.to_json),
+          "source_path"        => JSON.parse(dataset.source_path.to_json),
+          "source_format"      => JSON.parse(dataset.source_format.to_json),
+          "source_options"     => JSON.parse(dataset.source_options.to_json),
+          "created_at"         => JSON.parse(dataset.created_at.to_json),
+          "updated_at"         => JSON.parse(dataset.updated_at.to_json),
         }
       end
 

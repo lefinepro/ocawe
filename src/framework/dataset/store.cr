@@ -9,16 +9,24 @@ module Cogni
 
       getter id : String
       getter description : String?
+      getter schema_description : String?
       getter schema_source : String?
       getter source : String?
+      getter source_path : String?
+      getter source_format : String?
+      getter source_options : AnyHash?
       getter created_at : String
       getter updated_at : String
 
       def initialize(
         @id : String,
         @description : String? = nil,
+        @schema_description : String? = nil,
         @schema_source : String? = nil,
         @source : String? = nil,
+        @source_path : String? = nil,
+        @source_format : String? = nil,
+        @source_options : AnyHash? = nil,
         @created_at : String = Time.utc.to_s,
         @updated_at : String = Time.utc.to_s
       )
