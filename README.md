@@ -339,29 +339,6 @@ mise run cli-build
 mise run up
 mise run playground-build
 mise run docs-build
-mise run hooks-install
-mise run check-file-lines
-```
-
-## File Size Guardrail
-
-Code files are limited to `300` lines.
-
-- CI enforces this via `./scripts/check-max-lines.sh`.
-- Local `pre-push` is enforced via `jdx/hk` (`hk.pkl`).
-
-Install git hooks once:
-
-```bash
-mise run hooks-install
-```
-
-## CI Syntax Check
-
-Run Crystal syntax/type smoke-check without generating a binary:
-
-```bash
-./scripts/check-crystal-syntax.sh
 ```
 
 ## Testing

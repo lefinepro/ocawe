@@ -30,4 +30,9 @@ dependencies:
     github: lion-lef/aptok
     branch: release
 
+development_dependencies:
+  ameba:
+    github: crystal-ameba/ameba
+    branch: master
+
 license: MIT

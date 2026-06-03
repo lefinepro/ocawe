@@ -1,7 +1,6 @@
 [tools]
 crystal = "1.12.2"
 bun = "1.2.22"
-hk = "1.26.0"
 
 [tasks.cli-build]
 run = "mkdir -p build && crystal build src/cli/main.cr -o build/cogni"
@@ -43,9 +42,3 @@ run = "./build/cogni dev --port 4111"
 [tasks.up]
 depends = ["cli-build"]
 run = "./build/cogni up --port 4111"
-
-[tasks.hooks-install]
-run = "hk install"
-
-[tasks.check-file-lines]
-run = "./scripts/check-max-lines.sh"
