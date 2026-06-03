@@ -41,7 +41,7 @@ class ACD::Kemal::App
   end
 
   def test_local_actor_document(workflow_id : String) : Hash(String, JSON::Any)
-    local_actor_document(workflow_id)
+    local_workflow_actor_document(aptok_federation.create_context, workflow_id)
   end
 
   def test_extract_ticket_activity_payload(
@@ -88,8 +88,7 @@ class ACD::Kemal::App
     remote_actor : String,
     workflow_actor : String,
     local_domain : String,
-    published_at : String,
-    local_actor : String = ""
+    published_at : String
   ) : Nil
     publish_result_activity_from_output(
       workflow_id: workflow_id,
@@ -99,7 +98,6 @@ class ACD::Kemal::App
       ticket: ticket,
       requested_activity: requested_activity,
       remote_actor: remote_actor,
-      local_actor: local_actor,
       workflow_actor: workflow_actor,
       local_domain: local_domain,
       published_at: published_at,
@@ -107,19 +105,19 @@ class ACD::Kemal::App
   end
 
   def test_list_outbox_events : Array(Hash(String, JSON::Any))
-    @federation_store.list_outbox_events
+    events = [] of Hash(String, JSON::Any)
+    @federation_kv.list("cogni:federation:outbox:").each do |entry|
+      activity = JSON.parse(entry.value).as_h
+      events << {"activity" => JSON.parse(activity.to_json)} of String => JSON::Any
+    end
+    events
   end
 
-  def test_extract_activities_from_outbox(
-    outbox_doc : Hash(String, JSON::Any)
-  ) : Array(Hash(String, JSON::Any))
-    extract_activities_from_outbox(outbox_doc)
+  def test_federation_metadata_document : Hash(String, JSON::Any)
+    federation_metadata_document
   end
 
-  def test_validate_contextual_federation_object(
-    body : Hash(String, JSON::Any),
-    expected_kind : String = "object"
-  ) : String?
-    validate_contextual_federation_object(body, expected_kind)
+  def test_ensure_aptok_subscription(value : String) : Hash(String, JSON::Any)
+    ensure_aptok_subscription(value)
   end
 end

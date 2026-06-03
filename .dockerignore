@@ -1,0 +1,8 @@
+.git
+.github
+packages/playground/node_modules
+packages/docs/node_modules
+packages/**/dist
+build
+.tools
+.cogni

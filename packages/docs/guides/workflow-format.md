@@ -1,10 +1,8 @@
 # Workflow Format (`.acd.cr`)
 
-Use this page when you are authoring declarative workflow bundles.
-
 Cogni workflows use Crystal DSL files with extension `.acd.cr`.
 
-## Minimal Workflow
+Example:
 
 ```crystal
 workflow "agents-example" do
@@ -12,13 +10,9 @@ workflow "agents-example" do
 end
 ```
 
-## Preferred Direction
-
-The framework direction is a unified node model. In programmatic workflows, prefer `Workflow#step(type, id, ...)` for new workflow construction. In `.acd.cr`, keep node definitions explicit and close to runtime behavior.
-
 ## Agent Configuration
 
-Set model, prompt, and schema options directly on each `agent` node:
+Set model and schema options per-agent directly on each `agent` node:
 
 ```crystal
 workflow "example" do
@@ -163,6 +157,7 @@ end
 | `@[Workspace(...)]` | Configure workflow-level or next-node workspace metadata |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
+| `function_name` | Execute internal node kind (registered via `NodeKind::new(function_name)`) |
 | `exec "path_or_inline", runtime: {...}, env: {...}` | Execute external script path or inline script |
 | `voice "..."` | Voice node |
 | `rag "..."` | RAG node |
@@ -209,16 +204,19 @@ For `agent`, `exec`, and internal function-name nodes, runtime passes a chained 
 
 If exec/internal-node attributes are defined in DSL, runtime includes these attributes as flat fields in the input envelope.
 
-For runtime extensions, register behavior through:
+For internal function-name nodes, `input_schema` and `output_schema` are reserved schema keys; all other named args are passed through as node attributes.
 
+## Function Resolution and Aliases
+
+`function_name` resolves node-kind handlers by normalized case-insensitive key.
+
+- If a system and user function share the same name, system keeps base name.
+- User collisions are indexed as `name:1`, `name:2`, ...
+- You can add explicit aliases during registration and call them via `alias` node invocation syntax.
+
+Register runtime extensions through `Cogni::RegistryApi`:
 - `Cogni::RegistryApi.node_kind`
 - `Cogni::RegistryApi.resource`
-
-Related pages:
-
-- [Core Concepts](/guides/core-concepts)
-- [Registry And Extensions](/guides/registry)
-- [Examples](/guides/examples)
 
 ## Examples
 

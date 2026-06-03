@@ -88,9 +88,8 @@ module Cogni
       raise "forgefed_subscribe requires name or remote_actor" if name.empty?
 
       settings = load_registry_settings(parameters["config_rcl"]?.try(&.as_s?))
-      store = build_registry_federation_store(settings.federation)
       actor_document = parameters["actor_document"]?.try(&.as_h?)
-      record = Cogni::Federation::Subscriptions.ensure(settings, store, name, actor_document: actor_document)
+      record = build_registry_aptok_follow_record(settings, name, actor_document)
 
       {
         "subscription_name"   => json_value(name),
@@ -110,17 +109,43 @@ module Cogni
       CogniCore::Utils::ConfigParser.load_settings(default_settings, rcl_path: explicit)
     end
 
-    private def build_registry_federation_store(config : Cogni::Config::FederationSettings) : Cogni::Federation::Store::Base
-      case config.adapter.strip.downcase
-      when "", "memory"
-        Cogni::Federation::Store::Memory.new
-      when "sqlite"
-        Cogni::Federation::Store::SQLite.new(config.sqlite_path)
-      else
-        raise "unsupported federation adapter: #{config.adapter}"
-      end
+    private def build_registry_aptok_follow_record(settings : Cogni::Config::Settings, name : String, actor_document : AnyHash?) : AnyHash
+      remote_actor = actor_document.try(&.[]?("id")).try(&.as_s?) || registry_remote_actor_from_target(name)
+      remote_inbox = actor_document.try(&.[]?("inbox")).try(&.as_s?) || ""
+      remote_outbox = actor_document.try(&.[]?("outbox")).try(&.as_s?) || ""
+      queue = registry_queue_from_actor(remote_actor)
+      JSON.parse({
+        "id" => "#{settings.federation.local_actor}|#{remote_actor}",
+        "status" => "active",
+        "local_actor" => settings.federation.local_actor,
+        "remote_actor" => remote_actor,
+        "remote_inbox" => remote_inbox,
+        "remote_outbox" => remote_outbox,
+        "queue" => queue,
+        "capabilities" => {"activitypub" => true, "forgefed" => true},
+        "created_at" => Aptok.now,
+        "updated_at" => Aptok.now,
+      }.to_json).as_h
     end
 
+    private def registry_remote_actor_from_target(value : String) : String
+      normalized = value.strip
+      return normalized if normalized.starts_with?("http://") || normalized.starts_with?("https://")
+      raw = normalized.starts_with?('@') ? normalized[1..] : normalized
+      if idx = raw.index('@')
+        actor = raw[0, idx].strip
+        domain = raw[idx + 1, raw.size - idx - 1].strip
+        raise "invalid subscription handle: #{value}" if actor.empty? || domain.empty?
+        return "https://#{domain}/actors/#{actor}"
+      end
+      raise "invalid subscription domain: #{value}" if raw.empty?
+      "https://#{raw}/actors/order-queue"
+    end
+
+    private def registry_queue_from_actor(remote_actor : String) : String
+      tail = remote_actor.split('/').last?.to_s
+      tail.empty? ? "order-queue" : tail
+    end
     private def first_non_empty(*values : String?) : String
       values.each do |value|
         next unless value

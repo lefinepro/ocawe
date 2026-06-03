@@ -1,9 +1,7 @@
 api = "federation"
 
 federation do
-  adapter = "memory"
   auto_subscribe = ["@oq.col.pub"]
-  sqlite_path = "./.cogni/federation.sqlite3"
 end
 
 datasets do

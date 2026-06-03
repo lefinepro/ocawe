@@ -1,24 +1,16 @@
-# Registry And Extensions
+# Registry API (`Cogni::RegistryApi`)
 
-Use this page when you need to add runtime behavior to Cogni.
+Use `Cogni::RegistryApi` for runtime extension registration.
 
-## Public Extension APIs
-
-Cogni’s runtime extension surface is centered on:
-
+Supported API:
 - `Cogni::RegistryApi.node_kind`
 - `Cogni::RegistryApi.resource`
 - `Cogni::RegistryApi.workspace_schema`
 - `Cogni::RegistryApi.workspace_resolver`
 - `Cogni::RegistryApi.workspace_hook`
+- `Workflow#step(type, id, ...)` unified node entry
 
-Important direction:
-
-- Register node kinds only via `Cogni::RegistryApi.node_kind`
-- Register resources only via `Cogni::RegistryApi.resource`
-- Prefer `Workflow#step(type, id, ...)` as the workflow construction entry
-
-## Register A Node Kind
+## Register NodeKind
 
 ```crystal
 Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
@@ -27,24 +19,16 @@ Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
     "message" => attributes["message"]? || JSON.parse("none".to_json),
   }
 end
-```
 
-Use it from a workflow:
-
-```crystal
 workflow = Cogni::Workflow.build("node-kind")
 workflow
-  .step("node_kind", "native-step",
-    node_kind_name: "crystal_native",
-    node_kind_attributes: {
-      "message" => JSON.parse("hello".to_json),
-    })
+  .step(Cogni::NodeKind.new("crystal_native", {
+    "message" => JSON.parse("hello".to_json),
+  }))
   .commit
 ```
 
-For explicit NodeKind construction, use `Workflow#step(Cogni::NodeKind.new(...), id: ...)`.
-
-## Register A Resource
+## Register resource handler
 
 ```crystal
 Cogni::RegistryApi.resource("resource_ping") do |_ctx, payload|
@@ -54,9 +38,9 @@ Cogni::RegistryApi.resource("resource_ping") do |_ctx, payload|
 end
 ```
 
-Resources are the handler surface for runtime resource flow.
+Resource handlers can be registered from NodeKind handlers and used through runtime resource flow.
 
-## Workspace Extensions
+## Register workspace extensions
 
 ```crystal
 Cogni::RegistryApi.workspace_schema("provider_required") do |workspace|
@@ -74,9 +58,9 @@ Cogni::RegistryApi.workspace_hook("before_node") do |ctx, workspace|
 end
 ```
 
-## Unified Step Model
+## Unified Node Entry
 
-All built-in and external nodes should be described through one entry:
+All built-in and external nodes can be created through one entry:
 
 ```crystal
 workflow = Cogni::Workflow.build("unified")
@@ -87,14 +71,28 @@ workflow
   .step("voice", "voice-step", config: {"voice_operator" => JSON.parse("openai".to_json)})
   .step("rag", "rag-step", config: {"operation" => JSON.parse("query".to_json)})
   .step("suspend", "approval", reason: "human approval")
-  .step("node_kind", "ext-cliproxy", node_kind_name: "agent_cliproxy")
+  .step("node_kind", "ext-cliproxy", node_kind_name: "agent_cliproxy", node_kind_attributes: {"model" => JSON.parse("qwen3-coder-plus".to_json)})
   .step("node_kind", "ext-codex", node_kind_name: "agent_codex")
   .step("node_kind", "ext-opencode", node_kind_name: "agent_opencode")
   .commit
 ```
 
-Related pages:
+Built-in federation helper node kinds can be used the same way. Example:
 
-- [Core Concepts](/guides/core-concepts)
-- [Workflow Format](/guides/workflow-format)
-- [API Reference](/api/reference)
+```crystal
+workflow = Cogni::Workflow.build("federation-subscribe")
+workflow
+  .step("node_kind", "subscribe-default-actor",
+    node_kind_name: "forgefed_subscribe",
+    node_kind_attributes: {
+      "name" => JSON.parse("@oq.col.pub".to_json),
+    })
+  .commit
+```
+
+`forgefed_subscribe` accepts `name` in one of these forms:
+- `@domain` -> subscribes to `https://domain/actors/default`
+- `@actor@domain` -> subscribes to `https://domain/actors/actor`
+- `https://...` -> uses the actor URL directly
+
+For startup-time federation bootstrap, the same resolution path is available in RCL config with `federation.auto_subscribe = ["@oq.col.pub"]`.
