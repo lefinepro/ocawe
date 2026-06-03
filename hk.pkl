@@ -1,0 +1,11 @@
+amends "package://github.com/jdx/hk/releases/download/v1.26.0/hk@1.26.0#/Config.pkl"
+
+hooks {
+  ["pre-push"] {
+    steps {
+      ["max-file-lines"] {
+        check = "./scripts/check-max-lines.sh"
+      }
+    }
+  }
+}
