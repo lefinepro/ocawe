@@ -1,42 +1,78 @@
 # Examples
 
-Use the example bundles to learn one Cogni concept at a time.
+Examples live under `shards/examples` and are designed for direct reuse.
 
-## Run All Examples
+## Run all examples
 
 ```bash
 ./build/cogni up --port 4111 --workflows-root ./shards/examples
 ```
 
-## Core Example Bundles
+## Bundles
 
-- `agents-example`: basic agent execution and model usage
-- `skills-example`: skills bound to agent context
-- `workflow-example`: workflow composition and schema refs
-- `control-flow`: explicit control-flow nodes and staged execution
-- `voice-playground`: voice DSL and voice frontmatter
-- `rag-playground`: RAG orchestration through workflow nodes
+- `agents-example`: agent + model basics
+- `skills-example`: skills with agent context
+- `workflow-example`: agent + function node + schema refs
+- `voice-playground`: voice DSL + voice frontmatter
+- `rag-playground`: rag DSL + skill choreography
 - `simple-model-test`: model override behavior
-- `full-capabilities`: broad survey of supported directives
-- `config-example`: Crystal-native runtime config template
+- `full-capabilities`: all currently supported `.acd.cr` directives
+- `config-example`: Crystal-native `Cogni::Config::Settings` template
+- `src/custom_provider_example.cr`: custom provider creation macro + `AI::Client` injection
+- `src/control_flow_workflow_example.cr`: programmatic control-flow example (`parallel`, `then`, events) with explicit node schemas
 
-## Programmatic Examples
+## Foundation Project: docker-git
 
-- `src/control_flow_workflow_example.cr`: programmatic control flow, events, and explicit schemas
-- `src/custom_provider_example.cr`: custom provider registration and `AI::Client` wiring
+`shards/docker-git` is a standalone foundation project that uses `@[Workspace(...)]`
+as the main workflow contract and demonstrates workspace extension APIs.
 
-## Workspace Extension Example
-
-`shards/docker-git` demonstrates a workflow-centered project that uses workspace annotations and workspace extension APIs.
-
-Run it with:
+Run:
 
 ```bash
 crystal run shards/docker-git/src/docker_git.cr -- --port 4222
 ```
 
-## Important Notes
+## Notes
 
-- Use `exec "path_or_inline", runtime: {...}` for external execution.
-- Use unified step types such as `agent_codex`, `agent_cliproxy`, and `agent_opencode` for external agent node kinds.
-- Use `Cogni::RegistryApi.node_kind` and `Cogni::RegistryApi.resource` for new runtime extensions.
+- Use `function_name` (for example `agent_codex`) for internal Crystal handlers, and `exec "path_or_inline", runtime: {...}` for external execution.
+- Function names are not restricted to snake_case. Collision rule: system function keeps base name, user function gets `:1`, `:2`, etc., with optional explicit aliases.
+- Programmatic API exposes `Cogni::Workflow` and can be extended by inheritance.
+- Programmatic workflow DSL (`WorkflowDefinition` API) supports `parallel`, `then`, and event nodes (`wait_for_event`, `send_event`).
+- Federation MR flow accepts `Create(Ticket)`, `Offer(Ticket)` and direct `Ticket` payloads. MR results are published as ForgeFed-style `Offer` with `object.type=Ticket`, no `object.id`, `object.attributedTo=actor`, HTML `content` and `source` in CommonMark.
+
+## Full Container Example
+
+- Compose file: `docker-compose.solver-full-example.yml`
+- Mock tools:
+  - `tools/mock-data.rb` (returns JSON and saves mock payload file)
+  - `tools/mock-agent-cli.rb` (captures forwarded credentials/config env and saves report file)
+- Workflows:
+  - `provider-credentials-codex`
+  - `provider-credentials-claude`
+  - `provider-credentials-opencode`
+  - `provider-credentials-qwen`
+
+## Custom provider macro
+
+Use `CogniCore::AI.create_custom_provider` to generate a provider class:
+
+```crystal
+CogniCore::AI.create_custom_provider(
+  AcmeProvider,
+  "acme",
+  "ACME_BASE_URL",
+  "ACME_API_KEY",
+  "https://acme.example/v1"
+)
+```
+
+Inject it into `AI::Client`:
+
+```crystal
+providers = {
+  "acme" => CogniCore::AI::AcmeProvider.new,
+} of String => CogniCore::AI::Provider
+
+client = CogniCore::AI::Client.new(providers)
+response = client.generate_text("acme/demo-model", "Hello")
+```

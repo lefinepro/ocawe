@@ -120,7 +120,7 @@ module ACD
         } of String => JSON::Any
 
         activity = {
-          "@context" => JSON.parse([FEDERATION_JSONLD_CONTEXT, FEDERATION_FORGEFED_CONTEXT].to_json),
+          "@context" => JSON.parse([Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::FORGEFED_CONTEXT].to_json),
           "id"       => JSON.parse("#{local_domain}/activities/opening-mr-#{suffix}".to_json),
           "type"     => JSON.parse("Offer".to_json),
           "actor"    => JSON.parse(workflow_actor.to_json),

@@ -1,4 +1,4 @@
-require "../../vendor/rcl/src/rcl"
+require "rcl"
 require "../config/settings"
 
 module CogniCore
@@ -83,7 +83,7 @@ module CogniCore
       end
 
       # Backward-compatible support for root `api = "classic"|["classic","federation"]`.
-      # Vendor RCL parser expects top-level blocks, so rewrite to an equivalent block.
+      # RCL configs historically allowed a root api assignment; rewrite it to the block shape accepted by rcl.cr.
       private def self.normalize_legacy_api_assignment(content : String) : String
         lines = content.lines
         changed = false

@@ -22,8 +22,8 @@ describe "ACD::Kemal::App federation actor document" do
 
     actor["id"]?.try(&.as_s?).should eq("https://deployer.col.pub/actors/deploy-on-akash")
     actor["type"]?.try(&.as_s?).should eq("Application")
-    actor["inbox"]?.try(&.as_s?).should eq("https://deployer.col.pub/federation/inbox")
-    actor["outbox"]?.try(&.as_s?).should eq("https://deployer.col.pub/federation/outbox")
+    actor["inbox"]?.try(&.as_s?).should eq("https://deployer.col.pub/actors/deploy-on-akash/inbox")
+    actor["outbox"]?.try(&.as_s?).should eq("https://deployer.col.pub/actors/deploy-on-akash/outbox")
     actor["publicKey"]?.try(&.as_h?).not_nil!["id"]?.try(&.as_s?).should eq(
       "https://deployer.col.pub/actors/deploy-on-akash#main-key"
     )

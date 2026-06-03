@@ -86,7 +86,7 @@ module ACD
         local_domain : String
       ) : Hash(String, JSON::Any)
         activity = {} of String => JSON::Any
-        activity["@context"] = source["@context"]? || JSON.parse([FEDERATION_JSONLD_CONTEXT, FEDERATION_FORGEFED_CONTEXT].to_json)
+        activity["@context"] = source["@context"]? || JSON.parse([Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::FORGEFED_CONTEXT].to_json)
         activity["id"] = source["id"]? || JSON.parse("#{local_domain}/activities/opening-mr-#{suffix}".to_json)
         activity["type"] = JSON.parse("Offer".to_json)
         activity["actor"] = source["actor"]? || JSON.parse(workflow_actor.to_json)

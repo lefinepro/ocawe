@@ -26,8 +26,6 @@ module CogniCore
         federation = base.federation
         if fed_raw = tree["federation"]?
           if fed = fed_raw.as?(Hash(String, RCL::Value))
-            adapter = string_or_nil(fed["adapter"]?) || federation.adapter
-            sqlite_path = string_or_nil(fed["sqlite_path"]?) || federation.sqlite_path
             auto_subscribe = parse_string_list_value(fed["auto_subscribe"]?)
             auto_subscribe = federation.auto_subscribe if auto_subscribe.empty?
             poll_interval = int32_or_nil(fed["s2s_poll_interval_seconds"]?) || federation.s2s_poll_interval_seconds
@@ -38,7 +36,7 @@ module CogniCore
             local_key_id = string_or_nil(fed["local_key_id"]?) || federation.local_key_id
             local_private_key_path = string_or_nil(fed["local_private_key_path"]?) || federation.local_private_key_path
             federation = Cogni::Config::FederationSettings.new(
-              adapter, sqlite_path, auto_subscribe, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path
+              auto_subscribe, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path
             )
           end
         end

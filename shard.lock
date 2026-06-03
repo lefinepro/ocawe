@@ -14,13 +14,17 @@ shards:
 
   kemal:
     git: https://github.com/kemalcr/kemal.git
-    version: 1.9.0
+    version: 1.11.0
 
   radix:
     git: https://github.com/luislavena/radix.git
     version: 0.4.1
 
+  rcl:
+    git: https://github.com/cogniframework/rcl.cr.git
+    version: 1.0.0+git.commit.3e02abdbd86feceaa310a249c19cfc099afcb660
+
   sqlite3:
     git: https://github.com/crystal-lang/crystal-sqlite3.git
-    version: 0.22.0
+    version: 0.23.0
 

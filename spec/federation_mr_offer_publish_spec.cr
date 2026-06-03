@@ -1,67 +1,6 @@
 require "./spec_helper"
 
 describe "ACD::Kemal::App federation merge request format" do
-  it "publishes exchange-compatible Update(Ticket) results for exchange actors" do
-    app = ACD::Kemal::App.new(0)
-    ticket = JSON.parse(%({
-      "type": "Ticket",
-      "id": "https://exchange.example/orders/117",
-      "name": "Cogni solver e2e",
-      "summary": "Cogni solver e2e",
-      "content": "Calculate 50+50 and return only the number",
-      "inReplyTo": "370c7284-0f2b-464b-ae59-3a7cbf6d6c0e",
-      "attachment": [
-        {"type": "PropertyValue", "name": "externalId", "value": "370c7284-0f2b-464b-ae59-3a7cbf6d6c0e"},
-        {"type": "PropertyValue", "name": "orderId", "value": "117"}
-      ]
-    })).as_h
-    output = {
-      "status"  => json_str("success"),
-      "content" => json_str("100"),
-    } of String => JSON::Any
-
-    app.test_publish_result_activity_from_output(
-      workflow_id: "agent-codex-workflow",
-      run_id: "run-exchange-1",
-      run_status: "success",
-      output: output,
-      ticket: ticket,
-      requested_activity: "ticket",
-      remote_actor: "https://exchange.example/actor/code",
-      local_actor: "http://solver.example/actor/agent-codex-workflow",
-      workflow_actor: "https://lefine.pro/actor/staff",
-      local_domain: "http://solver.example",
-      published_at: "2026-03-07T00:00:00Z",
-    )
-
-    events = app.test_list_outbox_events
-    events.size.should eq(1)
-    activity = events.first["activity"]?.try(&.as_h?)
-    activity.should_not be_nil
-    activity.not_nil!["type"]?.try(&.as_s?).should eq("Update")
-    activity.not_nil!["actor"]?.try(&.as_s?).should eq("http://solver.example/actor/agent-codex-workflow")
-    activity.not_nil!["target"]?.try(&.as_s?).should eq("370c7284-0f2b-464b-ae59-3a7cbf6d6c0e")
-    activity.not_nil!["orderId"]?.try(&.as_s?).should eq("117")
-
-    result_ticket = activity.not_nil!["object"]?.try(&.as_h?)
-    result_ticket.should_not be_nil
-    result_ticket.not_nil!["type"]?.try(&.as_s?).should eq("Ticket")
-    result_ticket.not_nil!["id"]?.try(&.as_s?).should eq("370c7284-0f2b-464b-ae59-3a7cbf6d6c0e")
-    result_ticket.not_nil!["status"]?.try(&.as_s?).should eq("completed")
-    result_ticket.not_nil!["content"]?.try(&.as_s?).should eq("100")
-
-    attachments = result_ticket.not_nil!["attachment"]?.try(&.as_a?)
-    attachments.should_not be_nil
-    attachment_names = attachments.not_nil!.compact_map do |entry|
-      record = entry.as_h?
-      next nil unless record
-      record["name"]?.try(&.as_s?)
-    end
-    attachment_names.should contain("status")
-    attachment_names.should contain("orderId")
-    attachment_names.should contain("externalId")
-  end
-
   it "publishes merge result as Offer(Ticket) with Patch when requested activity is merge" do
     app = ACD::Kemal::App.new(0)
     ticket = JSON.parse(%({

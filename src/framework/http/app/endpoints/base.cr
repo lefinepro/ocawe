@@ -2,7 +2,8 @@ module ACD
   module Kemal
     class App
       RELOAD_INTERVAL_SECONDS = 2.0
-      @federation_store : Cogni::Federation::Store::Base
+      @aptok_federation : Aptok::Federation?
+      @federation_kv : Aptok::KvStore
 
       def initialize(
         @port : Int32,
@@ -17,7 +18,8 @@ module ACD
         @workflow_engine = Cogni::Workflow::Engine.new
         @workflow_service = Cogni::Workflow::Service.new(@workflow_engine)
         @dataset_service = Cogni::Dataset::Service.new(build_dataset_store(@settings.datasets))
-        @federation_store = build_federation_store(@settings.federation)
+        @aptok_federation = nil.as(Aptok::Federation?)
+        @federation_kv = Aptok::MemoryKvStore.new
         @mcp_manager = Cogni::MCP.manager
         @workflow_ids = [] of String
         @workflow_index = {} of String => NamedTuple(
@@ -257,20 +259,6 @@ module ACD
         config.workspace_bootstrap.try(&.call)
       end
 
-      private def bootstrap_federation_subscriptions : Nil
-        @settings.federation.auto_subscribe.each do |entry|
-          normalized = entry.strip
-          next if normalized.empty?
-
-          begin
-            record = Cogni::Federation::Subscriptions.ensure(@settings, @federation_store, normalized)
-            STDERR.puts "[federation] subscribed #{normalized} -> #{record["remote_actor"]?.try(&.as_s?) || normalized}"
-          rescue ex
-            STDERR.puts "[federation] auto_subscribe failed for #{normalized}: #{ex.message || ex.class.name}"
-          end
-        end
-      end
-
       private def build_dataset_store(config : Cogni::Config::DatasetSettings) : Cogni::Dataset::Store::Base
         case config.adapter.strip.downcase
         when "", "memory"
@@ -279,17 +267,6 @@ module ACD
           Cogni::Dataset::Store::File.new(config.file_root)
         else
           raise "unsupported dataset adapter: #{config.adapter}"
-        end
-      end
-
-      private def build_federation_store(config : Cogni::Config::FederationSettings) : Cogni::Federation::Store::Base
-        case config.adapter.strip.downcase
-        when "", "memory"
-          Cogni::Federation::Store::Memory.new
-        when "sqlite"
-          Cogni::Federation::Store::SQLite.new(config.sqlite_path)
-        else
-          raise "unsupported federation adapter: #{config.adapter}"
         end
       end
     end
