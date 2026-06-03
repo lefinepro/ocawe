@@ -7,7 +7,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY shard.yml shard.lock ./
-RUN shards install
+RUN shards update
 
 COPY . .
 RUN shards build cogni --release --no-debug

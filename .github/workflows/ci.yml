@@ -35,7 +35,7 @@ jobs:
         run: crystal --version
 
       - name: Install shards
-        run: shards install
+        run: shards update
 
       - name: Run Crystal syntax smoke-check
         run: ./scripts/check-crystal-syntax.sh
@@ -58,7 +58,7 @@ jobs:
         uses: crystal-lang/install-crystal@v1
 
       - name: Install shards
-        run: shards install
+        run: shards update
 
       - name: Run E2E integration specs
         run: |
@@ -93,7 +93,7 @@ jobs:
         run: crystal --version
 
       - name: Install shards
-        run: shards install
+        run: shards update
 
       - name: Build playground
         working-directory: packages/playground
