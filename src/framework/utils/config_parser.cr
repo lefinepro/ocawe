@@ -63,7 +63,7 @@ module CogniCore
 
         begin
           doc = parse_rcl_with_legacy_api_support(resolved)
-          apply_rcl_settings(default_settings, doc.to_h)
+          apply_rcl_settings(default_settings, document_to_h(doc))
         rescue ex
           raise ex if explicit_path
           STDERR.puts "[cogni] warning: failed to parse #{resolved}: #{ex.message}; using defaults"

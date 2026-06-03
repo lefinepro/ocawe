@@ -28,9 +28,3 @@ Workflow-local assets take precedence for conflicting ids/paths.
 ## Shard app directories
 - Playground: `packages/playground`
 - Docs: `packages/docs`
-
-## Code file line limit
-- Maximum: `300` lines per code file.
-- Enforcement:
-  - Local `pre-push` hook via `jdx/hk` (`hk.pkl`).
-  - CI check via `scripts/check-max-lines.sh`.

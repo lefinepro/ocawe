@@ -1,3 +1,4 @@
+require "set"
 module CogniCore
   module Utils
     module ConfigParser
@@ -75,6 +76,106 @@ module CogniCore
           workspace_bootstrap: base.workspace_bootstrap,
           mcp: base.mcp,
         )
+      end
+
+      private def self.document_to_h(doc : RCL::Document) : Hash(String, RCL::Value)
+        if root = doc.root_value
+          return {"root" => rcl_node_to_value(root)} of String => RCL::Value
+        end
+
+        result = {} of String => RCL::Value
+        doc.blocks.each do |block|
+          if arg = block.argument
+            result[rcl_named_base(block.name)] = {arg => rcl_block_to_h(block)} of String => RCL::Value
+          else
+            result[block.name] = rcl_block_to_h(block)
+          end
+        end
+        result
+      end
+
+      private def self.rcl_block_to_h(block : RCL::BlockNode) : Hash(String, RCL::Value)
+        result = {} of String => RCL::Value
+
+        block.properties.each do |key, node|
+          insert_rcl_key_path!(result, key, rcl_node_to_value(node))
+        end
+
+        rcl_child_blocks(block).each do |child|
+          child_h = rcl_block_to_h(child)
+          if arg = child.argument
+            base = rcl_named_base(child.name)
+            branch = result[base]?.as?(Hash(String, RCL::Value)) || ({} of String => RCL::Value)
+            branch[arg] = child_h
+            result[base] = branch
+          elsif existing = result[child.name]?.as?(Hash(String, RCL::Value))
+            merged = child_h.dup
+            existing.each { |key, value| merged[key] = value }
+            result[child.name] = merged
+          else
+            result[child.name] = child_h
+          end
+        end
+
+        result
+      end
+
+      private def self.rcl_child_blocks(block : RCL::BlockNode) : Array(RCL::BlockNode)
+        seen = Set(UInt64).new
+        out = [] of RCL::BlockNode
+        block.blocks.each_value do |child|
+          oid = child.object_id
+          next if seen.includes?(oid)
+          seen << oid
+          out << child
+        end
+        block.named_blocks.each do |child|
+          oid = child.object_id
+          next if seen.includes?(oid)
+          seen << oid
+          out << child
+        end
+        out
+      end
+
+      private def self.rcl_node_to_value(node : RCL::ASTNode) : RCL::Value
+        case node
+        when RCL::StringNode
+          node.value
+        when RCL::NumberNode
+          node.value
+        when RCL::BooleanNode
+          node.value
+        when RCL::ArrayNode
+          values = [] of RCL::Value
+          node.elements.each { |entry| values << rcl_node_to_value(entry) }
+          values
+        when RCL::BlockNode
+          rcl_block_to_h(node)
+        else
+          ""
+        end
+      end
+
+      private def self.insert_rcl_key_path!(target : Hash(String, RCL::Value), key : String, value : RCL::Value) : Nil
+        parts = key.split('.')
+        if parts.size == 1
+          raise "Duplicate key '#{key}'" if target.has_key?(key)
+          target[key] = value
+          return
+        end
+
+        head = parts[0]
+        existing = target[head]?
+        raise "Key conflict at '#{head}'" if existing && !existing.is_a?(Hash(String, RCL::Value))
+
+        branch = existing.as?(Hash(String, RCL::Value)) || ({} of String => RCL::Value)
+        insert_rcl_key_path!(branch, parts[1, parts.size - 1].join("."), value)
+        target[head] = branch
+      end
+
+      private def self.rcl_named_base(name : String) : String
+        name == "region" ? "regions" : name
       end
 
       private def self.string_or_nil(value : RCL::Value?) : String?
