@@ -12,7 +12,7 @@ module ACD
           metadata = body["metadata"]?.try(&.as_h?) || {} of String => JSON::Any
 
           begin
-            response = CogniCore::AI::Client.new.generate_text(
+            response = OcaweCore::AI::Client.new.generate_text(
               model_spec: model,
               prompt: prompt,
               system: system_message,

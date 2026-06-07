@@ -3,10 +3,10 @@ require "./e2e_spec_helper"
 describe "E2E: Edge Cases and Boundary Conditions" do
   describe "empty and minimal inputs" do
     it "handles workflow with no nodes" do
-      workflow = Cogni::Workflow.create_workflow("e2e-empty", "Empty workflow")
+      workflow = Ocawe::Workflow.create_workflow("e2e-empty", "Empty workflow")
       workflow.commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-empty")
@@ -15,15 +15,15 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     end
 
     it "handles workflow with empty input data" do
-      workflow = Cogni::Workflow.create_workflow("e2e-no-input", "No input")
+      workflow = Ocawe::Workflow.create_workflow("e2e-no-input", "No input")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("echo", Cogni::Workflow::NodeKind::Control) do |ctx|
+        .step(Ocawe::Workflow::WorkflowNode.new("echo", Ocawe::Workflow::NodeKind::Control) do |ctx|
           has_input = !ctx.input_data.empty?
-          Cogni::Workflow::WorkflowNodeResult.continue({"has_input" => json_bool(has_input)})
+          Ocawe::Workflow::WorkflowNodeResult.continue({"has_input" => json_bool(has_input)})
         end)
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-no-input")
@@ -32,20 +32,20 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     end
 
     it "handles deeply nested input data" do
-      workflow = Cogni::Workflow.create_workflow("e2e-nested", "Nested input")
+      workflow = Ocawe::Workflow.create_workflow("e2e-nested", "Nested input")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("extract", Cogni::Workflow::NodeKind::Control) do |ctx|
+        .step(Ocawe::Workflow::WorkflowNode.new("extract", Ocawe::Workflow::NodeKind::Control) do |ctx|
           level3 = ctx.input_data["level1"]?
             .try(&.as_h?)
             .try(&.["level2"]?)
             .try(&.as_h?)
             .try(&.["level3"]?)
             .try(&.as_s?) || "not-found"
-          Cogni::Workflow::WorkflowNodeResult.continue({"extracted" => json_str(level3)})
+          Ocawe::Workflow::WorkflowNodeResult.continue({"extracted" => json_str(level3)})
         end)
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       deep_input = JSON.parse({
@@ -67,18 +67,18 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "prevents infinite loops with iteration limit" do
       infinite_counter = 0
 
-      workflow = Cogni::Workflow.create_workflow("e2e-infinite-guard", "Infinite guard")
+      workflow = Ocawe::Workflow.create_workflow("e2e-infinite-guard", "Infinite guard")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("infinite", Cogni::Workflow::NodeKind::Control) do |_ctx|
+        .step(Ocawe::Workflow::WorkflowNode.new("infinite", Ocawe::Workflow::NodeKind::Control) do |_ctx|
           loop do
             infinite_counter += 1
             break if infinite_counter >= 100
           end
-          Cogni::Workflow::WorkflowNodeResult.continue({"count" => JSON.parse(infinite_counter.to_json)})
+          Ocawe::Workflow::WorkflowNodeResult.continue({"count" => JSON.parse(infinite_counter.to_json)})
         end)
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-infinite-guard")
@@ -92,15 +92,15 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     it "handles zero iteration loops" do
       counter = 5 # Start above threshold
 
-      workflow = Cogni::Workflow.create_workflow("e2e-zero-loop", "Zero iteration")
+      workflow = Ocawe::Workflow.create_workflow("e2e-zero-loop", "Zero iteration")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("skip", Cogni::Workflow::NodeKind::Control) do |_ctx|
+        .step(Ocawe::Workflow::WorkflowNode.new("skip", Ocawe::Workflow::NodeKind::Control) do |_ctx|
           counter += 1
-          Cogni::Workflow::WorkflowNodeResult.continue({"skipped" => json_bool(true)})
+          Ocawe::Workflow::WorkflowNodeResult.continue({"skipped" => json_bool(true)})
         end)
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-zero-loop")
@@ -113,16 +113,16 @@ describe "E2E: Edge Cases and Boundary Conditions" do
 
   describe "parallel edge cases" do
     it "handles single node in parallel" do
-      single = Cogni::Workflow::WorkflowNode.new("only", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"only_result" => json_str("done")})
+      single = Ocawe::Workflow::WorkflowNode.new("only", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.continue({"only_result" => json_str("done")})
       end
 
-      workflow = Cogni::Workflow.create_workflow("e2e-single-parallel", "Single parallel")
+      workflow = Ocawe::Workflow.create_workflow("e2e-single-parallel", "Single parallel")
       workflow
         .parallel([single])
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-single-parallel")
@@ -132,20 +132,20 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     end
 
     it "handles parallel with one failing node" do
-      success_node = Cogni::Workflow::WorkflowNode.new("success", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"success" => json_bool(true)})
+      success_node = Ocawe::Workflow::WorkflowNode.new("success", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.continue({"success" => json_bool(true)})
       end
 
-      fail_node = Cogni::Workflow::WorkflowNode.new("fail", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.fail("Intentional failure")
+      fail_node = Ocawe::Workflow::WorkflowNode.new("fail", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.fail("Intentional failure")
       end
 
-      workflow = Cogni::Workflow.create_workflow("e2e-parallel-fail", "Parallel with failure")
+      workflow = Ocawe::Workflow.create_workflow("e2e-parallel-fail", "Parallel with failure")
       workflow
         .parallel([success_node, fail_node])
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-parallel-fail")
@@ -155,26 +155,26 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     end
 
     it "merges parallel suspend labels correctly" do
-      suspend_1 = Cogni::Workflow::WorkflowNode.new("suspend-1", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.suspend(
+      suspend_1 = Ocawe::Workflow::WorkflowNode.new("suspend-1", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.suspend(
           {"type" => json_str("approval")},
           resume_label: "approval:1"
         )
       end
 
-      suspend_2 = Cogni::Workflow::WorkflowNode.new("suspend-2", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.suspend(
+      suspend_2 = Ocawe::Workflow::WorkflowNode.new("suspend-2", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.suspend(
           {"type" => json_str("approval")},
           resume_label: "approval:2"
         )
       end
 
-      workflow = Cogni::Workflow.create_workflow("e2e-parallel-suspend", "Parallel suspends")
+      workflow = Ocawe::Workflow.create_workflow("e2e-parallel-suspend", "Parallel suspends")
       workflow
         .parallel([suspend_1, suspend_2])
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-parallel-suspend")
@@ -187,15 +187,15 @@ describe "E2E: Edge Cases and Boundary Conditions" do
 
   describe "special characters and unicode" do
     it "handles unicode in input and output" do
-      workflow = Cogni::Workflow.create_workflow("e2e-unicode", "Unicode test")
+      workflow = Ocawe::Workflow.create_workflow("e2e-unicode", "Unicode test")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("echo-unicode", Cogni::Workflow::NodeKind::Control) do |ctx|
+        .step(Ocawe::Workflow::WorkflowNode.new("echo-unicode", Ocawe::Workflow::NodeKind::Control) do |ctx|
           text = ctx.input_data["text"]?.try(&.as_s?) || "no-text"
-          Cogni::Workflow::WorkflowNodeResult.continue({"echoed" => json_str(text)})
+          Ocawe::Workflow::WorkflowNodeResult.continue({"echoed" => json_str(text)})
         end)
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-unicode")
@@ -205,15 +205,15 @@ describe "E2E: Edge Cases and Boundary Conditions" do
     end
 
     it "handles special JSON characters" do
-      workflow = Cogni::Workflow.create_workflow("e2e-json-chars", "JSON characters")
+      workflow = Ocawe::Workflow.create_workflow("e2e-json-chars", "JSON characters")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("echo-special", Cogni::Workflow::NodeKind::Control) do |ctx|
+        .step(Ocawe::Workflow::WorkflowNode.new("echo-special", Ocawe::Workflow::NodeKind::Control) do |ctx|
           text = ctx.input_data["text"]?.try(&.as_s?) || ""
-          Cogni::Workflow::WorkflowNodeResult.continue({"echoed" => json_str(text)})
+          Ocawe::Workflow::WorkflowNodeResult.continue({"echoed" => json_str(text)})
         end)
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-json-chars")

@@ -1,3 +1,3 @@
 require "./app"
 
-CogniCore::CLI::Main.new.run(ARGV.dup)
+OcaweCore::CLI::Main.new.run(ARGV.dup)

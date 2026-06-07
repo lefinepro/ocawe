@@ -8,19 +8,19 @@ module ACD
       def initialize(
         @port : Int32,
         workflows_root : String? = nil,
-        @settings : Cogni::Config::Settings = Cogni::Config::Settings.default
+        @settings : Ocawe::Config::Settings = Ocawe::Config::Settings.default
       )
         config = @settings.workflows
         preferred_root = workflows_root || config.preferred_workflows_root
         @locator = Discovery::WorkflowLocator.new(preferred_root)
         @agent_loader = Agents::Loader.new
         @skill_loader = Skills::Loader.new
-        @workflow_engine = Cogni::Workflow::Engine.new
-        @workflow_service = Cogni::Workflow::Service.new(@workflow_engine)
-        @dataset_service = Cogni::Dataset::Service.new(build_dataset_store(@settings.datasets))
+        @workflow_engine = Ocawe::Workflow::Engine.new
+        @workflow_service = Ocawe::Workflow::Service.new(@workflow_engine)
+        @dataset_service = Ocawe::Dataset::Service.new(build_dataset_store(@settings.datasets))
         @aptok_federation = nil.as(Aptok::Federation?)
         @federation_kv = Aptok::MemoryKvStore.new
-        @mcp_manager = Cogni::MCP.manager
+        @mcp_manager = Ocawe::MCP.manager
         @workflow_ids = [] of String
         @workflow_index = {} of String => NamedTuple(
           source_root_type: String,
@@ -29,8 +29,8 @@ module ACD
           skills: Array(String),
           tools: Array(String),
           default_model: String?,
-          logger: Cogni::Workflow::AnyHash?,
-          node_loggers: Hash(String, Cogni::Workflow::AnyHash),
+          logger: Ocawe::Workflow::AnyHash?,
+          node_loggers: Hash(String, Ocawe::Workflow::AnyHash),
         )
         @skills_index = {} of String => NamedTuple(
           id: String,
@@ -77,6 +77,7 @@ module ACD
           mount_trigger_endpoints
           mount_mcp_endpoints
           mount_mcp_server_endpoint
+          mount_keys_endpoints
         end
         mount_federation_endpoints if @settings.api.enable?("federation")
         bootstrap_federation_subscriptions if @settings.api.enable?("federation")
@@ -96,9 +97,9 @@ module ACD
             begin
               reload_cache!
               fingerprint = current
-              puts "[cognicore] workflow cache reloaded"
+              puts "[ocawecore] workflow cache reloaded"
             rescue ex
-              STDERR.puts "[cognicore] workflow cache reload failed: #{ex.message}"
+              STDERR.puts "[ocawecore] workflow cache reload failed: #{ex.message}"
             end
           end
         end
@@ -107,7 +108,7 @@ module ACD
       private def reload_cache!
         bundles = @locator.list_workflows
         @dataset_service.reset_dsl_sources!
-        rebuilt_engine = Cogni::Workflow::Engine.new
+        rebuilt_engine = Ocawe::Workflow::Engine.new
         ids = [] of String
         index = {} of String => NamedTuple(
           source_root_type: String,
@@ -116,8 +117,8 @@ module ACD
           skills: Array(String),
           tools: Array(String),
           default_model: String?,
-          logger: Cogni::Workflow::AnyHash?,
-          node_loggers: Hash(String, Cogni::Workflow::AnyHash),
+          logger: Ocawe::Workflow::AnyHash?,
+          node_loggers: Hash(String, Ocawe::Workflow::AnyHash),
         )
         skills_index = {} of String => NamedTuple(
           id: String,
@@ -151,7 +152,7 @@ module ACD
           rebuilt_engine.register(definition)
           tool_ids = [] of String
           definition.nodes.each do |node|
-            next unless node.kind == Cogni::Workflow::NodeKind::Exec
+            next unless node.kind == Ocawe::Workflow::NodeKind::Exec
             next unless node.metadata["runtime"]?
             tool_ids << node.id unless tool_ids.includes?(node.id)
           end
@@ -207,7 +208,7 @@ module ACD
           @agents_index = agents_index
           @tools_index = tools_index
           @workflow_engine = rebuilt_engine
-          @workflow_service = Cogni::Workflow::Service.new(@workflow_engine)
+          @workflow_service = Ocawe::Workflow::Service.new(@workflow_engine)
         end
       end
 
@@ -251,20 +252,20 @@ module ACD
 
       private def register_configured_functions! : Nil
         config = @settings
-        Cogni::RegistryApi.reset_all!
+        Ocawe::RegistryApi.reset_all!
 
         config.functions.each do |name, handler|
-          Cogni::RegistryApi.register_system_function(name, &handler)
+          Ocawe::RegistryApi.register_system_function(name, &handler)
         end
         config.workspace_bootstrap.try(&.call)
       end
 
-      private def build_dataset_store(config : Cogni::Config::DatasetSettings) : Cogni::Dataset::Store::Base
+      private def build_dataset_store(config : Ocawe::Config::DatasetSettings) : Ocawe::Dataset::Store::Base
         case config.adapter.strip.downcase
         when "", "memory"
-          Cogni::Dataset::Store::InMemory.new
+          Ocawe::Dataset::Store::InMemory.new
         when "file"
-          Cogni::Dataset::Store::File.new(config.file_root)
+          Ocawe::Dataset::Store::File.new(config.file_root)
         else
           raise "unsupported dataset adapter: #{config.adapter}"
         end

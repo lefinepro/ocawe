@@ -1,7 +1,7 @@
 require "json"
 require "set"
 
-module Cogni
+module Ocawe
   module Logging
     class WorkflowLogger
       LEVELS = Set{"trace", "debug", "info", "warn", "error", "fatal"}

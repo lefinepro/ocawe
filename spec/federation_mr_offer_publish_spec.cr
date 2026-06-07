@@ -93,7 +93,7 @@ describe "ACD::Kemal::App federation merge request format" do
       "status" => json_str("ok"),
       "agent_output" => json_str(%({
         "type": "Offer",
-        "input": {"repo_path":"cogni/scripts/playbook.toml"},
+        "input": {"repo_path":"ocawe/scripts/playbook.toml"},
         "task": "update-playbook",
         "metadata": {"tool":"mock"},
         "object": {
@@ -115,7 +115,7 @@ describe "ACD::Kemal::App federation merge request format" do
             "object": {
               "type": "OrderedCollection",
               "totalItems": 1,
-              "repo_path": "cogni/scripts/playbook.toml",
+              "repo_path": "ocawe/scripts/playbook.toml",
               "items": [
                 {
                   "type": "Patch",

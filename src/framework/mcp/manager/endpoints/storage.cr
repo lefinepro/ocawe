@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module MCP
     class Manager
       private def persist_dynamic_store : Nil
@@ -25,7 +25,7 @@ module Cogni
       rescue
       end
 
-      private def parse_server(body : AnyHash) : Cogni::Config::MCPServerSettings
+      private def parse_server(body : AnyHash) : Ocawe::Config::MCPServerSettings
         id = body["id"]?.try(&.as_s?) || raise "server id required"
         transport = body["transport"]?.try(&.as_s?) || "http"
         command = body["command"]?.try(&.as_s?)
@@ -35,7 +35,7 @@ module Cogni
         url = body["url"]?.try(&.as_s?)
         bearer_token = body["bearer_token"]?.try(&.as_s?)
         enabled = body["enabled"]?.try(&.as_bool?) != false
-        Cogni::Config::MCPServerSettings.new(
+        Ocawe::Config::MCPServerSettings.new(
           id: id,
           transport: transport,
           command: command,

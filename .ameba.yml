@@ -15,7 +15,7 @@
 Version: "1.7.0-dev"
 
 Excluded:
-  # Dependency checkout; Cogni CI lints first-party code only.
+  # Dependency checkout; Ocawe CI lints first-party code only.
   - lib/**/*
   # BUG: Workaround for https://github.com/crystal-ameba/ameba/issues/782, https://github.com/crystal-ameba/ameba/issues/786, and https://github.com/crystal-ameba/ameba/issues/781
   - spec/support/factories.cr

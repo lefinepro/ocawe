@@ -40,10 +40,10 @@ cp scripts/ispmanager-panel-domain/panel-domain.example.env /tmp/ispmanager-pane
 3. Скопируйте env на сервер:
 
 ```bash
-scp /tmp/ispmanager-panel-domain.env root@<server-ip>:/etc/cogni/ispmanager-panel-domain.env
+scp /tmp/ispmanager-panel-domain.env root@<server-ip>:/etc/ocawe/ispmanager-panel-domain.env
 ```
 
-Или создайте `/etc/cogni/ispmanager-panel-domain.env` вручную.
+Или создайте `/etc/ocawe/ispmanager-panel-domain.env` вручную.
 
 4. Запустите playbook:
 

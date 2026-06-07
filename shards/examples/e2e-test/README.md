@@ -1,6 +1,6 @@
 # E2E Test Workflow Example
 
-This workflow bundle demonstrates comprehensive end-to-end testing scenarios for CogniCore.
+This workflow bundle demonstrates comprehensive end-to-end testing scenarios for OcaweCore.
 
 ## Features Demonstrated
 
@@ -17,9 +17,9 @@ This workflow bundle demonstrates comprehensive end-to-end testing scenarios for
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `COGNI_E2E_MODEL` | Model to use for E2E tests | `clipproxyapi/qwen3-coder-model` |
+| `OCAWE_E2E_MODEL` | Model to use for E2E tests | `clipproxyapi/qwen3-coder-model` |
 | `CLIPROXY_API_KEY` | API key for clipproxy service | (required for real API) |
-| `COGNICORE_MOCK_LLM` | Set to `1` to use mock responses | - |
+| `OCAWECORE_MOCK_LLM` | Set to `1` to use mock responses | - |
 
 ### Secrets (GitHub Actions)
 
@@ -32,13 +32,13 @@ For CI/CD, store the following secrets:
 
 ```bash
 # Build the CLI
-crystal build src/cli/main.cr -o build/cogni
+crystal build src/cli/main.cr -o build/ocawe
 
 # Run with mock (no API calls)
-COGNICORE_MOCK_LLM=1 ./build/cogni up --port 4111 --workflows-root ./shards/examples/e2e-test
+OCAWECORE_MOCK_LLM=1 ./build/ocawe up --port 4111 --workflows-root ./shards/examples/e2e-test
 
 # Run with real API
-CLIPROXY_API_KEY=your-key ./build/cogni up --port 4111 --workflows-root ./shards/examples/e2e-test
+CLIPROXY_API_KEY=your-key ./build/ocawe up --port 4111 --workflows-root ./shards/examples/e2e-test
 ```
 
 ### API Usage

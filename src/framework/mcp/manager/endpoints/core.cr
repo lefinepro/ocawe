@@ -1,9 +1,9 @@
-module Cogni
+module Ocawe
   module MCP
-    alias AnyHash = Cogni::Workflow::AnyHash
+    alias AnyHash = Ocawe::Workflow::AnyHash
 
     class Manager
-      @servers = {} of String => Cogni::Config::MCPServerSettings
+      @servers = {} of String => Ocawe::Config::MCPServerSettings
       @dynamic_ids = Set(String).new
       @static_ids = Set(String).new
       @tool_catalog = {} of String => Array(AnyHash)
@@ -15,7 +15,7 @@ module Cogni
       @http_bearer_token = nil.as(String?)
       @lock = Mutex.new
 
-      def configure(config : Cogni::Config::MCPSettings) : Nil
+      def configure(config : Ocawe::Config::MCPSettings) : Nil
         @store_path = config.dynamic_store_path
         @http_path = config.http_server.path
         @http_bearer_token = config.http_server.bearer_token
@@ -84,7 +84,7 @@ module Cogni
         end
       end
 
-      def create_dynamic(server : Cogni::Config::MCPServerSettings) : AnyHash
+      def create_dynamic(server : Ocawe::Config::MCPServerSettings) : AnyHash
         @lock.synchronize do
           raise "server already exists: #{server.id}" if @servers.has_key?(server.id)
           @servers[server.id] = server
@@ -96,7 +96,7 @@ module Cogni
         get_server(server.id) || raise "server not found after create: #{server.id}"
       end
 
-      def update_dynamic(server_id : String, server : Cogni::Config::MCPServerSettings) : AnyHash
+      def update_dynamic(server_id : String, server : Ocawe::Config::MCPServerSettings) : AnyHash
         @lock.synchronize do
           raise "cannot modify static server: #{server_id}" if @static_ids.includes?(server_id)
           raise "server not found: #{server_id}" unless @servers.has_key?(server_id)

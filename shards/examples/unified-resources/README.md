@@ -38,5 +38,5 @@ The `parallel do...end` block executes contained agents concurrently, improving 
 ## Running
 
 ```bash
-cogni run unified-resources
+ocawe run unified-resources
 ```

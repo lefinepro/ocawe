@@ -1,6 +1,6 @@
 require "json"
 
-module Cogni
+module Ocawe
   module Dataset
     alias AnyHash = Hash(String, JSON::Any)
 

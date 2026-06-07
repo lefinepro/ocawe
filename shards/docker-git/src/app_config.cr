@@ -1,4 +1,4 @@
-module CogniDockerGit
+module OcaweDockerGit
   module AppConfig
     extend self
 
@@ -10,9 +10,9 @@ module CogniDockerGit
       File.join(project_root, "workflows")
     end
 
-    def settings : Cogni::Config::Settings
-      Cogni::Config::Settings.new(
-        workflows: Cogni::Config::WorkflowSettings.new(
+    def settings : Ocawe::Config::Settings
+      Ocawe::Config::Settings.new(
+        workflows: Ocawe::Config::WorkflowSettings.new(
           preferred_workflows_root: workflows_root,
         ),
         functions: {
@@ -20,13 +20,13 @@ module CogniDockerGit
           "docker_workspace_clone" => docker_workspace_clone,
           "docker_workspace_open" => docker_workspace_open,
           "docker_workspace_delete" => docker_workspace_delete,
-        } of String => Cogni::Workflow::FunctionHandler,
-        workspace_bootstrap: -> : Nil { CogniDockerGit.bootstrap_workspace_extensions! },
+        } of String => Ocawe::Workflow::FunctionHandler,
+        workspace_bootstrap: -> : Nil { OcaweDockerGit.bootstrap_workspace_extensions! },
       )
     end
 
-    private def docker_workspace_create : Cogni::Workflow::FunctionHandler
-      ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
+    private def docker_workspace_create : Ocawe::Workflow::FunctionHandler
+      ->(ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
         workspace = current_workspace(ctx)
         workspace_id = "ws_#{Time.utc.to_unix_ms}"
         repo = workspace["repo"]?.try(&.as_s?) || "none"
@@ -39,8 +39,8 @@ module CogniDockerGit
       end
     end
 
-    private def docker_workspace_clone : Cogni::Workflow::FunctionHandler
-      ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
+    private def docker_workspace_clone : Ocawe::Workflow::FunctionHandler
+      ->(ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
         workspace = current_workspace(ctx)
         workspace_id = workspace_id_from_ctx(ctx)
         branch = workspace["branch"]?.try(&.as_s?) || "default"
@@ -53,8 +53,8 @@ module CogniDockerGit
       end
     end
 
-    private def docker_workspace_open : Cogni::Workflow::FunctionHandler
-      ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
+    private def docker_workspace_open : Ocawe::Workflow::FunctionHandler
+      ->(ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
         workspace = current_workspace(ctx)
         workspace_id = workspace_id_from_ctx(ctx)
         {
@@ -66,8 +66,8 @@ module CogniDockerGit
       end
     end
 
-    private def docker_workspace_delete : Cogni::Workflow::FunctionHandler
-      ->(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::RunnableResult do
+    private def docker_workspace_delete : Ocawe::Workflow::FunctionHandler
+      ->(ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
         workspace = current_workspace(ctx)
         workspace_id = workspace_id_from_ctx(ctx)
         {
@@ -79,11 +79,11 @@ module CogniDockerGit
       end
     end
 
-    private def current_workspace(ctx : Cogni::Workflow::NodeContext) : Cogni::Workflow::AnyHash
+    private def current_workspace(ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::AnyHash
       ctx.input_data["workspace"]?.try(&.as_h?) || ({} of String => JSON::Any)
     end
 
-    private def workspace_id_from_ctx(ctx : Cogni::Workflow::NodeContext) : String
+    private def workspace_id_from_ctx(ctx : Ocawe::Workflow::NodeContext) : String
       from_input = ctx.input_data["input"]?.try(&.as_h?).try(&.["workspace_id"]?).try(&.as_s?)
       from_state = ctx.state["workspace_id"]?.try(&.as_s?)
       from_input || from_state || "ws_unknown"

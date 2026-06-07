@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     def self.build(id : String, description : String? = nil) : WorkflowDefinition
       WorkflowDefinition.new(id, description)

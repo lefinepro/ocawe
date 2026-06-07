@@ -4,7 +4,7 @@ require "uuid"
 require "../workflows/dsl/crystal_dsl"
 require "./store"
 
-module Cogni
+module Ocawe
   module Dataset
     class Service
       getter store : Store::Base
@@ -203,7 +203,7 @@ module Cogni
         return unless schema_source
         stripped = schema_source.strip
         return if stripped.empty?
-        Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "dataset #{dataset_id} schema")
+        Ocawe::Workflows::DSL::CrystalDSL.compile(stripped, "dataset #{dataset_id} schema")
       rescue ex
         raise "dataset #{dataset_id} schema is invalid: #{ex.message}"
       end
@@ -213,11 +213,11 @@ module Cogni
         stripped = schema_source.strip
         return if stripped.empty?
 
-        validator = Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "dataset #{dataset_id} schema")
+        validator = Ocawe::Workflows::DSL::CrystalDSL.compile(stripped, "dataset #{dataset_id} schema")
         validator.validate(JSON.parse(payload.to_json), "$.item")
-      rescue ex : Cogni::Workflows::DSL::ValidationError
+      rescue ex : Ocawe::Workflows::DSL::ValidationError
         raise "dataset #{dataset_id} item validation failed: #{ex.message}"
-      rescue ex : Cogni::Workflows::DSL::CrystalDSL::ParseError
+      rescue ex : Ocawe::Workflows::DSL::CrystalDSL::ParseError
         raise "dataset #{dataset_id} schema is invalid: #{ex.message}"
       end
     end

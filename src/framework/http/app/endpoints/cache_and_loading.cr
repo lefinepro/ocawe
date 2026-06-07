@@ -48,7 +48,7 @@ module ACD
         json_error(env, 501, "not_implemented", message)
       end
 
-      private def json_body(env) : Cogni::Workflow::AnyHash
+      private def json_body(env) : Ocawe::Workflow::AnyHash
         raw = env.request.body.try(&.gets_to_end).to_s
         return {} of String => JSON::Any if raw.strip.empty?
         parsed = JSON.parse(raw)
@@ -81,32 +81,138 @@ module ACD
         return json_error(env, 422, "workflow_error", message)
       end
 
-      private def load_workflow_definition(bundle : Discovery::WorkflowBundle, loaded_agents : Array(Agents::LoadedAgent)) : Cogni::Workflow::WorkflowDefinition
-        workflow = Cogni::Workflow.create_workflow(bundle.id, "Loaded from #{bundle.workflow_file}")
+      private def load_workflow_definition(bundle : Discovery::WorkflowBundle, loaded_agents : Array(Agents::LoadedAgent)) : Ocawe::Workflow::WorkflowDefinition
+        workflow = Ocawe::Workflow.create_workflow(bundle.id, "Loaded from #{bundle.workflow_file}")
         agent_index = {} of String => Agents::LoadedAgent
         loaded_agents.each { |agent| agent_index[agent.id] = agent }
 
-        # Read all lines for multi-line block parsing
-        lines = File.read_lines(bundle.workflow_file)
-
-        # Create a parsing context
-        ctx = WorkflowParserContext.new(
-          workflow: workflow,
-          agent_index: agent_index,
-          workflow_file: bundle.workflow_file,
-          workflow_root: bundle.root_path,
-          lines: lines,
-          dataset_service: @dataset_service
-        )
-
-        parse_workflow_body(ctx, 0, lines.size)
+        if cawfile = bundle.cawfile
+          load_cawfile_workflow(workflow, bundle, cawfile, agent_index)
+        elsif File.extname(bundle.workflow_file) == ".cr"
+          lines = File.read_lines(bundle.workflow_file)
+          ctx = WorkflowParserContext.new(
+            workflow: workflow,
+            agent_index: agent_index,
+            workflow_file: bundle.workflow_file,
+            workflow_root: bundle.root_path,
+            lines: lines,
+            dataset_service: @dataset_service
+          )
+          parse_workflow_body(ctx, 0, lines.size)
+        else
+          raise "#{bundle.workflow_file}: unsupported workflow file format"
+        end
 
         workflow.commit
         enforce_enabled_node_kinds!(workflow, bundle.workflow_file)
         workflow
       end
 
-      private def enforce_enabled_node_kinds!(workflow : Cogni::Workflow::WorkflowDefinition, workflow_file : String) : Nil
+      private def rcl_value_to_json_any(value : RCL::Value) : JSON::Any
+        case value
+        when String
+          JSON.parse(value.to_json)
+        when Int32, Int64, Float64, Bool, Nil
+          JSON.parse(value.to_json)
+        when Array(RCL::Value)
+          JSON.parse(value.map { |v| rcl_value_to_json_any(v) }.to_json)
+        when Hash(String, RCL::Value)
+          JSON.parse(value.transform_values { |v| rcl_value_to_json_any(v) }.to_json)
+        else
+          JSON.parse("null")
+        end
+      end
+
+      private def load_cawfile_workflow(
+        workflow : Ocawe::Workflow::WorkflowDefinition,
+        bundle : Discovery::WorkflowBundle,
+        cawfile : Discovery::CawfileBundle,
+        agent_index : Hash(String, Agents::LoadedAgent)
+      )
+        # Register Cawfile agents into index so parser can reference them
+        cawfile.agents.each do |agent_spec|
+          agent_index[agent_spec.id] = Agents::LoadedAgent.new(
+            id: agent_spec.id,
+            prompt: agent_spec.prompt || "",
+            model: agent_spec.model,
+            description: agent_spec.description || "",
+            file_path: bundle.workflow_file,
+            voice_config: agent_spec.voice_config.try { |h| h.transform_values { |v| JSON.parse(v.to_json) } } || {} of String => JSON::Any,
+            guardrails_config: agent_spec.guardrails_config.try { |h| h.transform_values { |v| JSON.parse(v.to_json) } } || {} of String => JSON::Any,
+          )
+        end
+
+        # Load Cawfile keys as workspace annotations
+        unless cawfile.keys.empty?
+          workspace = {} of String => JSON::Any
+          cawfile.keys.each do |key_spec|
+            workspace["key_#{key_spec.name}"] = JSON.parse({
+              "required"    => key_spec.required,
+              "description" => key_spec.description,
+              "provider"    => key_spec.provider,
+            }.to_json)
+          end
+          workflow.workspace(workspace)
+        end
+
+        if File.extname(bundle.workflow_file) == ".cr"
+          lines = File.read_lines(bundle.workflow_file)
+          ctx = WorkflowParserContext.new(
+            workflow: workflow,
+            agent_index: agent_index,
+            workflow_file: bundle.workflow_file,
+            workflow_root: bundle.root_path,
+            lines: lines,
+            dataset_service: @dataset_service
+          )
+          parse_workflow_body(ctx, 0, lines.size)
+        elsif cawfile.workflow_steps.empty?
+          raise "#{bundle.workflow_file}: Cawfile has no workflow steps and no .acd.cr fallback"
+        else
+          cawfile.workflow_steps.each do |step|
+            case step.type
+            when "agent"
+              agent_id = step.id
+              loaded = agent_index[agent_id]?
+              attrs = step.params
+              workflow.agent(
+                agent_id,
+                prompt: loaded.try(&.prompt),
+                model: loaded.try(&.model),
+                input_schema: nil,
+                output_schema: nil,
+              )
+            when "skill"
+              workflow.skill(step.id, agent: nil)
+            when "exec"
+              workflow.exec(
+                step.id,
+                runtime: step.params["runtime"]?.try { |v| rcl_value_to_json_any(v).as_h? },
+                env: step.params["env"]?.try { |v| rcl_value_to_json_any(v).as_h? },
+                workflow_root: bundle.root_path,
+              )
+            when "suspend"
+              workflow.suspend(step.id, reason: step.params["reason"]?.try { |v| v.is_a?(String) ? v : v.to_s } || "human input required")
+            when "rag"
+              workflow.rag(step.id, config: step.params["config"]?.try { |v| rcl_value_to_json_any(v).as_h? } || {} of String => JSON::Any)
+            when "voice"
+              workflow.voice(step.id, config: step.params["config"]?.try { |v| rcl_value_to_json_any(v).as_h? } || {} of String => JSON::Any)
+            when "control", "node_kind"
+              workflow.step("node_kind", step.id,
+                node_kind_name: step.params["kind"]?.try { |v| v.is_a?(String) ? v : v.to_s } || step.id,
+                node_kind_attributes: step.params.reject { |k, _| k == "kind" }.transform_values { |v| rcl_value_to_json_any(v) },
+              )
+            else
+              workflow.step("node_kind", step.id,
+                node_kind_name: step.type,
+                node_kind_attributes: step.params.transform_values { |v| rcl_value_to_json_any(v) },
+              )
+            end
+          end
+        end
+      end
+
+      private def enforce_enabled_node_kinds!(workflow : Ocawe::Workflow::WorkflowDefinition, workflow_file : String) : Nil
         enabled = @settings.node_kinds.enabled
         return if enabled.empty?
 
@@ -121,21 +227,21 @@ module ACD
 
       # Parser context for workflow DSL
       private struct WorkflowParserContext
-        getter workflow : Cogni::Workflow::WorkflowDefinition
+        getter workflow : Ocawe::Workflow::WorkflowDefinition
         getter agent_index : Hash(String, Agents::LoadedAgent)
         getter workflow_file : String
         getter workflow_root : String
         getter lines : Array(String)
-        getter dataset_service : Cogni::Dataset::Service
+        getter dataset_service : Ocawe::Dataset::Service
         property last_agent_id : String?
 
         def initialize(
-          @workflow : Cogni::Workflow::WorkflowDefinition,
+          @workflow : Ocawe::Workflow::WorkflowDefinition,
           @agent_index : Hash(String, Agents::LoadedAgent),
           @workflow_file : String,
           @workflow_root : String,
           @lines : Array(String),
-          @dataset_service : Cogni::Dataset::Service
+          @dataset_service : Ocawe::Dataset::Service
         )
           @last_agent_id = nil
         end

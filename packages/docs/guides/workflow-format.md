@@ -1,6 +1,6 @@
 # Workflow Format (`.acd.cr`)
 
-Cogni workflows use Crystal DSL files with extension `.acd.cr`.
+Ocawe workflows use Crystal DSL files with extension `.acd.cr`.
 
 Example:
 
@@ -34,7 +34,7 @@ end
 ```crystal
 workflow "logger-example" do
   # Workflow-level logger default
-  @[Logger(name: "cogni", level: "info")]
+  @[Logger(name: "ocawe", level: "info")]
 
   # Node-level override (applies to the next node only)
   @[Logger(level: "debug")]
@@ -54,7 +54,7 @@ Runtime currently supports console output transport; non-console transports are 
 - If used before the first node, it becomes workflow default workspace.
 - If used after nodes have started, it applies to the next node only.
 - Optional `scope: "workflow" | "node" | "next"` can force scope.
-- Custom keys are allowed and passed through; extension logic can validate/resolve via `Cogni::RegistryApi.workspace_*`.
+- Custom keys are allowed and passed through; extension logic can validate/resolve via `Ocawe::RegistryApi.workspace_*`.
 
 ```crystal
 workflow "workspace-flow" do
@@ -214,9 +214,9 @@ For internal function-name nodes, `input_schema` and `output_schema` are reserve
 - User collisions are indexed as `name:1`, `name:2`, ...
 - You can add explicit aliases during registration and call them via `alias` node invocation syntax.
 
-Register runtime extensions through `Cogni::RegistryApi`:
-- `Cogni::RegistryApi.node_kind`
-- `Cogni::RegistryApi.resource`
+Register runtime extensions through `Ocawe::RegistryApi`:
+- `Ocawe::RegistryApi.node_kind`
+- `Ocawe::RegistryApi.resource`
 
 ## Examples
 

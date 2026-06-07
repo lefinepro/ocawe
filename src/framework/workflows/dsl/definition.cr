@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflows
     module DSL
     struct WorkflowBundleDefinition

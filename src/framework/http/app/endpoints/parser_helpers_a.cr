@@ -1,12 +1,12 @@
 module ACD
   module Kemal
     class App
-      private def wrap_nodes_in_control(nodes : Array(Cogni::Workflow::WorkflowNode), name : String) : Cogni::Workflow::WorkflowNode
-        Cogni::Workflow::WorkflowNode.new(name, Cogni::Workflow::NodeKind::Control) do |ctx|
+      private def wrap_nodes_in_control(nodes : Array(Ocawe::Workflow::WorkflowNode), name : String) : Ocawe::Workflow::WorkflowNode
+        Ocawe::Workflow::WorkflowNode.new(name, Ocawe::Workflow::NodeKind::Control) do |ctx|
           merged = {} of String => JSON::Any
-          halted = nil.as(Cogni::Workflow::WorkflowNodeResult?)
+          halted = nil.as(Ocawe::Workflow::WorkflowNodeResult?)
           nodes.each do |node|
-            result = node.execute(Cogni::Workflow::NodeContext.new(
+            result = node.execute(Ocawe::Workflow::NodeContext.new(
               workflow_id: ctx.workflow_id,
               run_id: ctx.run_id,
               node_id: node.id,
@@ -19,7 +19,7 @@ module ACD
               trigger_data: ctx.trigger_data,
               resume_data: ctx.resume_data,
             ))
-            if result.action != Cogni::Workflow::NodeAction::Continue.to_s.downcase
+            if result.action != Ocawe::Workflow::NodeAction::Continue.to_s.downcase
               halted = result
               break
             end
@@ -27,12 +27,12 @@ module ACD
               data.each { |k, v| merged[k] = v }
             end
           end
-          halted || Cogni::Workflow::WorkflowNodeResult.continue(merged)
+          halted || Ocawe::Workflow::WorkflowNodeResult.continue(merged)
         end
       end
 
-      private def with_state(ctx : Cogni::Workflow::NodeContext, additions : Hash(String, JSON::Any)) : Cogni::Workflow::NodeContext
-        Cogni::Workflow::NodeContext.new(
+      private def with_state(ctx : Ocawe::Workflow::NodeContext, additions : Hash(String, JSON::Any)) : Ocawe::Workflow::NodeContext
+        Ocawe::Workflow::NodeContext.new(
           workflow_id: ctx.workflow_id,
           run_id: ctx.run_id,
           node_id: ctx.node_id,
@@ -47,7 +47,7 @@ module ACD
         )
       end
 
-      private def evaluate_dsl_condition(expression : String, ctx : Cogni::Workflow::NodeContext) : Bool
+      private def evaluate_dsl_condition(expression : String, ctx : Ocawe::Workflow::NodeContext) : Bool
         normalized = expression.strip
         return true if normalized == "true"
         return false if normalized == "false"
@@ -91,7 +91,7 @@ module ACD
       end
 
       # Helper to build agent user prompt from context
-      private def build_agent_user_prompt_from_ctx(ctx : Cogni::Workflow::NodeContext) : String
+      private def build_agent_user_prompt_from_ctx(ctx : Ocawe::Workflow::NodeContext) : String
         if input = ctx.input_data["input"]?
           if as_text = input.as_s?
             return as_text
@@ -112,7 +112,7 @@ module ACD
       end
 
       # Helper to resolve model from context
-      private def resolve_model_from_ctx(ctx : Cogni::Workflow::NodeContext, agent_model : String?, default_model : String?) : String
+      private def resolve_model_from_ctx(ctx : Ocawe::Workflow::NodeContext, agent_model : String?, default_model : String?) : String
         request_model = ctx.input_data["model"]?.try(&.as_s?) || ctx.state["model"]?.try(&.as_s?)
         return request_model if request_model
         return agent_model if agent_model
@@ -125,7 +125,7 @@ module ACD
         kind : String,
         workflow_file : String,
         agent_id : String
-      ) : Cogni::Workflows::DSL::Validator?
+      ) : Ocawe::Workflows::DSL::Validator?
         if literal
           stripped = literal.strip
           if match = stripped.match(/^schema_ref\("([^"]+)"\)$/)
@@ -141,10 +141,10 @@ module ACD
                               raise "#{workflow_file}: unknown schema_ref(\"#{ref_name}\") for agent #{agent_id}"
                             end
             raise "#{workflow_file}: schema_ref(\"#{ref_name}\") missing in agent #{agent_id} markdown" unless schema_source
-            return Cogni::Workflows::DSL::CrystalDSL.compile(schema_source, "#{workflow_file}: agent #{agent_id} #{kind} schema_ref")
+            return Ocawe::Workflows::DSL::CrystalDSL.compile(schema_source, "#{workflow_file}: agent #{agent_id} #{kind} schema_ref")
           end
 
-          return Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: agent #{agent_id} #{kind} schema")
+          return Ocawe::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: agent #{agent_id} #{kind} schema")
         end
 
         fallback = case kind
@@ -158,14 +158,14 @@ module ACD
                      nil
                    end
         return nil unless fallback
-        Cogni::Workflows::DSL::CrystalDSL.compile(fallback, "#{workflow_file}: agent #{agent_id} #{kind} markdown schema")
+        Ocawe::Workflows::DSL::CrystalDSL.compile(fallback, "#{workflow_file}: agent #{agent_id} #{kind} markdown schema")
       end
 
       private def resolve_suspend_resume_schema(
         literal : String?,
         ctx : WorkflowParserContext,
         suspend_id : String
-      ) : Cogni::Workflows::DSL::Validator?
+      ) : Ocawe::Workflows::DSL::Validator?
         return nil unless literal
         stripped = literal.strip
 
@@ -180,10 +180,10 @@ module ACD
           schema_source = loaded.try(&.resume_schema_dsl)
           raise "#{ctx.workflow_file}: schema_ref(\"resume\") missing in agent #{agent_id} markdown" unless schema_source
 
-          return Cogni::Workflows::DSL::CrystalDSL.compile(schema_source, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema_ref")
+          return Ocawe::Workflows::DSL::CrystalDSL.compile(schema_source, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema_ref")
         end
 
-        Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema")
+        Ocawe::Workflows::DSL::CrystalDSL.compile(stripped, "#{ctx.workflow_file}: suspend #{suspend_id} resume schema")
       end
 
       private def parse_line_attributes(tail : String, workflow_file : String, context : String) : Hash(String, String)
@@ -206,7 +206,7 @@ module ACD
         attributes
       end
 
-      private def extract_attributes(attributes : Hash(String, String), skip_keys : Set(String), workflow_file : String) : Cogni::Workflow::AnyHash?
+      private def extract_attributes(attributes : Hash(String, String), skip_keys : Set(String), workflow_file : String) : Ocawe::Workflow::AnyHash?
         args = {} of String => JSON::Any
         attributes.each do |key, value|
           next if skip_keys.includes?(key)

@@ -1,14 +1,14 @@
-name: cogni
+name: ocawe
 version: 0.0.1
 
 authors:
-  - CogniCore Team
+  - OcaweCore Team
 
 targets:
-  cogni:
+  ocawe:
     main: src/cli/main.cr
-  cognicore:
-    main: src/cogni.cr
+  ocawecore:
+    main: src/ocawe.cr
 
 crystal: ">= 1.12.0"
 

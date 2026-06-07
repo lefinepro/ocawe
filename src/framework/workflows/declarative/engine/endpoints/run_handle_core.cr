@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     class WorkflowRunHandle
       getter run_id : String

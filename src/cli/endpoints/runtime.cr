@@ -1,17 +1,19 @@
-module CogniCore
+module OcaweCore
   module CLI
     class Main
       private def build(args : Array(String)) : Nil
         release = true
+        static = false
         output = RUNTIME_BIN
 
         OptionParser.parse(args) do |parser|
           parser.on("--release", "Build release binary (default)") { release = true }
           parser.on("--debug", "Build non-release binary") { release = false }
+          parser.on("--static", "Build static binary") { static = true }
           parser.on("--output PATH", "Output binary path") { |v| output = v }
         end
 
-        abort_unless_success(build_runtime(release: release, output: output))
+        abort_unless_success(build_runtime(release: release, static: static, output: output))
       end
 
       private def dev(args : Array(String)) : Nil
@@ -41,14 +43,14 @@ module CogniCore
           current = compute_fingerprint(tracked)
           next if current == fingerprint
 
-          puts "[cogni] changes detected, recompiling runtime..."
+          puts "[ocawe] changes detected, recompiling runtime..."
           if build_runtime(release: false, output: DEV_RUNTIME_BIN)
             terminate(runtime)
             runtime = spawn_cmd(dev_runtime_cmd(port, config_rcl))
             fingerprint = current
-            puts "[cogni] runtime restarted"
+            puts "[ocawe] runtime restarted"
           else
-            STDERR.puts "[cogni] compile failed, keeping last runtime"
+            STDERR.puts "[ocawe] compile failed, keeping last runtime"
           end
         end
       end
@@ -81,9 +83,13 @@ module CogniCore
         runtime.wait
       end
 
-      private def build_runtime(release : Bool, output : String) : Bool
-        release_flag = release ? "--release " : ""
-        run_cmd("mkdir -p #{PROJECT_ROOT}/build && bash #{BOOTSTRAP_CRYSTAL} && crystal build #{RUNTIME_ENTRY} -D cogni_runtime_main #{release_flag}-o #{output}")
+      private def build_runtime(release : Bool, static : Bool = false, output : String) : Bool
+        flags = [] of String
+        flags << "--release" if release
+        flags << "--static" if static
+        flags << "--no-debug" if release
+        flag_str = flags.empty? ? "" : flags.join(" ") + " "
+        run_cmd("mkdir -p #{PROJECT_ROOT}/build && bash #{BOOTSTRAP_CRYSTAL} && crystal build #{RUNTIME_ENTRY} -D ocawe_runtime_main #{flag_str}-o #{output}")
       end
 
       private def dev_runtime_cmd(port : Int32, config_rcl : String?) : String

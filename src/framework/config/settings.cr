@@ -1,7 +1,7 @@
 require "json"
 require "./default_function_handlers"
 
-module Cogni
+module Ocawe
   module Config
     struct WorkflowSettings
       getter preferred_workflows_root : String
@@ -21,7 +21,7 @@ module Cogni
       getter adapter : String
       getter file_root : String
 
-      def initialize(@adapter : String = "memory", @file_root : String = "./.cogni/datasets")
+      def initialize(@adapter : String = "memory", @file_root : String = "./.ocawe/datasets")
       end
     end
 
@@ -41,7 +41,7 @@ module Cogni
         @signatures_required : Bool = true,
         @local_actor : String = "http://127.0.0.1:4111/actors/server",
         @local_key_id : String = "http://127.0.0.1:4111/actors/server#main-key",
-        @local_private_key_path : String = "./.cogni/federation-private.pem"
+        @local_private_key_path : String = "./.ocawe/federation-private.pem"
       )
       end
     end
@@ -80,7 +80,7 @@ module Cogni
       getter datasets : DatasetSettings
       getter federation : FederationSettings
       getter api : ApiSettings
-      getter functions : Hash(String, Cogni::Workflow::FunctionHandler)
+      getter functions : Hash(String, Ocawe::Workflow::FunctionHandler)
       getter workspace_bootstrap : Proc(Nil)?
       getter mcp : MCPSettings
 
@@ -90,7 +90,7 @@ module Cogni
         @datasets : DatasetSettings = DatasetSettings.new,
         @federation : FederationSettings = FederationSettings.new,
         @api : ApiSettings = ApiSettings.new,
-        @functions : Hash(String, Cogni::Workflow::FunctionHandler) = {} of String => Cogni::Workflow::FunctionHandler,
+        @functions : Hash(String, Ocawe::Workflow::FunctionHandler) = {} of String => Ocawe::Workflow::FunctionHandler,
         @workspace_bootstrap : Proc(Nil)? = nil,
         @mcp : MCPSettings = MCPSettings.new
       )

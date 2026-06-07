@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     class WorkflowRunHandle
       private def node_input_for(node : WorkflowNode, previous_node_id : String?, previous_node_result : AnyHash?) : AnyHash

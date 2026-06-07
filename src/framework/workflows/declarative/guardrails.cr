@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     module Guardrails
       class Violation < Exception

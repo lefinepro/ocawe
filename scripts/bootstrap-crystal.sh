@@ -5,11 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TOOLS_DIR="${PROJECT_ROOT}/.tools"
 
-if command -v crystal >/dev/null 2>&1 && [[ "${COGNI_CRYSTAL_FORCE_BOOTSTRAP:-0}" != "1" ]]; then
+if command -v crystal >/dev/null 2>&1 && [[ "${OCAWE_CRYSTAL_FORCE_BOOTSTRAP:-0}" != "1" ]]; then
   exit 0
 fi
 
-VERSION="${COGNI_CRYSTAL_VERSION:-1.13.3}"
+VERSION="${OCAWE_CRYSTAL_VERSION:-1.13.3}"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
@@ -17,7 +17,7 @@ case "${OS}" in
   Linux) OS_TAG="linux" ;;
   Darwin) OS_TAG="darwin" ;;
   *)
-    echo "[cogni] unsupported OS for Crystal bootstrap: ${OS}" >&2
+    echo "[ocawe] unsupported OS for Crystal bootstrap: ${OS}" >&2
     exit 1
     ;;
 esac
@@ -32,7 +32,7 @@ case "${ARCH}" in
     fi
     ;;
   *)
-    echo "[cogni] unsupported CPU architecture for Crystal bootstrap: ${ARCH}" >&2
+    echo "[ocawe] unsupported CPU architecture for Crystal bootstrap: ${ARCH}" >&2
     exit 1
     ;;
 esac
@@ -45,7 +45,7 @@ else
   TARGET="${OS_TAG}-${ARCH_TAG}"
 fi
 
-BASE_URL="${COGNI_CRYSTAL_BASE_URL:-https://github.com/crystal-lang/crystal/releases/download}"
+BASE_URL="${OCAWE_CRYSTAL_BASE_URL:-https://github.com/crystal-lang/crystal/releases/download}"
 ARCHIVE_URL="${BASE_URL}/${VERSION}/${ARCHIVE_NAME}"
 
 INSTALL_DIR="${TOOLS_DIR}/crystal/${VERSION}/${TARGET}"
@@ -55,16 +55,16 @@ ARCHIVE_PATH="${CACHE_DIR}/${ARCHIVE_NAME}"
 mkdir -p "${CACHE_DIR}" "$(dirname "${INSTALL_DIR}")"
 
 if [[ ! -x "${INSTALL_DIR}/bin/crystal" ]]; then
-  echo "[cogni] crystal not found, bootstrapping ${VERSION} for ${TARGET}"
+  echo "[ocawe] crystal not found, bootstrapping ${VERSION} for ${TARGET}"
 
   if [[ ! -f "${ARCHIVE_PATH}" ]]; then
-    echo "[cogni] downloading ${ARCHIVE_URL}"
+    echo "[ocawe] downloading ${ARCHIVE_URL}"
     if command -v curl >/dev/null 2>&1; then
       curl -fL "${ARCHIVE_URL}" -o "${ARCHIVE_PATH}"
     elif command -v wget >/dev/null 2>&1; then
       wget -O "${ARCHIVE_PATH}" "${ARCHIVE_URL}"
     else
-      echo "[cogni] neither curl nor wget is available to download Crystal" >&2
+      echo "[ocawe] neither curl nor wget is available to download Crystal" >&2
       exit 1
     fi
   fi
@@ -76,7 +76,7 @@ if [[ ! -x "${INSTALL_DIR}/bin/crystal" ]]; then
   CRYSTAL_BIN="$(find "${TMP_DIR}" -type f -path '*/bin/crystal' | head -n 1)"
 
   if [[ -z "${CRYSTAL_BIN}" ]]; then
-    echo "[cogni] failed to locate crystal binary inside archive ${ARCHIVE_NAME}" >&2
+    echo "[ocawe] failed to locate crystal binary inside archive ${ARCHIVE_NAME}" >&2
     exit 1
   fi
 
@@ -87,6 +87,6 @@ fi
 
 export PATH="${INSTALL_DIR}/bin:${PATH}"
 
-if [[ "${COGNI_CRYSTAL_VERBOSE:-0}" == "1" ]]; then
+if [[ "${OCAWE_CRYSTAL_VERBOSE:-0}" == "1" ]]; then
   crystal --version
 fi

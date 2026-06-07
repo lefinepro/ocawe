@@ -63,8 +63,8 @@ cp scripts/maddy-users/users.example.csv /tmp/maddy-users.csv
 4. Скопируйте файлы на сервер:
 
 ```bash
-scp /tmp/maddy-users.env root@<mail-server>:/etc/cogni/maddy-users.env
-scp /tmp/maddy-users.csv root@<mail-server>:/etc/cogni/maddy-users.csv
+scp /tmp/maddy-users.env root@<mail-server>:/etc/ocawe/maddy-users.env
+scp /tmp/maddy-users.csv root@<mail-server>:/etc/ocawe/maddy-users.csv
 ```
 
 5. Запустите playbook:

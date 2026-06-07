@@ -1,6 +1,6 @@
-# Cogni Playground
+# Ocawe Playground
 
-This workspace contains the Bun + Svelte playground for CogniCore.
+This workspace contains the Bun + Svelte playground for OcaweCore.
 
 - Runtime app root: `.`
 - Companion docs package: `../docs`

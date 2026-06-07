@@ -46,7 +46,7 @@ DOMAINS="domain1.tld domain2.tld domain3.tld domain4.tld domain5.tld"
 4. Загрузите заполненный env-файл на сервер:
 
 ```bash
-scp ispmanager-domains.env root@<server-ip>:/etc/cogni/ispmanager-domains.env
+scp ispmanager-domains.env root@<server-ip>:/etc/ocawe/ispmanager-domains.env
 ```
 
 ## Запуск через spot
@@ -61,12 +61,12 @@ docker run --rm \
   -t default
 ```
 
-По умолчанию playbook использует env-файл `/etc/cogni/ispmanager-domains.env` на удаленном хосте.
+По умолчанию playbook использует env-файл `/etc/ocawe/ispmanager-domains.env` на удаленном хосте.
 
 ## Что делает playbook
 
-- Создает `/etc/cogni` при необходимости.
-- Кладет шаблон env-файла в `/etc/cogni/ispmanager-domains.env` (без перезаписи).
+- Создает `/etc/ocawe` при необходимости.
+- Кладет шаблон env-файла в `/etc/ocawe/ispmanager-domains.env` (без перезаписи).
 - Проверяет доступ к API ISPmanager.
 - Добавляет каждый домен через API (с fallback между `site.edit`, `webdomain.edit`, `wwwdomain.edit` для совместимости версий).
 - Проверяет, что домены доступны через API и SSL не отключен.

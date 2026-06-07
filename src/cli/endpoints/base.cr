@@ -1,4 +1,4 @@
-module CogniCore
+module OcaweCore
   module CLI
     class Main
       struct TriggerResponse
@@ -14,9 +14,9 @@ module CogniCore
       private DEFAULT_PORT             = 4111
       private DEFAULT_TRIGGER_BASE_URL = "http://127.0.0.1:4111"
       private PROJECT_ROOT             = File.expand_path("../..", __DIR__)
-      private RUNTIME_ENTRY            = "#{PROJECT_ROOT}/src/cogni.cr"
-      private RUNTIME_BIN              = "#{PROJECT_ROOT}/build/cognicore"
-      private DEV_RUNTIME_BIN          = "#{PROJECT_ROOT}/build/cognicore-dev"
+      private RUNTIME_ENTRY            = "#{PROJECT_ROOT}/src/ocawe.cr"
+      private RUNTIME_BIN              = "#{PROJECT_ROOT}/build/ocawecore"
+      private DEV_RUNTIME_BIN          = "#{PROJECT_ROOT}/build/ocawecore-dev"
       private WORKFLOWS_PATH           = "#{PROJECT_ROOT}/src/workflows"
       private AGENTS_PATH              = "#{PROJECT_ROOT}/agents"
       private TOOLS_PATH               = "#{PROJECT_ROOT}/tools"
@@ -66,7 +66,7 @@ module CogniCore
           end
           run_trigger_command(trigger_kind, target_id, args)
         when "-v", "--version"
-          puts CogniCore::VERSION
+          puts OcaweCore::VERSION
         when "-h", "--help"
           print_help
         else
@@ -78,7 +78,7 @@ module CogniCore
 
       private def print_help : Nil
         puts <<-TXT
-          Usage: cogni <command> [options]
+          Usage: ocawe <command> [options]
 
           Commands:
             build [--release] [--output PATH]
@@ -105,18 +105,18 @@ module CogniCore
                 Show this help.
 
           Examples:
-            cogni workflow solver
-            cogni workflow solver task=deploy env=prod
-            cogni agent code-reviewer --prompt "review this diff"
-            cogni tool project_healthcheck
-            cogni support onboarding-check
+            ocawe workflow solver
+            ocawe workflow solver task=deploy env=prod
+            ocawe agent code-reviewer --prompt "review this diff"
+            ocawe tool project_healthcheck
+            ocawe support onboarding-check
         TXT
       end
 
       private def print_trigger_help(kind : String) : Nil
         puts <<-TXT
           Usage:
-            cogni #{kind} <id> [args ...] [--base-url URL] [--input-json JSON]
+            ocawe #{kind} <id> [args ...] [--base-url URL] [--input-json JSON]
 
           Argument mapping:
             key=value   -> payload key/value (or payload.input key/value for workflow/function/tool)
@@ -202,7 +202,7 @@ module CogniCore
       private def workflow_alias_from_program_name(program_name : String) : String?
         name = File.basename(program_name)
         return nil if name.empty?
-        return nil if name == "cogni"
+        return nil if name == "ocawe"
         return nil if CORE_COMMANDS.includes?(name)
         return nil if TRIGGER_COMMANDS.includes?(name)
         name

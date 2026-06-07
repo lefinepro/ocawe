@@ -24,7 +24,7 @@ module ACD
 
           env.response.status_code = 201
           env.response.content_type = "application/json"
-          dataset_to_json(response.as(Cogni::Dataset::DatasetRecord)).to_json
+          dataset_to_json(response.as(Ocawe::Dataset::DatasetRecord)).to_json
         end
 
         get "/v1/datasets/:datasetId" do |env|
@@ -52,7 +52,7 @@ module ACD
           next response if response.is_a?(String)
 
           env.response.content_type = "application/json"
-          dataset_to_json(response.as(Cogni::Dataset::DatasetRecord)).to_json
+          dataset_to_json(response.as(Ocawe::Dataset::DatasetRecord)).to_json
         end
 
         delete "/v1/datasets/:datasetId" do |env|

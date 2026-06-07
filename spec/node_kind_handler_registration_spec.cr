@@ -2,22 +2,22 @@ require "./spec_helper"
 
 describe "custom node kinds and resource registrations" do
   it "executes custom node kind from declarative API" do
-    Cogni::Workflow.reset_node_kind_registry!
-    Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
+    Ocawe::Workflow.reset_node_kind_registry!
+    Ocawe::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
       {
         "kind" => json_str("ok"),
         "value" => attributes["value"]? || json_str("missing"),
       }
     end
 
-    workflow = Cogni::Workflow.create_workflow("wf-custom-kind")
+    workflow = Ocawe::Workflow.create_workflow("wf-custom-kind")
     workflow
-      .step(Cogni::NodeKind.new("crystal_native", {
+      .step(Ocawe::NodeKind.new("crystal_native", {
         "value" => json_str("from-attributes"),
       }))
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     result = engine.create_run("wf-custom-kind").start
@@ -27,17 +27,17 @@ describe "custom node kinds and resource registrations" do
   end
 
   it "registers resources from a node kind handler" do
-    Cogni::Workflow.reset_node_kind_registry!
-    Cogni::Workflow.reset_resource_registry!
+    Ocawe::Workflow.reset_node_kind_registry!
+    Ocawe::Workflow.reset_resource_registry!
 
-    Cogni::RegistryApi.node_kind("bootstrap") do |ctx, _parameters|
-      Cogni::RegistryApi.resource("resource_ping") do |_resource_ctx, payload|
+    Ocawe::RegistryApi.node_kind("bootstrap") do |ctx, _parameters|
+      Ocawe::RegistryApi.resource("resource_ping") do |_resource_ctx, payload|
         {
           "resource_task" => json_str(payload["task"]?.try(&.as_s?) || "none"),
         }
       end
 
-      resource_value = Cogni::Workflow.resource_registry.call("resource_ping", ctx, {
+      resource_value = Ocawe::Workflow.resource_registry.call("resource_ping", ctx, {
         "task" => json_str("beta"),
       })
 
@@ -47,12 +47,12 @@ describe "custom node kinds and resource registrations" do
       }
     end
 
-    workflow = Cogni::Workflow.create_workflow("wf-handler-registration")
+    workflow = Ocawe::Workflow.create_workflow("wf-handler-registration")
     workflow
-      .step(Cogni::NodeKind.new("bootstrap"), id: "bootstrap-node")
+      .step(Ocawe::NodeKind.new("bootstrap"), id: "bootstrap-node")
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     result = engine.create_run("wf-handler-registration").start

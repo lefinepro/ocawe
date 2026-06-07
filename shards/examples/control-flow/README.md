@@ -1,6 +1,6 @@
 # Control Flow Example
 
-This example demonstrates the enhanced control flow constructs in the CogniCore workflow DSL.
+This example demonstrates the enhanced control flow constructs in the OcaweCore workflow DSL.
 
 ## Features Demonstrated
 

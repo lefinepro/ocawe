@@ -1,24 +1,24 @@
-module Cogni
+module Ocawe
   module RegistryApi
     extend self
 
-    alias AnyHash = Cogni::Workflow::AnyHash
-    alias Validator = Cogni::Workflows::DSL::Validator
-    alias WorkflowDefinition = Cogni::Workflow::WorkflowDefinition
-    alias WorkflowNode = Cogni::Workflow::WorkflowNode
-    alias WorkflowNodeResult = Cogni::Workflow::WorkflowNodeResult
-    alias NodeContext = Cogni::Workflow::NodeContext
-    alias NodeKind = Cogni::Workflow::NodeKind
+    alias AnyHash = Ocawe::Workflow::AnyHash
+    alias Validator = Ocawe::Workflows::DSL::Validator
+    alias WorkflowDefinition = Ocawe::Workflow::WorkflowDefinition
+    alias WorkflowNode = Ocawe::Workflow::WorkflowNode
+    alias WorkflowNodeResult = Ocawe::Workflow::WorkflowNodeResult
+    alias NodeContext = Ocawe::Workflow::NodeContext
+    alias NodeKind = Ocawe::Workflow::NodeKind
     @@bootstrap_actions = [] of Proc(Nil)
     @@capture_bootstrap_actions = true
 
     def reset_all! : Nil
       previous_capture = @@capture_bootstrap_actions
       @@capture_bootstrap_actions = false
-      Cogni::Workflow.reset_node_kind_registry!
-      Cogni::Workflow.reset_resource_registry!
-      Cogni::Workflow.reset_function_registry!
-      Cogni::Workflow.reset_workspace_registry!
+      Ocawe::Workflow.reset_node_kind_registry!
+      Ocawe::Workflow.reset_resource_registry!
+      Ocawe::Workflow.reset_function_registry!
+      Ocawe::Workflow.reset_workspace_registry!
       register_default_node_kinds!
       replay_bootstrap_actions!
       @@capture_bootstrap_actions = previous_capture
@@ -27,27 +27,27 @@ module Cogni
     def register_system_function(
       name : String,
       alias_name : String? = nil,
-      &block : NodeContext -> Cogni::Workflow::RunnableResult
+      &block : NodeContext -> Ocawe::Workflow::RunnableResult
     ) : String
-      Cogni::Workflow.register_system_function(name, alias_name: alias_name, &block)
+      Ocawe::Workflow.register_system_function(name, alias_name: alias_name, &block)
     end
 
     def register_function(
       name : String,
       alias_name : String? = nil,
-      source : Cogni::Workflow::FunctionSource = Cogni::Workflow::FunctionSource::User,
-      &block : NodeContext -> Cogni::Workflow::RunnableResult
+      source : Ocawe::Workflow::FunctionSource = Ocawe::Workflow::FunctionSource::User,
+      &block : NodeContext -> Ocawe::Workflow::RunnableResult
     ) : String
       register_function_internal(name, alias_name: alias_name, source: source, persist: true, &block)
     end
 
     def call_function(name : String, ctx : NodeContext) : AnyHash
-      Cogni::Workflow.function_registry.call(name, ctx)
+      Ocawe::Workflow.function_registry.call(name, ctx)
     end
 
     def node_kind(
       kind : String,
-      &block : NodeContext, AnyHash -> Cogni::Workflow::NodeKindResult
+      &block : NodeContext, AnyHash -> Ocawe::Workflow::NodeKindResult
     ) : Nil
       register_node_kind_internal(kind, persist: true, &block)
     end
@@ -78,11 +78,11 @@ module Cogni
     private def register_function_internal(
       name : String,
       alias_name : String? = nil,
-      source : Cogni::Workflow::FunctionSource = Cogni::Workflow::FunctionSource::User,
+      source : Ocawe::Workflow::FunctionSource = Ocawe::Workflow::FunctionSource::User,
       persist : Bool = false,
-      &block : NodeContext -> Cogni::Workflow::RunnableResult
+      &block : NodeContext -> Ocawe::Workflow::RunnableResult
     ) : String
-      canonical = Cogni::Workflow.register_function(name, alias_name: alias_name, source: source, &block)
+      canonical = Ocawe::Workflow.register_function(name, alias_name: alias_name, source: source, &block)
       if persist && @@capture_bootstrap_actions
         handler = block
         @@bootstrap_actions << ->{
@@ -96,9 +96,9 @@ module Cogni
     private def register_node_kind_internal(
       kind : String,
       persist : Bool = false,
-      &block : NodeContext, AnyHash -> Cogni::Workflow::NodeKindResult
+      &block : NodeContext, AnyHash -> Ocawe::Workflow::NodeKindResult
     ) : Nil
-      Cogni::Workflow.register_node_kind(kind, &block)
+      Ocawe::Workflow.register_node_kind(kind, &block)
       if persist && @@capture_bootstrap_actions
         handler = block
         @@bootstrap_actions << ->{
@@ -113,7 +113,7 @@ module Cogni
       persist : Bool = false,
       &block : NodeContext, AnyHash -> AnyHash
     ) : Nil
-      Cogni::Workflow.register_resource(name, &block)
+      Ocawe::Workflow.register_resource(name, &block)
       if persist && @@capture_bootstrap_actions
         handler = block
         @@bootstrap_actions << ->{
@@ -128,7 +128,7 @@ module Cogni
       persist : Bool = false,
       &block : AnyHash -> Nil
     ) : Nil
-      Cogni::Workflow.workspace_registry.register_schema(name, &block)
+      Ocawe::Workflow.workspace_registry.register_schema(name, &block)
       if persist && @@capture_bootstrap_actions
         handler = block
         @@bootstrap_actions << ->{
@@ -142,7 +142,7 @@ module Cogni
       persist : Bool = false,
       &block : AnyHash -> AnyHash
     ) : Nil
-      Cogni::Workflow.workspace_registry.register_resolver(&block)
+      Ocawe::Workflow.workspace_registry.register_resolver(&block)
       if persist && @@capture_bootstrap_actions
         handler = block
         @@bootstrap_actions << ->{
@@ -157,7 +157,7 @@ module Cogni
       persist : Bool = false,
       &block : NodeContext, AnyHash -> Nil
     ) : Nil
-      Cogni::Workflow.workspace_registry.register_hook(event, &block)
+      Ocawe::Workflow.workspace_registry.register_hook(event, &block)
       if persist && @@capture_bootstrap_actions
         handler = block
         @@bootstrap_actions << ->{

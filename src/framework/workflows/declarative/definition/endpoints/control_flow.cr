@@ -1,18 +1,18 @@
-module Cogni
+module Ocawe
   module Workflow
     class WorkflowDefinition
       def agent(
         id : String,
         prompt : String? = nil,
         model : String? = nil,
-        resume_schema : Cogni::Workflows::DSL::Validator? = nil,
+        resume_schema : Ocawe::Workflows::DSL::Validator? = nil,
         voice_config : AnyHash? = nil,
         guardrails_config : AnyHash? = nil,
         workspace : AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "agent",
           id,
@@ -28,13 +28,13 @@ module Cogni
       end
 
       def step(
-        kind : Cogni::NodeKind,
+        kind : Ocawe::NodeKind,
         id : String? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
         node_id = id || "#{kind.node}-#{@nodes.size}"
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "node_kind",
           node_id,
@@ -50,10 +50,10 @@ module Cogni
         id : String,
         agent_id : String? = nil,
         agent : String? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "skill",
           id,
@@ -69,10 +69,10 @@ module Cogni
       def voice(
         id : String,
         config : AnyHash = {} of String => JSON::Any,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "voice",
           id,
@@ -87,10 +87,10 @@ module Cogni
       def rag(
         id : String,
         config : AnyHash = {} of String => JSON::Any,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "rag",
           id,
@@ -103,11 +103,11 @@ module Cogni
       def suspend(
         id : String,
         reason : String = "human input required",
-        resume_schema : Cogni::Workflows::DSL::Validator? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        resume_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "suspend",
           id,

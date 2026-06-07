@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module MCP
     @@manager = Manager.new
 

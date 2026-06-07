@@ -1,15 +1,15 @@
 require "./e2e_spec_helper"
 
 private def map_function_to_node_kind(name : String) : Nil
-  Cogni::RegistryApi.node_kind(name) do |ctx, _parameters|
-    Cogni::RegistryApi.call_function(name, ctx)
+  Ocawe::RegistryApi.node_kind(name) do |ctx, _parameters|
+    Ocawe::RegistryApi.call_function(name, ctx)
   end
 end
 
 describe "E2E: Node Kinds and Functions" do
   describe "node kind execution" do
     it "executes registered functions via node kinds" do
-      Cogni::Workflow.register_function("e2e_test_tool") do |ctx|
+      Ocawe::Workflow.register_function("e2e_test_tool") do |ctx|
         input = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
         {
           "tool_name"  => json_any("e2e-test-tool"),
@@ -19,12 +19,12 @@ describe "E2E: Node Kinds and Functions" do
       end
       map_function_to_node_kind("e2e_test_tool")
 
-      workflow = Cogni::Workflow.create_workflow("e2e-run", "Run test")
+      workflow = Ocawe::Workflow.create_workflow("e2e-run", "Run test")
       workflow
-        .step(Cogni::NodeKind.new("e2e_test_tool"), id: "e2e_test_tool")
+        .step(Ocawe::NodeKind.new("e2e_test_tool"), id: "e2e_test_tool")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-run")
@@ -35,7 +35,7 @@ describe "E2E: Node Kinds and Functions" do
     end
 
     it "executes node kind with complex input" do
-      Cogni::Workflow.register_function("complex_input_tool") do |ctx|
+      Ocawe::Workflow.register_function("complex_input_tool") do |ctx|
         input = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
         data = input["data"]?.try(&.as_h?) || {} of String => JSON::Any
         count = data["count"]?.try(&.as_i?) || 0
@@ -46,12 +46,12 @@ describe "E2E: Node Kinds and Functions" do
       end
       map_function_to_node_kind("complex_input_tool")
 
-      workflow = Cogni::Workflow.create_workflow("complex-run-test", "Complex run test")
+      workflow = Ocawe::Workflow.create_workflow("complex-run-test", "Complex run test")
       workflow
-        .step(Cogni::NodeKind.new("complex_input_tool"), id: "complex_input_tool")
+        .step(Ocawe::NodeKind.new("complex_input_tool"), id: "complex_input_tool")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("complex-run-test")
@@ -65,17 +65,17 @@ describe "E2E: Node Kinds and Functions" do
 
   describe "function chaining" do
     it "passes output from one function to the next as input envelope" do
-      Cogni::Workflow.register_function("e2e_fn_step_one") do |_ctx|
-        Cogni::Workflow::AgentResult.new(
+      Ocawe::Workflow.register_function("e2e_fn_step_one") do |_ctx|
+        Ocawe::Workflow::AgentResult.new(
           agent_type: "fn",
           content: "step-one-data",
         )
       end
 
-      Cogni::Workflow.register_function("e2e_fn_step_two") do |ctx|
+      Ocawe::Workflow.register_function("e2e_fn_step_two") do |ctx|
         previous = ctx.input_data["input"]?.try(&.as_h?) || {} of String => JSON::Any
         received_content = previous["content"]?.try(&.as_s?) || "missing"
-        Cogni::Workflow::AgentResult.new(
+        Ocawe::Workflow::AgentResult.new(
           agent_type: "fn",
           content: "received:#{received_content}",
         )
@@ -83,13 +83,13 @@ describe "E2E: Node Kinds and Functions" do
       map_function_to_node_kind("e2e_fn_step_one")
       map_function_to_node_kind("e2e_fn_step_two")
 
-      workflow = Cogni::Workflow.create_workflow("e2e-run-chain", "Function chaining")
+      workflow = Ocawe::Workflow.create_workflow("e2e-run-chain", "Function chaining")
       workflow
-        .step(Cogni::NodeKind.new("e2e_fn_step_one"), id: "e2e_fn_step_one")
-        .step(Cogni::NodeKind.new("e2e_fn_step_two"), id: "e2e_fn_step_two")
+        .step(Ocawe::NodeKind.new("e2e_fn_step_one"), id: "e2e_fn_step_one")
+        .step(Ocawe::NodeKind.new("e2e_fn_step_two"), id: "e2e_fn_step_two")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       result = engine.create_run("e2e-run-chain").start
@@ -98,24 +98,24 @@ describe "E2E: Node Kinds and Functions" do
     end
 
     it "chains multiple functions in sequence" do
-      Cogni::Workflow.register_function("chain_fn_a") do |_ctx|
-        Cogni::Workflow::AgentResult.new(
+      Ocawe::Workflow.register_function("chain_fn_a") do |_ctx|
+        Ocawe::Workflow::AgentResult.new(
           agent_type: "fn",
           content: "A",
         )
       end
 
-      Cogni::Workflow.register_function("chain_fn_b") do |ctx|
+      Ocawe::Workflow.register_function("chain_fn_b") do |ctx|
         prev = ctx.input_data["input"]?.try(&.as_h?).try { |h| h["content"]?.try(&.as_s?) } || ""
-        Cogni::Workflow::AgentResult.new(
+        Ocawe::Workflow::AgentResult.new(
           agent_type: "fn",
           content: "#{prev}->B",
         )
       end
 
-      Cogni::Workflow.register_function("chain_fn_c") do |ctx|
+      Ocawe::Workflow.register_function("chain_fn_c") do |ctx|
         prev = ctx.input_data["input"]?.try(&.as_h?).try { |h| h["content"]?.try(&.as_s?) } || ""
-        Cogni::Workflow::AgentResult.new(
+        Ocawe::Workflow::AgentResult.new(
           agent_type: "fn",
           content: "#{prev}->C",
         )
@@ -124,14 +124,14 @@ describe "E2E: Node Kinds and Functions" do
       map_function_to_node_kind("chain_fn_b")
       map_function_to_node_kind("chain_fn_c")
 
-      workflow = Cogni::Workflow.create_workflow("multi-fn-chain", "Multi function chain")
+      workflow = Ocawe::Workflow.create_workflow("multi-fn-chain", "Multi function chain")
       workflow
-        .step(Cogni::NodeKind.new("chain_fn_a"), id: "chain_fn_a")
-        .step(Cogni::NodeKind.new("chain_fn_b"), id: "chain_fn_b")
-        .step(Cogni::NodeKind.new("chain_fn_c"), id: "chain_fn_c")
+        .step(Ocawe::NodeKind.new("chain_fn_a"), id: "chain_fn_a")
+        .step(Ocawe::NodeKind.new("chain_fn_b"), id: "chain_fn_b")
+        .step(Ocawe::NodeKind.new("chain_fn_c"), id: "chain_fn_c")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       result = engine.create_run("multi-fn-chain").start
@@ -142,7 +142,7 @@ describe "E2E: Node Kinds and Functions" do
 
   describe "node kind with workflow context" do
     it "accesses workflow state in node kind function" do
-      Cogni::Workflow.register_function("state_aware_tool") do |ctx|
+      Ocawe::Workflow.register_function("state_aware_tool") do |ctx|
         prev_value = ctx.state["setup_value"]?.try(&.as_s?) || "none"
         {
           "from_state" => json_any(prev_value),
@@ -151,15 +151,15 @@ describe "E2E: Node Kinds and Functions" do
       end
       map_function_to_node_kind("state_aware_tool")
 
-      workflow = Cogni::Workflow.create_workflow("state-run-test", "State run test")
+      workflow = Ocawe::Workflow.create_workflow("state-run-test", "State run test")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
-          Cogni::Workflow::WorkflowNodeResult.continue({"setup_value" => json_str("initialized")})
+        .step(Ocawe::Workflow::WorkflowNode.new("setup", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+          Ocawe::Workflow::WorkflowNodeResult.continue({"setup_value" => json_str("initialized")})
         end)
-        .step(Cogni::NodeKind.new("state_aware_tool"), id: "state_aware_tool")
+        .step(Ocawe::NodeKind.new("state_aware_tool"), id: "state_aware_tool")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("state-run-test")

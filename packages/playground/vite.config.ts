@@ -7,7 +7,7 @@ export default defineConfig({
     port: 4173,
     proxy: {
       "/api": {
-        target: process.env.COGNI_API_BASE || "http://localhost:4111",
+        target: process.env.OCAWE_API_BASE || "http://localhost:4111",
         changeOrigin: true,
         rewrite: path => path.replace(/^\/api/, "")
       }

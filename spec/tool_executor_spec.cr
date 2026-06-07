@@ -2,10 +2,10 @@ require "./spec_helper"
 require "file_utils"
 
 
-describe Cogni::Workflow::ExecExecutor do
+describe Ocawe::Workflow::ExecExecutor do
   it "rejects non-mcp refs without runtime" do
-    executor = Cogni::Workflow::ExecExecutor.new
-    ctx = Cogni::Workflow::NodeContext.new(
+    executor = Ocawe::Workflow::ExecExecutor.new
+    ctx = Ocawe::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_1",
       node_id: "create_sandbox",
@@ -19,8 +19,8 @@ describe Cogni::Workflow::ExecExecutor do
   end
 
   it "runs external scripts with runtime metadata" do
-    executor = Cogni::Workflow::ExecExecutor.new
-    ctx = Cogni::Workflow::NodeContext.new(
+    executor = Ocawe::Workflow::ExecExecutor.new
+    ctx = Ocawe::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_2",
       node_id: "external-tool",
@@ -39,14 +39,14 @@ describe Cogni::Workflow::ExecExecutor do
   end
 
   it "fails when external run emits invalid json" do
-    dir = "/tmp/cognicore-test-tools"
+    dir = "/tmp/ocawecore-test-tools"
     FileUtils.mkdir_p(dir)
     script = File.join(dir, "invalid.sh")
     File.write(script, "#!/usr/bin/env bash\nset -euo pipefail\necho not-json\n")
     File.chmod(script, 0o755)
 
-    executor = Cogni::Workflow::ExecExecutor.new
-    ctx = Cogni::Workflow::NodeContext.new(
+    executor = Ocawe::Workflow::ExecExecutor.new
+    ctx = Ocawe::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_3",
       node_id: "external-invalid",
@@ -61,8 +61,8 @@ describe Cogni::Workflow::ExecExecutor do
   end
 
   it "fails when runtime object is empty" do
-    executor = Cogni::Workflow::ExecExecutor.new
-    ctx = Cogni::Workflow::NodeContext.new(
+    executor = Ocawe::Workflow::ExecExecutor.new
+    ctx = Ocawe::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run_4",
       node_id: "external-empty-runtime",

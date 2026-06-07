@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module RegistryApi
     extend self
 
@@ -40,7 +40,7 @@ module Cogni
         metadata["attributes"] = JSON.parse(attributes.to_json) if attributes
         metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
-        executor = Cogni::Workflow::ExecExecutor.new
+        executor = Ocawe::Workflow::ExecExecutor.new
         return WorkflowNode.new(id, NodeKind::Exec, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           WorkflowNodeResult.continue(executor.exec(id, ctx, runtime: runtime, env: env, workflow_root: workflow_root))
         end
@@ -51,7 +51,7 @@ module Cogni
 
         return WorkflowNode.new(id, NodeKind::Agent, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
           user_prompt = build_agent_user_prompt(ctx)
-          Cogni::Workflow::Guardrails.validate_input!(id, user_prompt, guardrails_config)
+          Ocawe::Workflow::Guardrails.validate_input!(id, user_prompt, guardrails_config)
 
           resolved_model = resolve_model(workflow, ctx, model)
           system_prompt = prompt || "You are agent #{id}."
@@ -62,13 +62,13 @@ module Cogni
             "agent_id"    => JSON.parse(id.to_json),
           } of String => JSON::Any
 
-          response = CogniCore::AI::Client.new.generate_text(
+          response = OcaweCore::AI::Client.new.generate_text(
             model_spec: resolved_model,
             prompt: user_prompt,
             system: system_prompt,
             metadata: metadata,
           )
-          agent_payload = Cogni::Workflow::AgentResult.new(
+          agent_payload = Ocawe::Workflow::AgentResult.new(
             agent_type: "default-agent",
             content: response.text,
             provider: response.provider,
@@ -77,7 +77,7 @@ module Cogni
 
           agent_content = agent_payload["content"]?.try(&.as_s?) || ""
 
-          Cogni::Workflow::Guardrails.validate_output!(id, agent_content, guardrails_config)
+          Ocawe::Workflow::Guardrails.validate_output!(id, agent_content, guardrails_config)
 
           outputs = ctx.state["agent_outputs"]?.try(&.as_h?) || {} of String => JSON::Any
           outputs = outputs.dup
@@ -123,7 +123,7 @@ module Cogni
           "dsl_kind" => JSON.parse("rag".to_json),
           "config"   => JSON.parse(resolved_config.to_json),
         } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(Cogni::Workflow::RagRuntime.execute(ctx, resolved_config))
+          WorkflowNodeResult.continue(Ocawe::Workflow::RagRuntime.execute(ctx, resolved_config))
         end
       when "suspend"
         suspend_reason = reason || "human input required"
@@ -173,7 +173,7 @@ module Cogni
         metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
         return WorkflowNode.new(id, NodeKind::Custom, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          raw = Cogni::Workflow.node_kind_registry.call(kind_name, ctx, kind_attributes)
+          raw = Ocawe::Workflow.node_kind_registry.call(kind_name, ctx, kind_attributes)
           case raw
           when WorkflowNodeResult
             raw

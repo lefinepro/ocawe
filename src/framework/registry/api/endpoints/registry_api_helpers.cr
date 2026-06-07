@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module RegistryApi
     extend self
 
@@ -102,14 +102,14 @@ module Cogni
       } of String => JSON::Any
     end
 
-    private def load_registry_settings(config_rcl : String?) : Cogni::Config::Settings
-      default_settings = Cogni::Config::Settings.default
-      explicit = first_non_empty(config_rcl, ENV["COGNI_CONFIG_RCL"]?)
+    private def load_registry_settings(config_rcl : String?) : Ocawe::Config::Settings
+      default_settings = Ocawe::Config::Settings.default
+      explicit = first_non_empty(config_rcl, ENV["OCAWE_CONFIG_RCL"]?)
       return default_settings if explicit.empty?
-      CogniCore::Utils::ConfigParser.load_settings(default_settings, rcl_path: explicit)
+      OcaweCore::Utils::ConfigParser.load_settings(default_settings, rcl_path: explicit)
     end
 
-    private def build_registry_aptok_follow_record(settings : Cogni::Config::Settings, name : String, actor_document : AnyHash?) : AnyHash
+    private def build_registry_aptok_follow_record(settings : Ocawe::Config::Settings, name : String, actor_document : AnyHash?) : AnyHash
       remote_actor = actor_document.try(&.[]?("id")).try(&.as_s?) || registry_remote_actor_from_target(name)
       remote_inbox = actor_document.try(&.[]?("inbox")).try(&.as_s?) || ""
       remote_outbox = actor_document.try(&.[]?("outbox")).try(&.as_s?) || ""

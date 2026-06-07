@@ -1,6 +1,6 @@
 # config-example (Crystal config)
 
-Framework configuration is defined directly in Crystal (`Cogni::Config::Settings`), not TOML runtime files.
+Framework configuration is defined directly in Crystal (`Ocawe::Config::Settings`), not TOML runtime files.
 
 Use this file as a template:
 

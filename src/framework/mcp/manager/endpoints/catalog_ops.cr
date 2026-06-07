@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module MCP
     class Manager
       def list_tools : Array(AnyHash)

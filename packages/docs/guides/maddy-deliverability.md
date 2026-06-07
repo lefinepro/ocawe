@@ -38,7 +38,7 @@ cp scripts/maddy-deliverability/dns-records.example.env /tmp/maddy-deliverabilit
 # Отредактируйте /tmp/maddy-deliverability.env
 ```
 
-3. Скопируйте env на сервер (или создайте `/etc/cogni/maddy-deliverability.env` вручную).
+3. Скопируйте env на сервер (или создайте `/etc/ocawe/maddy-deliverability.env` вручную).
 
 4. Запустите playbook:
 
@@ -54,8 +54,8 @@ docker run --rm \
 
 Playbook:
 - делает backup `/etc/maddy/maddy.conf`,
-- рендерит snippet `check.dnsbl` + `modify.dkim` в `/etc/cogni/maddy-deliverability.rendered.conf`,
-- генерирует DNS-план в `/etc/cogni/maddy-dns-records.generated.txt`,
+- рендерит snippet `check.dnsbl` + `modify.dkim` в `/etc/ocawe/maddy-deliverability.rendered.conf`,
+- генерирует DNS-план в `/etc/ocawe/maddy-dns-records.generated.txt`,
 - поддерживает общий SPF (`SPF_IPV4`) и точечный per-domain SPF (`DOMAIN_SPF_IPV4_MAP`),
 - поддерживает PTR для каждого IP через `PTR_HOSTS`,
 - проверяет опубликованные SPF/DKIM/DMARC/PTR через `dig`.
@@ -64,7 +64,7 @@ Playbook:
 
 По умолчанию auto-append выключен (`APPLY_MADDY_SNIPPET="no"`).
 
-- Рекомендуемо: вручную объединить `/etc/cogni/maddy-deliverability.rendered.conf` с вашим `maddy.conf`.
+- Рекомендуемо: вручную объединить `/etc/ocawe/maddy-deliverability.rendered.conf` с вашим `maddy.conf`.
 - Опционально: поставить `APPLY_MADDY_SNIPPET="yes"` в env для автоматического append.
 
 После merge убедитесь, что в endpoint `smtp tcp://...:25` есть:
@@ -75,7 +75,7 @@ dmarc yes
 check {
     spf
     dkim
-    dnsbl &cogni_dnsbl
+    dnsbl &cogni_dnsblocawe_dnsbl
 }
 
 limits {
@@ -89,7 +89,7 @@ limits {
 
 ```conf
 modify {
-    dkim &cogni_dkim
+    dkim &cogni_dkimocawe_dkim
 }
 ```
 

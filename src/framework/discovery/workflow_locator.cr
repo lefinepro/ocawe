@@ -1,4 +1,5 @@
 require "set"
+require "./cawfile_loader"
 
 module ACD
   module Discovery
@@ -9,19 +10,20 @@ module ACD
       getter agents_dir : String
       getter skills_dir : String
       getter source_root_type : String
+      getter cawfile : CawfileBundle?
 
-      def initialize(@id : String, @root_path : String, @workflow_file : String, @agents_dir : String, @skills_dir : String, @source_root_type : String)
+      def initialize(@id : String, @root_path : String, @workflow_file : String, @agents_dir : String, @skills_dir : String, @source_root_type : String, @cawfile : CawfileBundle? = nil)
       end
     end
 
     class WorkflowLocator
-    def initialize(@preferred_root : String = "./src/workflows")
-    end
+      def initialize(@preferred_root : String = "./src/workflows")
+      end
 
-    def list_workflows : Array(WorkflowBundle)
-      ids = Set(String).new
+      def list_workflows : Array(WorkflowBundle)
+        ids = Set(String).new
 
-      each_bundle_dir(@preferred_root) { |name| ids << name }
+        each_bundle_dir(@preferred_root) { |name| ids << name }
 
         ids.to_a.sort.compact_map { |id| resolve?(id) }
       end
@@ -40,6 +42,28 @@ module ACD
       end
 
       private def bundle_from_dir(id : String, dir : String, source_type : String)
+        # Primary: Cawfile / .caw
+        cawfile = CawfileLoader.load(dir, id)
+
+        if cawfile
+          workflow_file = cawfile.workflow_file ? File.join(dir, cawfile.workflow_file.not_nil!) : nil
+          # If explicit workflow_file provided, it must exist, else Cawfile steps are source of truth
+          if workflow_file && !File.file?(workflow_file)
+            raise "#{dir}: Cawfile references missing workflow_file #{workflow_file}"
+          end
+
+          return WorkflowBundle.new(
+            id: id,
+            root_path: dir,
+            workflow_file: workflow_file || File.join(dir, ".caw"),
+            agents_dir: File.join(dir, "agents"),
+            skills_dir: File.join(dir, "skills"),
+            source_root_type: source_type,
+            cawfile: cawfile,
+          )
+        end
+
+        # Fallback: .acd.cr
         workflow_file = File.join(dir, "#{id}.acd.cr")
         raise "#{dir}: missing executable workflow file #{workflow_file}" unless File.file?(workflow_file)
 

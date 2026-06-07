@@ -1,8 +1,8 @@
 require "./spec_helper"
 
-describe Cogni::Dataset::Service do
+describe Ocawe::Dataset::Service do
   it "creates and lists datasets" do
-    service = Cogni::Dataset::Service.new
+    service = Ocawe::Dataset::Service.new
 
     service.create_dataset("users", description: "User profiles")
     datasets = service.list_datasets
@@ -13,7 +13,7 @@ describe Cogni::Dataset::Service do
   end
 
   it "registers DSL datasets without duplicating seed items on reload" do
-    service = Cogni::Dataset::Service.new
+    service = Ocawe::Dataset::Service.new
 
     seed = {"id" => json_any("seed-1"), "name" => json_any("Ada")} of String => JSON::Any
 
@@ -27,7 +27,7 @@ describe Cogni::Dataset::Service do
   end
 
   it "validates items against dataset schema" do
-    service = Cogni::Dataset::Service.new
+    service = Ocawe::Dataset::Service.new
 
     service.create_dataset(
       "feedback",
@@ -46,7 +46,7 @@ describe Cogni::Dataset::Service do
   end
 
   it "updates and deletes items" do
-    service = Cogni::Dataset::Service.new
+    service = Ocawe::Dataset::Service.new
     service.create_dataset("events")
 
     created = service.add_items("events", [

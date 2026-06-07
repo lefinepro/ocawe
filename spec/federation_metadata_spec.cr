@@ -2,8 +2,8 @@ require "./spec_helper"
 
 describe "ACD::Kemal::App federation metadata" do
   it "parses supported FEPs from FEDERATION.md" do
-    original_metadata_path = ENV["COGNI_FEDERATION_MD"]?
-    ENV["COGNI_FEDERATION_MD"] = File.expand_path("FEDERATION.md", Dir.current)
+    original_metadata_path = ENV["OCAWE_FEDERATION_MD"]?
+    ENV["OCAWE_FEDERATION_MD"] = File.expand_path("FEDERATION.md", Dir.current)
 
     app = ACD::Kemal::App.new(0)
     metadata = app.test_federation_metadata_document
@@ -21,9 +21,9 @@ describe "ACD::Kemal::App federation metadata" do
     fep_ids.includes?("FEP-EF61").should be_true
   ensure
     if original_metadata_path.nil?
-      ENV.delete("COGNI_FEDERATION_MD")
+      ENV.delete("OCAWE_FEDERATION_MD")
     else
-      ENV["COGNI_FEDERATION_MD"] = original_metadata_path
+      ENV["OCAWE_FEDERATION_MD"] = original_metadata_path
     end
   end
 end

@@ -1,6 +1,6 @@
 require "json"
 
-module Cogni
+module Ocawe
   module Workflow
     class RagRuntime
       record StoredDocument, id : String, text : String, metadata : AnyHash

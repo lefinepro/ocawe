@@ -10,7 +10,7 @@ module ACD
         return unless match
         condition = match[1].strip
 
-        loop_nodes = [] of Cogni::Workflow::WorkflowNode
+        loop_nodes = [] of Ocawe::Workflow::WorkflowNode
 
         i = start_line + 1
         while i <= end_line
@@ -107,22 +107,22 @@ module ACD
         return if loop_nodes.empty?
 
         loop_body = wrap_nodes_in_control(loop_nodes, "while-body")
-        control_node = Cogni::Workflow::WorkflowNode.new("while-#{start_line}", Cogni::Workflow::NodeKind::Control) do |node_ctx|
+        control_node = Ocawe::Workflow::WorkflowNode.new("while-#{start_line}", Ocawe::Workflow::NodeKind::Control) do |node_ctx|
           iterations = 0
           merged = {} of String => JSON::Any
-          result = Cogni::Workflow::WorkflowNodeResult.continue
+          result = Ocawe::Workflow::WorkflowNodeResult.continue
 
           while evaluate_dsl_condition(condition, with_state(node_ctx, merged)) && iterations < 100
             iterations += 1
             result = loop_body.execute(with_state(node_ctx, merged))
-            break if result.action != Cogni::Workflow::NodeAction::Continue.to_s.downcase
+            break if result.action != Ocawe::Workflow::NodeAction::Continue.to_s.downcase
             if data = result.data
               data.each { |k, v| merged[k] = v }
             end
           end
 
-          if result.action == Cogni::Workflow::NodeAction::Continue.to_s.downcase
-            Cogni::Workflow::WorkflowNodeResult.continue(merged)
+          if result.action == Ocawe::Workflow::NodeAction::Continue.to_s.downcase
+            Ocawe::Workflow::WorkflowNodeResult.continue(merged)
           else
             result
           end
@@ -140,7 +140,7 @@ module ACD
         return unless match
         condition = match[1].strip
 
-        loop_nodes = [] of Cogni::Workflow::WorkflowNode
+        loop_nodes = [] of Ocawe::Workflow::WorkflowNode
 
         i = start_line + 1
         while i <= end_line
@@ -237,22 +237,22 @@ module ACD
         return if loop_nodes.empty?
 
         loop_body = wrap_nodes_in_control(loop_nodes, "until-body")
-        control_node = Cogni::Workflow::WorkflowNode.new("until-#{start_line}", Cogni::Workflow::NodeKind::Control) do |node_ctx|
+        control_node = Ocawe::Workflow::WorkflowNode.new("until-#{start_line}", Ocawe::Workflow::NodeKind::Control) do |node_ctx|
           iterations = 0
           merged = {} of String => JSON::Any
-          result = Cogni::Workflow::WorkflowNodeResult.continue
+          result = Ocawe::Workflow::WorkflowNodeResult.continue
 
           while !evaluate_dsl_condition(condition, with_state(node_ctx, merged)) && iterations < 100
             iterations += 1
             result = loop_body.execute(with_state(node_ctx, merged))
-            break if result.action != Cogni::Workflow::NodeAction::Continue.to_s.downcase
+            break if result.action != Ocawe::Workflow::NodeAction::Continue.to_s.downcase
             if data = result.data
               data.each { |k, v| merged[k] = v }
             end
           end
 
-          if result.action == Cogni::Workflow::NodeAction::Continue.to_s.downcase
-            Cogni::Workflow::WorkflowNodeResult.continue(merged)
+          if result.action == Ocawe::Workflow::NodeAction::Continue.to_s.downcase
+            Ocawe::Workflow::WorkflowNodeResult.continue(merged)
           else
             result
           end

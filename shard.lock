@@ -1,12 +1,20 @@
 version: 2.0
 shards:
+  ameba:
+    git: https://github.com/crystal-ameba/ameba.git
+    version: 1.7.0-dev+git.commit.db6d92839f8b8204b90360b479d50939e7d7502a
+
+  aptok:
+    git: https://github.com/lion-lef/aptok.git
+    version: 0.3.0+git.commit.05152dad0ae38b06eb2aef5e5dd5eee4cdad7995
+
   backtracer:
     git: https://github.com/sija/backtracer.cr.git
     version: 1.2.4
 
   db:
     git: https://github.com/crystal-lang/crystal-db.git
-    version: 0.14.0
+    version: 0.13.1
 
   exception_page:
     git: https://github.com/crystal-loot/exception_page.git
@@ -15,6 +23,10 @@ shards:
   kemal:
     git: https://github.com/kemalcr/kemal.git
     version: 1.11.0
+
+  pg:
+    git: https://github.com/will/crystal-pg.git
+    version: 0.29.0
 
   radix:
     git: https://github.com/luislavena/radix.git
@@ -26,5 +38,5 @@ shards:
 
   sqlite3:
     git: https://github.com/crystal-lang/crystal-sqlite3.git
-    version: 0.23.0
+    version: 0.21.0
 

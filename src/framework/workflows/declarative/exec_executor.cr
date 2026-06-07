@@ -1,6 +1,6 @@
 require "../../mcp/manager"
 
-module Cogni
+module Ocawe
   module Workflow
     class ExecExecutor
       def exec(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil) : AnyHash
@@ -13,9 +13,9 @@ module Cogni
       end
 
       private def exec_mcp_tool(ref : String, ctx : NodeContext) : AnyHash
-        server_id, tool_name = Cogni::MCP.parse_mcp_ref(ref)
+        server_id, tool_name = Ocawe::MCP.parse_mcp_ref(ref)
         arguments = ctx.input_data["input"]?.try(&.as_h?) || ctx.input_data
-        Cogni::MCP.manager.call_tool(server_id, tool_name, arguments)
+        Ocawe::MCP.manager.call_tool(server_id, tool_name, arguments)
       end
 
       private def exec_external(ref : String, ctx : NodeContext, runtime : AnyHash, env : AnyHash?, workflow_root : String?) : AnyHash
@@ -105,7 +105,7 @@ module Cogni
 
       private def write_inline_script(script : String) : String
         ext = inline_script_extension(script)
-        path = File.join("/tmp", "cogni-inline-#{Random::Secure.hex(8)}#{ext}")
+        path = File.join("/tmp", "ocawe-inline-#{Random::Secure.hex(8)}#{ext}")
         File.write(path, script)
         path
       end

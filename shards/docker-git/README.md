@@ -1,15 +1,15 @@
-# cogni-docker-git (foundation example)
+# ocawe-docker-git (foundation example)
 
 `shards/docker-git` is a standalone example project that turns docker-git style flows
-into Cogni primitives and uses `@[Workspace(...)]` as the primary runtime contract.
+into Ocawe primitives and uses `@[Workspace(...)]` as the primary runtime contract.
 
 ## What it demonstrates
 
 - Workflow-level and node-level `@[Workspace(...)]`
 - Workspace extension API:
-  - `Cogni::RegistryApi.workspace_schema`
-  - `Cogni::RegistryApi.workspace_resolver`
-  - `Cogni::RegistryApi.workspace_hook`
+  - `Ocawe::RegistryApi.workspace_schema`
+  - `Ocawe::RegistryApi.workspace_resolver`
+  - `Ocawe::RegistryApi.workspace_hook`
 - Lifecycle flow:
   - `create -> clone -> open -> delete`
 

@@ -1,4 +1,4 @@
-require "../../cognicore/ai/client"
+require "../../ocawecore/ai/client"
 require "./definition/endpoints/core_state"
 require "./definition/endpoints/core_nodes"
 require "./definition/endpoints/control_flow"

@@ -1,6 +1,6 @@
 require "json"
 
-module Cogni
+module Ocawe
   module Workflows
     module DSL
     class ValidationError < Exception

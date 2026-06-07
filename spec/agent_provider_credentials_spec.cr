@@ -1,10 +1,10 @@
 require "./spec_helper"
 
-describe "Cogni::AgentFunctionHandlers provider credentials forwarding" do
+describe "Ocawe::AgentFunctionHandlers provider credentials forwarding" do
   it "builds provider env for codex, claude_code, opencode and qwen" do
     home = ENV["HOME"]? || "/tmp"
 
-    codex_env = Cogni::AgentFunctionHandlers.test_provider_env(
+    codex_env = Ocawe::AgentFunctionHandlers.test_provider_env(
       "codex",
       {
         "path_to_credentials_codex" => json_str("~/spec/codex/auth.json"),
@@ -16,7 +16,7 @@ describe "Cogni::AgentFunctionHandlers provider credentials forwarding" do
     codex_env["CODEX_PATH_TO_CREDENTIALS"].should eq("#{home}/spec/codex/auth.json")
     codex_env["CODEX_PATH_TO_CONFIG"].should eq("#{home}/spec/codex/config.toml")
 
-    claude_env = Cogni::AgentFunctionHandlers.test_provider_env(
+    claude_env = Ocawe::AgentFunctionHandlers.test_provider_env(
       "claude_code",
       {
         "path_to_credentials_claude_code" => json_str("~/spec/claude/credentials.json"),
@@ -28,7 +28,7 @@ describe "Cogni::AgentFunctionHandlers provider credentials forwarding" do
     claude_env["CLAUDE_CODE_PATH_TO_CREDENTIALS"].should eq("#{home}/spec/claude/credentials.json")
     claude_env["CLAUDE_CODE_PATH_TO_CONFIG"].should eq("#{home}/spec/claude/settings.json")
 
-    opencode_env = Cogni::AgentFunctionHandlers.test_provider_env(
+    opencode_env = Ocawe::AgentFunctionHandlers.test_provider_env(
       "opencode",
       {
         "path_to_credentials_opencode" => json_str("~/spec/opencode/credentials.json"),
@@ -40,7 +40,7 @@ describe "Cogni::AgentFunctionHandlers provider credentials forwarding" do
     opencode_env["OPENCODE_PATH_TO_CREDENTIALS"].should eq("#{home}/spec/opencode/credentials.json")
     opencode_env["OPENCODE_PATH_TO_CONFIG"].should eq("#{home}/spec/opencode/config.json")
 
-    qwen_env = Cogni::AgentFunctionHandlers.test_provider_env(
+    qwen_env = Ocawe::AgentFunctionHandlers.test_provider_env(
       "qwen",
       {
         "path_to_credentials_qwen" => json_str("~/spec/qwen/credentials.json"),

@@ -31,7 +31,7 @@
 
 <div class="card">
   <h2>Workflows</h2>
-  <p class="muted">Run workflows from CogniCore.</p>
+  <p class="muted">Run workflows from OcaweCore.</p>
   <table class="table">
     <tbody>
       {#each workflows as id}

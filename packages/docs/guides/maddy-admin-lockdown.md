@@ -17,7 +17,7 @@
 
 Сначала добавьте ваш текущий IP/VPN CIDR в whitelist, только потом применяйте правила.
 
-По умолчанию whitelist хранится в `/etc/cogni/admin-whitelist.txt` и копируется из шаблона `trusted-ips.example.txt` при первом запуске.
+По умолчанию whitelist хранится в `/etc/ocawe/admin-whitelist.txt` и копируется из шаблона `trusted-ips.example.txt` при первом запуске.
 
 Playbook валидирует whitelist как `IPv4`/`IPv4 CIDR` и перед применением проверяет, что текущий `SSH`-клиент входит в whitelist (защита от самоблокировки).
 
@@ -54,7 +54,7 @@ docker run --rm \
 ## Что делает playbook
 
 - Делает backup текущих правил в `/root/iptables.backup.<timestamp>`.
-- Создает/обновляет цепочки `COGNI_ISPMANAGER` и `COGNI_SSH`.
+- Создает/обновляет цепочки `OCAWE_ISPMANAGER` и `OCAWE_SSH`.
 - Разрешает доступ к `1500/tcp` и `22/tcp` только для IP/CIDR из whitelist.
 - Если запуск идет по SSH: проверяет, что текущий IP сессии есть в whitelist (если нет, прерывает применение).
 - Логирует и блокирует неавторизованные попытки (`LOG` + `DROP`).
@@ -65,7 +65,7 @@ docker run --rm \
 
 ## Быстрое добавление IP в whitelist
 
-1. Добавьте IP/CIDR строкой в `/etc/cogni/admin-whitelist.txt`.
+1. Добавьте IP/CIDR строкой в `/etc/ocawe/admin-whitelist.txt`.
 2. Повторно выполните playbook (или только шаг `apply whitelist for ISPmanager and SSH`).
 
 Если нужно принудительно применить правила без проверки текущего SSH IP (риск lockout), используйте `ALLOW_LOCKOUT_RISK=yes`.
@@ -75,8 +75,8 @@ docker run --rm \
 - `AC-1`: с доверенного IP открывается ISPmanager (`:1500`) и SSH (`:22`).
 - `AC-2`: с недоверенного IP соединение отклоняется.
 - `AC-3`: в kernel/journald появляются записи с префиксами:
-  - `COGNI ISP deny`
-  - `COGNI SSH deny`
+  - `OCAWE ISP deny`
+  - `OCAWE SSH deny`
 - `AC-4`: почта и веб не затронуты, так как правило применяется только к `1500` и `22`.
 - `AC-5`: SSH доступен только доверенным IP.
 - `AC-6`: права на конфиг/БД Maddy ограничены.
@@ -84,7 +84,7 @@ docker run --rm \
 Проверка deny-логов:
 
 ```bash
-journalctl -k --since "15 min ago" | grep -E 'COGNI (ISP|SSH) deny'
+journalctl -k --since "15 min ago" | grep -E 'OCAWE (ISP|SSH) deny'
 ```
 
 ## Откат

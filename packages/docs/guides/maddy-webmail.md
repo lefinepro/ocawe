@@ -45,7 +45,7 @@ cp scripts/maddy-webmail/webmail.example.env /tmp/maddy-webmail.env
 3. Скопируйте env на сервер (или создайте файл вручную):
 
 ```bash
-scp /tmp/maddy-webmail.env root@<server>:/etc/cogni/maddy-webmail.env
+scp /tmp/maddy-webmail.env root@<server>:/etc/ocawe/maddy-webmail.env
 ```
 
 4. Запустите playbook:

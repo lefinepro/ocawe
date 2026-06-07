@@ -2,7 +2,7 @@ require "./spec_helper"
 
 describe "agent prompt contract injection" do
   it "applies ForgeFed merge contract when api/activity are present in state" do
-    result = Cogni::AgentFunctionHandlers.test_apply_agent_prompt_contracts_with_state(
+    result = Ocawe::AgentFunctionHandlers.test_apply_agent_prompt_contracts_with_state(
       "Implement ticket changes",
       {"input" => json_any({"content" => "task"})} of String => JSON::Any,
       {
@@ -15,7 +15,7 @@ describe "agent prompt contract injection" do
   end
 
   it "prepends ForgeFed merge instructions for federation merge runs" do
-    result = Cogni::AgentFunctionHandlers.test_apply_agent_prompt_contracts(
+    result = Ocawe::AgentFunctionHandlers.test_apply_agent_prompt_contracts(
       "Implement ticket changes",
       {
         "api"      => json_str("federation"),
@@ -29,7 +29,7 @@ describe "agent prompt contract injection" do
   end
 
   it "does not modify prompt outside federation merge runs" do
-    result = Cogni::AgentFunctionHandlers.test_apply_forgefed_merge_prompt_contract(
+    result = Ocawe::AgentFunctionHandlers.test_apply_forgefed_merge_prompt_contract(
       "Plain task",
       {
         "api"      => json_str("classic"),

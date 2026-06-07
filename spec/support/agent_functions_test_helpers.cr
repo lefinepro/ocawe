@@ -1,9 +1,9 @@
-module Cogni
+module Ocawe
   module AgentFunctionHandlers
     extend self
 
-    def test_provider_env(provider : String, input_data : Cogni::Workflow::AnyHash) : Hash(String, String)
-      ctx = Cogni::Workflow::NodeContext.new(
+    def test_provider_env(provider : String, input_data : Ocawe::Workflow::AnyHash) : Hash(String, String)
+      ctx = Ocawe::Workflow::NodeContext.new(
         workflow_id: "spec-workflow",
         run_id: "spec-run",
         node_id: "spec-node",
@@ -13,8 +13,8 @@ module Cogni
       provider_env(ctx, provider)
     end
 
-    def test_apply_forgefed_merge_prompt_contract(prompt : String, input_data : Cogni::Workflow::AnyHash) : String
-      ctx = Cogni::Workflow::NodeContext.new(
+    def test_apply_forgefed_merge_prompt_contract(prompt : String, input_data : Ocawe::Workflow::AnyHash) : String
+      ctx = Ocawe::Workflow::NodeContext.new(
         workflow_id: "spec-workflow",
         run_id: "spec-run",
         node_id: "spec-node",
@@ -24,8 +24,8 @@ module Cogni
       apply_forgefed_merge_prompt_contract(ctx, prompt)
     end
 
-    def test_apply_agent_prompt_contracts(prompt : String, input_data : Cogni::Workflow::AnyHash) : String
-      ctx = Cogni::Workflow::NodeContext.new(
+    def test_apply_agent_prompt_contracts(prompt : String, input_data : Ocawe::Workflow::AnyHash) : String
+      ctx = Ocawe::Workflow::NodeContext.new(
         workflow_id: "spec-workflow",
         run_id: "spec-run",
         node_id: "spec-node",
@@ -37,10 +37,10 @@ module Cogni
 
     def test_apply_agent_prompt_contracts_with_state(
       prompt : String,
-      input_data : Cogni::Workflow::AnyHash,
-      state : Cogni::Workflow::AnyHash
+      input_data : Ocawe::Workflow::AnyHash,
+      state : Ocawe::Workflow::AnyHash
     ) : String
-      ctx = Cogni::Workflow::NodeContext.new(
+      ctx = Ocawe::Workflow::NodeContext.new(
         workflow_id: "spec-workflow",
         run_id: "spec-run",
         node_id: "spec-node",

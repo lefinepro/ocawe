@@ -40,7 +40,7 @@ module E2ETestHelpers
 
   # Create a temporary directory for test artifacts
   def with_temp_dir(&block : String ->)
-    dir = "/tmp/cogni_e2e_#{Random.rand(1_000_000)}"
+    dir = "/tmp/ocawe_e2e_#{Random.rand(1_000_000)}"
     Dir.mkdir_p(dir)
     begin
       block.call(dir)

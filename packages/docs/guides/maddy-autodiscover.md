@@ -41,7 +41,7 @@ cp scripts/maddy-autodiscover/autodiscover.example.env /tmp/maddy-autodiscover.e
 # Отредактируйте /tmp/maddy-autodiscover.env
 ```
 
-3. Скопируйте env на сервер (или создайте `/etc/cogni/maddy-autodiscover.env` вручную).
+3. Скопируйте env на сервер (или создайте `/etc/ocawe/maddy-autodiscover.env` вручную).
 
 4. Запустите playbook:
 
@@ -57,9 +57,9 @@ docker run --rm \
 
 Playbook:
 
-- рендерит endpoint-файлы в `/var/www/cogni-autodiscover/<domain>/...`,
-- рендерит Nginx vhost в `/etc/cogni/maddy-autodiscover.nginx.conf`,
-- рендерит DNS-подсказки в `/etc/cogni/maddy-autodiscover-dns.generated.txt`,
+- рендерит endpoint-файлы в `/var/www/ocawe-autodiscover/<domain>/...`,
+- рендерит Nginx vhost в `/etc/ocawe/maddy-autodiscover.nginx.conf`,
+- рендерит DNS-подсказки в `/etc/ocawe/maddy-autodiscover-dns.generated.txt`,
 - проверяет локально ответы endpoint’ов через `curl --resolve`.
 
 По умолчанию авто-применение Nginx выключено (`APPLY_NGINX_CONFIG="no"`).
@@ -70,7 +70,7 @@ Playbook:
 
 - `TLS_CERT_PATH`
 - `TLS_KEY_PATH`
-- `NGINX_CONF_DEST` (по умолчанию `/etc/nginx/conf.d/cogni-autodiscover.conf`)
+- `NGINX_CONF_DEST` (по умолчанию `/etc/nginx/conf.d/ocawe-autodiscover.conf`)
 
 2. Поставьте:
 
@@ -85,7 +85,7 @@ APPLY_NGINX_CONFIG="yes"
 ## Root domain `.well-known` (опционально)
 
 Если нужен именно путь `https://domain.tld/.well-known/...`,
-playbook генерирует snippet’ы в `/etc/cogni/maddy-root-domain-snippets/*.conf`.
+playbook генерирует snippet’ы в `/etc/ocawe/maddy-root-domain-snippets/*.conf`.
 
 Их нужно вручную включить в существующие vhost’ы `domain.tld`, чтобы не ломать текущий сайт.
 

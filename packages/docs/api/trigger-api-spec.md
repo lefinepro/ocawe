@@ -1,8 +1,8 @@
-# Cogni Trigger API Specification
+# Ocawe Trigger API Specification
 
 ## Scope
 
-This specification defines invocation contracts for the Trigger API and `Cogni::Trigger` client.
+This specification defines invocation contracts for the Trigger API and `Ocawe::Trigger` client.
 
 ## Endpoints
 
@@ -72,7 +72,7 @@ All endpoints return JSON object payloads.
 {"error": {"type": "<error_type>", "message": "<message>"}}
 ```
 
-## SDK Mapping (`Cogni::Trigger`)
+## SDK Mapping (`Ocawe::Trigger`)
 
 - `trigger.workflow(id).run(payload)` -> workflow trigger endpoint
 - `trigger.agent(id).run(payload)` -> agent trigger endpoint

@@ -1,7 +1,7 @@
-module Cogni
+module Ocawe
   module MCP
     class Manager
-      private def set_server(server : Cogni::Config::MCPServerSettings, dynamic : Bool) : Nil
+      private def set_server(server : Ocawe::Config::MCPServerSettings, dynamic : Bool) : Nil
         @lock.synchronize do
           @servers[server.id] = server
           if dynamic
@@ -13,7 +13,7 @@ module Cogni
         end
       end
 
-      private def find_server(server_id : String) : Cogni::Config::MCPServerSettings
+      private def find_server(server_id : String) : Ocawe::Config::MCPServerSettings
         @lock.synchronize do
           @servers[server_id]? || raise "unknown mcp server: #{server_id}"
         end
@@ -59,7 +59,7 @@ module Cogni
         out
       end
 
-      private def rpc_call(server : Cogni::Config::MCPServerSettings, method : String, params : AnyHash? = nil) : JSON::Any
+      private def rpc_call(server : Ocawe::Config::MCPServerSettings, method : String, params : AnyHash? = nil) : JSON::Any
         payload_h = {
           "jsonrpc" => json_any("2.0"),
           "id" => json_any(Random::Secure.hex(8)),
@@ -75,7 +75,7 @@ module Cogni
         end
       end
 
-      private def call_http(server : Cogni::Config::MCPServerSettings, payload : String) : JSON::Any
+      private def call_http(server : Ocawe::Config::MCPServerSettings, payload : String) : JSON::Any
         url = server.url || raise "mcp http server url missing for #{server.id}"
         headers = HTTP::Headers{"Content-Type" => "application/json"}
         if token = server.bearer_token
@@ -86,7 +86,7 @@ module Cogni
         parse_rpc_response(response.body)
       end
 
-      private def call_stdio(server : Cogni::Config::MCPServerSettings, payload : String) : JSON::Any
+      private def call_stdio(server : Ocawe::Config::MCPServerSettings, payload : String) : JSON::Any
         command = server.command || raise "mcp stdio command missing for #{server.id}"
         stdout = IO::Memory.new
         stderr = IO::Memory.new

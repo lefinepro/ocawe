@@ -1,6 +1,6 @@
 require "json"
 
-module Cogni
+module Ocawe
   module Workflow
     alias AnyHash = Hash(String, JSON::Any)
 

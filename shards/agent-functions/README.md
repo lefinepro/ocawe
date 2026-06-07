@@ -1,4 +1,4 @@
-# cogni-agent-functions
+# ocawe-agent-functions
 
 Local shard that contains built-in `agent_*` function handlers:
 
@@ -8,8 +8,8 @@ Local shard that contains built-in `agent_*` function handlers:
 - `agent_claude_code`
 - `agent_qwen`
 
-The main `cogni` runtime consumes these handlers via
-`Cogni::Config::DefaultFunctionHandlers`.
+The main `ocawe` runtime consumes these handlers via
+`Ocawe::Config::DefaultFunctionHandlers`.
 
 Notes:
 - CLI binaries are auto-installed on-demand for `agent_codex`, `agent_opencode`, `agent_claude_code`, `agent_qwen`.

@@ -43,7 +43,7 @@ module ACD
           "created_at" => Aptok.now,
           "updated_at" => Aptok.now,
         }.to_json).as_h
-        @federation_kv.set("cogni:federation:follow:#{remote_actor}", record.to_json)
+        @federation_kv.set("ocawe:federation:follow:#{remote_actor}", record.to_json)
         record
       end
 
@@ -91,7 +91,7 @@ module ACD
       end
 
       private def run_federation_poll_cycle : Nil
-        @federation_kv.list("cogni:federation:follow:").each do |entry|
+        @federation_kv.list("ocawe:federation:follow:").each do |entry|
           follow = JSON.parse(entry.value).as_h
           remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
           remote_outbox = follow["remote_outbox"]?.try(&.as_s?).to_s
@@ -104,7 +104,7 @@ module ACD
             activities.each do |activity|
               activity_id = activity["id"]?.try(&.as_s?).to_s
               next if activity_id.empty?
-              seen_key = "cogni:federation:seen:#{remote_actor}:#{activity_id}"
+              seen_key = "ocawe:federation:seen:#{remote_actor}:#{activity_id}"
               next if @federation_kv.get(seen_key)
 
               @federation_kv.set(seen_key, Aptok.now) if process_polled_activity(follow, activity)
@@ -118,7 +118,7 @@ module ACD
       end
 
       private def update_aptok_follow_state(remote_actor : String, status : String? = nil, cursor : String? = nil, last_polled_at : String? = nil, error : String? = nil) : Nil
-        key = "cogni:federation:follow:#{remote_actor}"
+        key = "ocawe:federation:follow:#{remote_actor}"
         record = @federation_kv.get(key).try { |raw| JSON.parse(raw).as_h } || Aptok::JsonMap.new
         record["status"] = Aptok.json(status) if status
         record["cursor"] = Aptok.json(cursor) if cursor

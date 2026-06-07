@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     class WorkflowDefinition
       private def append_node(node : WorkflowNode) : self
@@ -28,7 +28,7 @@ module Cogni
         end
 
         return nil if merged.empty?
-        Cogni::Workflow.workspace_registry.resolve(merged)
+        Ocawe::Workflow.workspace_registry.resolve(merged)
       end
 
       private def normalize_hash(hash : AnyHash) : AnyHash

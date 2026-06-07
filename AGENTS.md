@@ -1,12 +1,12 @@
-# Cogni Framework Development Agent Guide
+# Ocawe Framework Development Agent Guide
 
 ## Goal
-Develop and evolve Cogni framework internals safely and consistently.
+Develop and evolve Ocawe framework internals safely and consistently.
 
 ## Scope
 - Runtime engine and declarative workflow API
 - NodeKind execution model
-- Registry surface (`Cogni::RegistryApi.node_kind`, `Cogni::RegistryApi.resource`)
+- Registry surface (`Ocawe::RegistryApi.node_kind`, `Ocawe::RegistryApi.resource`)
 - HTTP runtime endpoints and compatibility behavior
 - Type-safe schema/DSL integration
 
@@ -36,6 +36,6 @@ Develop and evolve Cogni framework internals safely and consistently.
   - `agent_cliproxy`
   - `agent_codex`
   - `agent_opencode`
-- For NodeKind steps use `Workflow#step(Cogni::NodeKind.new(...), id: ...)`.
-- Register node kinds only via `Cogni::RegistryApi.node_kind`.
-- Register resource handlers only via `Cogni::RegistryApi.resource`.
+- For NodeKind steps use `Workflow#step(Ocawe::NodeKind.new(...), id: ...)`.
+- Register node kinds only via `Ocawe::RegistryApi.node_kind`.
+- Register resource handlers only via `Ocawe::RegistryApi.resource`.

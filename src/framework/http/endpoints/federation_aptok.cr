@@ -3,7 +3,7 @@ require "aptok"
 module ACD
   module Kemal
     class App
-      FEDERATION_METADATA_ENV_VAR = "COGNI_FEDERATION_MD"
+      FEDERATION_METADATA_ENV_VAR = "OCAWE_FEDERATION_MD"
       FEP_MARKDOWN_LINK_PATTERN   = /\[([^\]]+)\]\(([^)\s]+)\)/
       FEP_ID_PATTERN              = /[Ff][Ee][Pp]-[0-9a-z]{2,}/
       FEP_FILE_ID_PATTERN         = /fep-([0-9a-z]{2,})\.md$/i
@@ -16,11 +16,6 @@ module ACD
         get "/actors/:identifier" do |env|
           write_aptok_response(federation, env)
         end
-
-        head "/actors/:identifier" do |env|
-          write_aptok_response(federation, env)
-        end
-
         post "/actors/:identifier/inbox" do |env|
           write_aptok_response(federation, env)
         end
@@ -28,11 +23,6 @@ module ACD
         get "/actors/:identifier/outbox" do |env|
           write_aptok_response(federation, env)
         end
-
-        head "/actors/:identifier/outbox" do |env|
-          write_aptok_response(federation, env)
-        end
-
         post "/actors/:identifier/outbox" do |env|
           write_aptok_response(federation, env)
         end
@@ -44,27 +34,12 @@ module ACD
         get "/.well-known/webfinger" do |env|
           write_aptok_response(federation, env)
         end
-
-        head "/.well-known/webfinger" do |env|
-          write_aptok_response(federation, env)
-        end
-
         get "/.well-known/nodeinfo" do |env|
           write_aptok_response(federation, env)
         end
-
-        head "/.well-known/nodeinfo" do |env|
-          write_aptok_response(federation, env)
-        end
-
         get "/nodeinfo/2.1" do |env|
           write_aptok_response(federation, env)
         end
-
-        head "/nodeinfo/2.1" do |env|
-          write_aptok_response(federation, env)
-        end
-
         get "/federation/metadata" do |env|
           env.response.content_type = "application/json"
           federation_metadata_document.to_json
@@ -171,9 +146,7 @@ module ACD
           end
         end
 
-        federation.outbox "/actors/{identifier}/outbox" do |_ctx, identifier|
-          list_aptok_outbox(identifier)
-        end
+        federation.outbox "/actors/{identifier}/outbox", ->(_ctx : Aptok::Context, identifier : String) { list_aptok_outbox(identifier) }
 
         federation.handles do |_ctx, username|
           workflow_ids.includes?(username) ? username : nil
@@ -182,7 +155,7 @@ module ACD
         federation.nodeinfo do |_ctx|
           JSON.parse({
             "version" => "2.1",
-            "software" => {"name" => "cogni", "version" => CogniCore::VERSION},
+            "software" => {"name" => "ocawe", "version" => OcaweCore::VERSION},
             "protocols" => ["activitypub"],
             "services" => {"inbound" => [] of String, "outbound" => [] of String},
             "openRegistrations" => false,
@@ -280,7 +253,7 @@ module ACD
       end
 
       private def list_aptok_outbox(identifier : String) : Array(Aptok::JsonMap)
-        @federation_kv.list("cogni:federation:outbox:#{identifier}:").compact_map do |entry|
+        @federation_kv.list("ocawe:federation:outbox:#{identifier}:").compact_map do |entry|
           JSON.parse(entry.value).as_h?
         end
       end
@@ -288,7 +261,7 @@ module ACD
       private def append_aptok_outbox_event(workflow_actor : String, activity : Hash(String, JSON::Any), event_id : String) : Nil
         workflow_id = workflow_id_from_actor(workflow_actor)
         workflow_id = "server" if workflow_id.empty?
-        @federation_kv.set("cogni:federation:outbox:#{workflow_id}:#{event_id}", activity.to_json)
+        @federation_kv.set("ocawe:federation:outbox:#{workflow_id}:#{event_id}", activity.to_json)
       end
 
     end

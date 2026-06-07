@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     class Service
       def initialize(@engine : Engine)

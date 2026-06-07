@@ -6,20 +6,20 @@ describe "ACD::Kemal::App control wrapper" do
     app = ACD::Kemal::App.new(0)
     executed = false
 
-    first = Cogni::Workflow::WorkflowNode.new("first", Cogni::Workflow::NodeKind::Control) do |_ctx|
-      Cogni::Workflow::WorkflowNodeResult.suspend(
+    first = Ocawe::Workflow::WorkflowNode.new("first", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+      Ocawe::Workflow::WorkflowNodeResult.suspend(
         {"reason" => json_str("pause")},
         resume_label: "first-stop"
       )
     end
 
-    second = Cogni::Workflow::WorkflowNode.new("second", Cogni::Workflow::NodeKind::Control) do |_ctx|
+    second = Ocawe::Workflow::WorkflowNode.new("second", Ocawe::Workflow::NodeKind::Control) do |_ctx|
       executed = true
-      Cogni::Workflow::WorkflowNodeResult.continue({"should_not_run" => json_bool(true)})
+      Ocawe::Workflow::WorkflowNodeResult.continue({"should_not_run" => json_bool(true)})
     end
 
     wrapped = app.test_wrap_nodes_in_control([first, second], "if-branch")
-    ctx = Cogni::Workflow::NodeContext.new(
+    ctx = Ocawe::Workflow::NodeContext.new(
       workflow_id: "wf",
       run_id: "run",
       node_id: "if-branch",
@@ -28,13 +28,13 @@ describe "ACD::Kemal::App control wrapper" do
     )
 
     result = wrapped.execute(ctx)
-    result.action.should eq(Cogni::Workflow::NodeAction::Suspend.to_s.downcase)
+    result.action.should eq(Ocawe::Workflow::NodeAction::Suspend.to_s.downcase)
     result.resume_labels.should eq(["first-stop"])
     executed.should eq(false)
   end
 
   it "parses workflow files that include Crystal type declarations before workflow block" do
-    tmp_dir = "/tmp/cogni_http_app_spec_#{Random.rand(1_000_000)}"
+    tmp_dir = "/tmp/ocawe_http_app_spec_#{Random.rand(1_000_000)}"
     Dir.mkdir_p(tmp_dir)
     begin
       workflow_file = File.join(tmp_dir, "types_before_workflow.acd.cr")
@@ -62,7 +62,7 @@ WORKFLOW
       definition = app.test_load_workflow_definition(bundle, [] of ACD::Agents::LoadedAgent)
       definition.id.should eq("types_before_workflow")
       definition.nodes.size.should eq(1)
-      definition.nodes.first.kind.should eq(Cogni::Workflow::NodeKind::Exec)
+      definition.nodes.first.kind.should eq(Ocawe::Workflow::NodeKind::Exec)
     ensure
       FileUtils.rm_rf(tmp_dir)
     end

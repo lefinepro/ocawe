@@ -1,6 +1,6 @@
 require "../dsl/types"
 
-module Cogni
+module Ocawe
   module Workflow
     struct NodeContext
       getter workflow_id : String
@@ -52,8 +52,8 @@ module Cogni
         @id : String,
         @kind : NodeKind = NodeKind::Control,
         @metadata : AnyHash = {} of String => JSON::Any,
-        @input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        @output_schema : Cogni::Workflows::DSL::Validator? = nil,
+        @input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        @output_schema : Ocawe::Workflows::DSL::Validator? = nil,
         &@executor : NodeContext -> WorkflowNodeResult
       )
       end

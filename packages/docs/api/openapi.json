@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "CogniCore API",
+    "title": "OcaweCore API",
     "version": "dev"
   },
   "paths": {}

@@ -26,7 +26,7 @@ module ACD
           metadata["workflow_id"] = JSON.parse(agent[:workflow_id].to_json)
 
           begin
-            response = CogniCore::AI::Client.new.generate_text(
+            response = OcaweCore::AI::Client.new.generate_text(
               model_spec: model,
               prompt: prompt,
               system: [agent[:prompt], system_message].compact.reject(&.empty?).join("\n\n"),
@@ -65,7 +65,7 @@ module ACD
             "workflow_id" => skill[:workflow_id],
             "status"      => "ok",
             "output"      => {
-              "message" => "Skill execution scaffolded in CogniCore",
+              "message" => "Skill execution scaffolded in OcaweCore",
               "input"   => body,
             },
           }.to_json
@@ -75,7 +75,7 @@ module ACD
           fn_id = env.params.url["id"]
           body = json_body(env)
           input_data = body["input"]?.try(&.as_h?) || body["input_data"]?.try(&.as_h?) || body.dup
-          ctx = Cogni::Workflow::NodeContext.new(
+          ctx = Ocawe::Workflow::NodeContext.new(
             workflow_id: body["workflow_id"]?.try(&.as_s?) || "trigger:function",
             run_id: body["run_id"]?.try(&.as_s?) || "trigger_#{Random::Secure.hex(8)}",
             node_id: fn_id,
@@ -84,7 +84,7 @@ module ACD
           )
 
           begin
-            result = Cogni::RegistryApi.call_function(fn_id, ctx)
+            result = Ocawe::RegistryApi.call_function(fn_id, ctx)
             env.response.content_type = "application/json"
             {
               "id"          => "trg_fn_#{Random::Secure.hex(12)}",

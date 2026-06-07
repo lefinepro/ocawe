@@ -29,7 +29,7 @@ module ACD
         json_error(env, 422, "dataset_error", message)
       end
 
-      private def dataset_to_json(dataset : Cogni::Dataset::DatasetRecord) : Hash(String, JSON::Any)
+      private def dataset_to_json(dataset : Ocawe::Dataset::DatasetRecord) : Hash(String, JSON::Any)
         {
           "id"          => JSON.parse(dataset.id.to_json),
           "description" => JSON.parse(dataset.description.to_json),
@@ -40,7 +40,7 @@ module ACD
         }
       end
 
-      private def item_to_json(item : Cogni::Dataset::ItemRecord) : Hash(String, JSON::Any)
+      private def item_to_json(item : Ocawe::Dataset::ItemRecord) : Hash(String, JSON::Any)
         {
           "id"         => JSON.parse(item.id.to_json),
           "payload"    => JSON.parse(item.payload.to_json),

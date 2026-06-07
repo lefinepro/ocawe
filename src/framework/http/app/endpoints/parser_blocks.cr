@@ -42,7 +42,7 @@ module ACD
       private def parse_dataset_block(ctx : WorkflowParserContext, dataset_id : String, start_line : Int32, end_line : Int32) : Nil
         description = nil.as(String?)
         schema_source = nil.as(String?)
-        seed_items = [] of Cogni::Dataset::AnyHash
+        seed_items = [] of Ocawe::Dataset::AnyHash
 
         i = start_line
         while i < end_line
@@ -108,7 +108,7 @@ module ACD
       # Parse a parallel do...end block
       private def parse_parallel_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
         # Collect nodes defined in the parallel block
-        parallel_nodes = [] of Cogni::Workflow::WorkflowNode
+        parallel_nodes = [] of Ocawe::Workflow::WorkflowNode
 
         i = start_line
         while i < end_line

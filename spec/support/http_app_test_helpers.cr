@@ -2,14 +2,14 @@ class ACD::Kemal::App
   def test_load_workflow_definition(
     bundle : ACD::Discovery::WorkflowBundle,
     loaded_agents : Array(ACD::Agents::LoadedAgent)
-  ) : Cogni::Workflow::WorkflowDefinition
+  ) : Ocawe::Workflow::WorkflowDefinition
     load_workflow_definition(bundle, loaded_agents)
   end
 
   def test_wrap_nodes_in_control(
-    nodes : Array(Cogni::Workflow::WorkflowNode),
+    nodes : Array(Ocawe::Workflow::WorkflowNode),
     name : String
-  ) : Cogni::Workflow::WorkflowNode
+  ) : Ocawe::Workflow::WorkflowNode
     wrap_nodes_in_control(nodes, name)
   end
 
@@ -106,7 +106,7 @@ class ACD::Kemal::App
 
   def test_list_outbox_events : Array(Hash(String, JSON::Any))
     events = [] of Hash(String, JSON::Any)
-    @federation_kv.list("cogni:federation:outbox:").each do |entry|
+    @federation_kv.list("ocawe:federation:outbox:").each do |entry|
       activity = JSON.parse(entry.value).as_h
       events << {"activity" => JSON.parse(activity.to_json)} of String => JSON::Any
     end

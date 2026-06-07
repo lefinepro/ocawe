@@ -11,7 +11,7 @@ describe "E2E: RAG Operations" do
   describe "rag-playground" do
     it "creates workflow with RAG nodes" do
       # Simulates rag-playground workflow structure
-      workflow = Cogni::Workflow.create_workflow("rag-playground", "RAG test")
+      workflow = Ocawe::Workflow.create_workflow("rag-playground", "RAG test")
       workflow
         .rag("rag-ingest", config: {
           "operation"       => json_str("upsert"),
@@ -27,12 +27,12 @@ describe "E2E: RAG Operations" do
         .commit
 
       workflow.nodes.size.should eq(2)
-      workflow.nodes[0].kind.should eq(Cogni::Workflow::NodeKind::Rag)
-      workflow.nodes[1].kind.should eq(Cogni::Workflow::NodeKind::Rag)
+      workflow.nodes[0].kind.should eq(Ocawe::Workflow::NodeKind::Rag)
+      workflow.nodes[1].kind.should eq(Ocawe::Workflow::NodeKind::Rag)
     end
 
     it "executes RAG upsert operation" do
-      workflow = Cogni::Workflow.create_workflow("rag-upsert-test", "RAG upsert test")
+      workflow = Ocawe::Workflow.create_workflow("rag-upsert-test", "RAG upsert test")
       workflow
         .rag("ingest", config: {
           "operation"       => json_str("upsert"),
@@ -41,7 +41,7 @@ describe "E2E: RAG Operations" do
         })
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("rag-upsert-test")
@@ -53,7 +53,7 @@ describe "E2E: RAG Operations" do
     end
 
     it "executes RAG query operation" do
-      workflow = Cogni::Workflow.create_workflow("rag-query-test", "RAG query test")
+      workflow = Ocawe::Workflow.create_workflow("rag-query-test", "RAG query test")
       workflow
         .rag("query", config: {
           "operation"       => json_str("query"),
@@ -63,7 +63,7 @@ describe "E2E: RAG Operations" do
         })
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("rag-query-test")
@@ -78,7 +78,7 @@ describe "E2E: RAG Operations" do
 
   describe "RAG upsert and query workflow" do
     it "performs RAG upsert and query operations" do
-      workflow = Cogni::Workflow.create_workflow("e2e-rag", "RAG operations")
+      workflow = Ocawe::Workflow.create_workflow("e2e-rag", "RAG operations")
       workflow
         .rag("ingest", config: {
           "operation"       => json_str("upsert"),
@@ -93,7 +93,7 @@ describe "E2E: RAG Operations" do
         })
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("e2e-rag")
@@ -111,10 +111,10 @@ describe "E2E: RAG Operations" do
 
   describe "RAG in full workflows" do
     it "combines RAG with approval step" do
-      workflow = Cogni::Workflow.create_workflow("rag-approval-test", "RAG with approval")
+      workflow = Ocawe::Workflow.create_workflow("rag-approval-test", "RAG with approval")
       workflow
-        .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
-          Cogni::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+        .step(Ocawe::Workflow::WorkflowNode.new("setup", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+          Ocawe::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
         end)
         .rag("rag", config: {
           "operation"       => json_str("query"),
@@ -124,7 +124,7 @@ describe "E2E: RAG Operations" do
         .suspend("confirm", reason: "Confirm RAG results")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run = engine.create_run("rag-approval-test")

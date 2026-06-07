@@ -3,18 +3,18 @@ require "file_utils"
 
 describe "workspace annotation and registry integration" do
   it "resolves workflow and node workspace config through registry handlers" do
-    Cogni::RegistryApi.reset_all!
+    Ocawe::RegistryApi.reset_all!
 
-    Cogni::RegistryApi.workspace_schema("provider_required") do |config|
+    Ocawe::RegistryApi.workspace_schema("provider_required") do |config|
       raise "workspace.provider is required" unless config["provider"]?.try(&.as_s?)
     end
-    Cogni::RegistryApi.workspace_resolver do |config|
+    Ocawe::RegistryApi.workspace_resolver do |config|
       resolved = JSON.parse(config.to_json).as_h
       resolved["resolved"] = json_bool(true)
       resolved
     end
 
-    workflow = Cogni::Workflow.create_workflow("workspace-resolution")
+    workflow = Ocawe::Workflow.create_workflow("workspace-resolution")
     workflow
       .workspace({
         "provider" => json_str("docker"),
@@ -39,38 +39,38 @@ describe "workspace annotation and registry integration" do
   end
 
   it "injects workspace into run envelope and emits workspace hooks" do
-    Cogni::RegistryApi.reset_all!
+    Ocawe::RegistryApi.reset_all!
     events = [] of String
     fn_name = "capture_workspace_#{Random.rand(1_000_000)}"
 
-    Cogni::RegistryApi.workspace_hook("before_node") do |ctx, workspace|
+    Ocawe::RegistryApi.workspace_hook("before_node") do |ctx, workspace|
       events << "before:#{ctx.node_id}:#{workspace["provider"]?.try(&.as_s?) || "none"}"
     end
-    Cogni::RegistryApi.workspace_hook("after_node") do |ctx, workspace|
+    Ocawe::RegistryApi.workspace_hook("after_node") do |ctx, workspace|
       events << "after:#{ctx.node_id}:#{workspace["provider"]?.try(&.as_s?) || "none"}"
     end
 
-    Cogni::RegistryApi.register_function(fn_name) do |ctx|
+    Ocawe::RegistryApi.register_function(fn_name) do |ctx|
       workspace = ctx.input_data["workspace"]?.try(&.as_h?) || ({} of String => JSON::Any)
       {
         "workspace_provider" => workspace["provider"]? || json_str("missing"),
         "workspace_branch" => workspace["branch"]? || json_str("none"),
       }
     end
-    Cogni::RegistryApi.node_kind(fn_name) do |ctx, _parameters|
-      Cogni::RegistryApi.call_function(fn_name, ctx)
+    Ocawe::RegistryApi.node_kind(fn_name) do |ctx, _parameters|
+      Ocawe::RegistryApi.call_function(fn_name, ctx)
     end
 
-    workflow = Cogni::Workflow.create_workflow("workspace-run")
+    workflow = Ocawe::Workflow.create_workflow("workspace-run")
     workflow
       .workspace({
         "provider" => json_str("docker"),
         "branch" => json_str("main"),
       })
-      .step(Cogni::NodeKind.new(fn_name), id: fn_name)
+      .step(Ocawe::NodeKind.new(fn_name), id: fn_name)
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
     result = engine.create_run("workspace-run").start
 
@@ -81,8 +81,8 @@ describe "workspace annotation and registry integration" do
   end
 
   it "parses @[Workspace(...)] and rejects deprecated docker use syntax" do
-    Cogni::RegistryApi.reset_all!
-    tmp_dir = "/tmp/cogni_workspace_annotation_#{Random.rand(1_000_000)}"
+    Ocawe::RegistryApi.reset_all!
+    tmp_dir = "/tmp/ocawe_workspace_annotation_#{Random.rand(1_000_000)}"
     Dir.mkdir_p(tmp_dir)
 
     begin

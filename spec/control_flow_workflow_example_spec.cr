@@ -1,11 +1,11 @@
 require "./spec_helper"
 require "../shards/examples/src/control_flow_workflow_example"
 
-describe CogniExamples::ControlFlowWorkflowExample do
+describe OcaweExamples::ControlFlowWorkflowExample do
   it "runs branch/parallel and other control-flow methods with schema-typed nodes" do
-    workflow = CogniExamples::ControlFlowWorkflowExample.build_branch_parallel_workflow
+    workflow = OcaweExamples::ControlFlowWorkflowExample.build_branch_parallel_workflow
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("control-flow-branch-parallel")

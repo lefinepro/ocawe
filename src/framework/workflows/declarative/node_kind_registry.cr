@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
       alias NodeKindResult = WorkflowNodeResult | AnyHash
       alias NodeKindHandler = Proc(NodeContext, AnyHash, NodeKindResult)
@@ -27,8 +27,8 @@ module Cogni
           # Backward-compatible fallback: treat bare workflow calls
           # (`function_name`) as function-registry handlers when there
           # is no explicit node kind registered.
-          if Cogni::Workflow.function_registry.registered?(kind)
-            return Cogni::Workflow.function_registry.call(kind, ctx)
+          if Ocawe::Workflow.function_registry.registered?(kind)
+            return Ocawe::Workflow.function_registry.call(kind, ctx)
           end
 
           raise "unknown node kind: #{kind}"

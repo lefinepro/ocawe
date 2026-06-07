@@ -13,7 +13,7 @@ module ACD
           env.response.content_type = "application/json"
           {
             "dataset_id" => dataset_id,
-            "items"      => response.as(Array(Cogni::Dataset::ItemRecord)).map { |item| item_to_json(item) },
+            "items"      => response.as(Array(Ocawe::Dataset::ItemRecord)).map { |item| item_to_json(item) },
           }.to_json
         end
 
@@ -30,7 +30,7 @@ module ACD
           env.response.content_type = "application/json"
           {
             "dataset_id" => dataset_id,
-            "items"      => response.as(Array(Cogni::Dataset::ItemRecord)).map { |item| item_to_json(item) },
+            "items"      => response.as(Array(Ocawe::Dataset::ItemRecord)).map { |item| item_to_json(item) },
           }.to_json
         end
 
@@ -47,7 +47,7 @@ module ACD
           next response if response.is_a?(String)
 
           env.response.content_type = "application/json"
-          item_to_json(response.as(Cogni::Dataset::ItemRecord)).to_json
+          item_to_json(response.as(Ocawe::Dataset::ItemRecord)).to_json
         end
 
         delete "/v1/datasets/:datasetId/items/:itemId" do |env|
@@ -69,8 +69,8 @@ module ACD
         end
       end
 
-      private def extract_dataset_items_payload(body : Cogni::Dataset::AnyHash) : Array(Cogni::Dataset::AnyHash)
-        raw_items = [] of Cogni::Dataset::AnyHash
+      private def extract_dataset_items_payload(body : Ocawe::Dataset::AnyHash) : Array(Ocawe::Dataset::AnyHash)
+        raw_items = [] of Ocawe::Dataset::AnyHash
         if items = body["items"]?.try(&.as_a?)
           items.each do |entry|
             hash = entry.as_h?

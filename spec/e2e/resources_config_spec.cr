@@ -5,7 +5,7 @@ describe "E2E: Workflow Configuration" do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      workflow = Cogni::Workflow.create_workflow("workflow-model-inline", "Model inline")
+      workflow = Ocawe::Workflow.create_workflow("workflow-model-inline", "Model inline")
       workflow
         .agent("model-agent",
           model: "openai/gpt-4.1-mini",
@@ -13,7 +13,7 @@ describe "E2E: Workflow Configuration" do
         )
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       result = engine.create_run("workflow-model-inline").start(input_data: {"task" => json_str("test")})
@@ -28,12 +28,12 @@ describe "E2E: Workflow Configuration" do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      workflow = Cogni::Workflow.create_workflow("workflow-model-priority", "Model priority")
+      workflow = Ocawe::Workflow.create_workflow("workflow-model-priority", "Model priority")
       workflow
         .agent("priority-agent", model: "openai/gpt-4.1", prompt: "Test")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       result = engine.create_run("workflow-model-priority").start(input_data: {
@@ -51,17 +51,17 @@ describe "E2E: Workflow Configuration" do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      workflow = Cogni::Workflow.create_workflow("workflow-agent-matrix", "Agent matrix")
+      workflow = Ocawe::Workflow.create_workflow("workflow-agent-matrix", "Agent matrix")
       workflow
         .agent("first-agent", model: "openai/gpt-4.1-mini", prompt: "First step")
-        .step(Cogni::Workflow::WorkflowNode.new("capture-model", Cogni::Workflow::NodeKind::Control) do |ctx|
+        .step(Ocawe::Workflow::WorkflowNode.new("capture-model", Ocawe::Workflow::NodeKind::Control) do |ctx|
           first_model = ctx.state["last_model"]?.try(&.as_s?) || ""
-          Cogni::Workflow::WorkflowNodeResult.continue({"first_model" => json_str(first_model)})
+          Ocawe::Workflow::WorkflowNodeResult.continue({"first_model" => json_str(first_model)})
         end)
         .agent("second-agent", model: "openai/gpt-4.1", prompt: "Second step")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       result = engine.create_run("workflow-agent-matrix").start(input_data: {"task" => json_str("pipeline")})
@@ -74,12 +74,12 @@ describe "E2E: Workflow Configuration" do
   end
 
   it "creates workflow with agent, skill, voice, rag, and suspend nodes" do
-    workflow = Cogni::Workflow.create_workflow("full-demo", "Full demo test")
+    workflow = Ocawe::Workflow.create_workflow("full-demo", "Full demo test")
     workflow
       .agent("full-agent",
         model: "clipproxyapi/qwen3-coder-plus",
-        input_schema: Cogni::Workflows::DSL::Types.object({"input" => Cogni::Workflows::DSL::Types.any()}, strict: false),
-        output_schema: Cogni::Workflows::DSL::Types.object({"last_response" => Cogni::Workflows::DSL::Types.of(String)}, strict: false))
+        input_schema: Ocawe::Workflows::DSL::Types.object({"input" => Ocawe::Workflows::DSL::Types.any()}, strict: false),
+        output_schema: Ocawe::Workflows::DSL::Types.object({"last_response" => Ocawe::Workflows::DSL::Types.of(String)}, strict: false))
       .skill("full-skill", agent: "full-agent")
       .voice("voice-step", config: {"provider" => json_str("openai"), "speaker" => json_str("alloy")})
       .rag("rag-step", config: {
@@ -92,18 +92,18 @@ describe "E2E: Workflow Configuration" do
       .commit
 
     workflow.nodes.size.should eq(5)
-    workflow.nodes[0].kind.should eq(Cogni::Workflow::NodeKind::Agent)
-    workflow.nodes[1].kind.should eq(Cogni::Workflow::NodeKind::Skill)
-    workflow.nodes[2].kind.should eq(Cogni::Workflow::NodeKind::Voice)
-    workflow.nodes[3].kind.should eq(Cogni::Workflow::NodeKind::Rag)
-    workflow.nodes[4].kind.should eq(Cogni::Workflow::NodeKind::Suspend)
+    workflow.nodes[0].kind.should eq(Ocawe::Workflow::NodeKind::Agent)
+    workflow.nodes[1].kind.should eq(Ocawe::Workflow::NodeKind::Skill)
+    workflow.nodes[2].kind.should eq(Ocawe::Workflow::NodeKind::Voice)
+    workflow.nodes[3].kind.should eq(Ocawe::Workflow::NodeKind::Rag)
+    workflow.nodes[4].kind.should eq(Ocawe::Workflow::NodeKind::Suspend)
   end
 
   it "executes full workflow up to approval suspension" do
-    workflow = Cogni::Workflow.create_workflow("full-approval-test", "Full approval test")
+    workflow = Ocawe::Workflow.create_workflow("full-approval-test", "Full approval test")
     workflow
-      .step(Cogni::Workflow::WorkflowNode.new("setup", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
+      .step(Ocawe::Workflow::WorkflowNode.new("setup", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.continue({"prepared" => json_bool(true)})
       end)
       .voice("voice", config: {"provider" => json_str("openai")})
       .rag("rag", config: {
@@ -114,7 +114,7 @@ describe "E2E: Workflow Configuration" do
       .suspend("confirm", reason: "Confirm output")
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("full-approval-test")

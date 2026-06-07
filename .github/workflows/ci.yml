@@ -46,12 +46,12 @@ jobs:
         run: shards update --production
 
       - name: Run Crystal syntax smoke-check
-        run: crystal build src/cogni.cr --no-codegen
+        run: crystal build src/ocawe.cr --no-codegen
 
       - name: Run unit specs (mock mode)
         run: crystal spec --error-trace
         env:
-          COGNICORE_MOCK_LLM: "1"
+          OCAWECORE_MOCK_LLM: "1"
 
   e2e-integration:
     runs-on: ubuntu-latest
@@ -75,11 +75,11 @@ jobs:
             crystal spec spec/e2e/ --error-trace
           else
             echo "CLIPROXY_API_KEY not configured - running E2E tests in mock mode"
-            COGNICORE_MOCK_LLM=1 crystal spec spec/e2e/ --error-trace
+            OCAWECORE_MOCK_LLM=1 crystal spec spec/e2e/ --error-trace
           fi
         env:
           CLIPROXY_API_KEY: ${{ secrets.CLIPROXY_API_KEY }}
-          COGNI_E2E_MODEL: "clipproxyapi/qwen3-coder-model"
+          OCAWE_E2E_MODEL: "clipproxyapi/qwen3-coder-model"
 
   build:
     runs-on: ubuntu-latest
@@ -124,10 +124,10 @@ jobs:
           fi
 
       - name: Build runtime binary
-        run: mkdir -p build && crystal build src/cogni.cr --release -o build/cognicore
+        run: mkdir -p build && crystal build src/ocawe.cr --release -o build/ocawecore
 
       - name: Upload runtime artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cognicore-linux
-          path: build/cognicore
+          name: ocawecore-linux
+          path: build/ocawecore

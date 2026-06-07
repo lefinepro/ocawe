@@ -1,13 +1,13 @@
-name: cogni-agent-functions
+name: ocawe-agent-functions
 version: 0.1.0
 
 authors:
-  - CogniCore Team
+  - OcaweCore Team
 
 crystal: ">= 1.12.0"
 
 license: MIT
 
 targets:
-  cogni_agent_functions:
-    main: src/cogni-agent-functions.cr
+  ocawe_agent_functions:
+    main: src/ocawe-agent-functions.cr

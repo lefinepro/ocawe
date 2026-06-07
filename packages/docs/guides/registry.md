@@ -1,28 +1,28 @@
-# Registry API (`Cogni::RegistryApi`)
+# Registry API (`Ocawe::RegistryApi`)
 
-Use `Cogni::RegistryApi` for runtime extension registration.
+Use `Ocawe::RegistryApi` for runtime extension registration.
 
 Supported API:
-- `Cogni::RegistryApi.node_kind`
-- `Cogni::RegistryApi.resource`
-- `Cogni::RegistryApi.workspace_schema`
-- `Cogni::RegistryApi.workspace_resolver`
-- `Cogni::RegistryApi.workspace_hook`
+- `Ocawe::RegistryApi.node_kind`
+- `Ocawe::RegistryApi.resource`
+- `Ocawe::RegistryApi.workspace_schema`
+- `Ocawe::RegistryApi.workspace_resolver`
+- `Ocawe::RegistryApi.workspace_hook`
 - `Workflow#step(type, id, ...)` unified node entry
 
 ## Register NodeKind
 
 ```crystal
-Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
+Ocawe::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
   {
     "status" => JSON.parse("ok".to_json),
     "message" => attributes["message"]? || JSON.parse("none".to_json),
   }
 end
 
-workflow = Cogni::Workflow.build("node-kind")
+workflow = Ocawe::Workflow.build("node-kind")
 workflow
-  .step(Cogni::NodeKind.new("crystal_native", {
+  .step(Ocawe::NodeKind.new("crystal_native", {
     "message" => JSON.parse("hello".to_json),
   }))
   .commit
@@ -31,7 +31,7 @@ workflow
 ## Register resource handler
 
 ```crystal
-Cogni::RegistryApi.resource("resource_ping") do |_ctx, payload|
+Ocawe::RegistryApi.resource("resource_ping") do |_ctx, payload|
   {
     "resource_task" => JSON.parse((payload["task"]?.try(&.as_s?) || "none").to_json),
   }
@@ -43,17 +43,17 @@ Resource handlers can be registered from NodeKind handlers and used through runt
 ## Register workspace extensions
 
 ```crystal
-Cogni::RegistryApi.workspace_schema("provider_required") do |workspace|
+Ocawe::RegistryApi.workspace_schema("provider_required") do |workspace|
   raise "workspace.provider required" unless workspace["provider"]?.try(&.as_s?)
 end
 
-Cogni::RegistryApi.workspace_resolver do |workspace|
+Ocawe::RegistryApi.workspace_resolver do |workspace|
   resolved = JSON.parse(workspace.to_json).as_h
   resolved["resolved"] = JSON.parse(true.to_json)
   resolved
 end
 
-Cogni::RegistryApi.workspace_hook("before_node") do |ctx, workspace|
+Ocawe::RegistryApi.workspace_hook("before_node") do |ctx, workspace|
   # Observe resolved workspace before node execution.
 end
 ```
@@ -63,7 +63,7 @@ end
 All built-in and external nodes can be created through one entry:
 
 ```crystal
-workflow = Cogni::Workflow.build("unified")
+workflow = Ocawe::Workflow.build("unified")
 workflow
   .step("agent", "assistant", prompt: "You are helpful")
   .step("exec", "tools/tool.sh", runtime: {"shell" => JSON.parse("bash".to_json)})
@@ -80,7 +80,7 @@ workflow
 Built-in federation helper node kinds can be used the same way. Example:
 
 ```crystal
-workflow = Cogni::Workflow.build("federation-subscribe")
+workflow = Ocawe::Workflow.build("federation-subscribe")
 workflow
   .step("node_kind", "subscribe-default-actor",
     node_kind_name: "forgefed_subscribe",

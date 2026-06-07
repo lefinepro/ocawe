@@ -1,6 +1,6 @@
 require "json"
 require "spec"
-require "../src/cogni"
+require "../src/ocawe"
 require "./support/http_app_test_helpers"
 require "./support/agent_functions_test_helpers"
 

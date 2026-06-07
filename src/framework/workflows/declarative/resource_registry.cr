@@ -1,6 +1,6 @@
 require "../../mcp/manager"
 
-module Cogni
+module Ocawe
   module Workflow
       alias ResourceHandler = Proc(NodeContext, AnyHash, AnyHash)
 
@@ -23,8 +23,8 @@ module Cogni
         def call(name : String, ctx : NodeContext, payload : AnyHash = {} of String => JSON::Any) : AnyHash
           key = normalize(name)
           if key.starts_with?("mcp:")
-            server_id, resource_name = Cogni::MCP.parse_mcp_ref(name)
-            return Cogni::MCP.manager.read_resource(server_id, resource_name, payload)
+            server_id, resource_name = Ocawe::MCP.parse_mcp_ref(name)
+            return Ocawe::MCP.manager.read_resource(server_id, resource_name, payload)
           end
           handler = @handlers[key]?
           raise "unknown resource handler: #{name}" unless handler

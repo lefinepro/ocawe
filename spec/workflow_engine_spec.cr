@@ -1,18 +1,18 @@
 require "./spec_helper"
-describe Cogni::Workflow::Engine do
+describe Ocawe::Workflow::Engine do
   it "runs start/resume/cancel/time_travel lifecycle" do
-    workflow = Cogni::Workflow.create_workflow("wf-test", "test workflow")
+    workflow = Ocawe::Workflow.create_workflow("wf-test", "test workflow")
     workflow
-      .step(Cogni::Workflow::WorkflowNode.new("node-1", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"value" => json_str("ok")})
+      .step(Ocawe::Workflow::WorkflowNode.new("node-1", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.continue({"value" => json_str("ok")})
       end)
       .suspend("approval")
-      .step(Cogni::Workflow::WorkflowNode.new("final", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"done" => json_bool(true)})
+      .step(Ocawe::Workflow::WorkflowNode.new("final", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.continue({"done" => json_bool(true)})
       end)
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("wf-test")
@@ -35,31 +35,31 @@ describe Cogni::Workflow::Engine do
   end
 
   it "supports sequential and parallel control nodes" do
-    workflow = Cogni::Workflow.create_workflow("wf-controls", "control nodes")
+    workflow = Ocawe::Workflow.create_workflow("wf-controls", "control nodes")
 
-    parallel_continue = Cogni::Workflow::WorkflowNode.new("parallel-continue", Cogni::Workflow::NodeKind::Control) do |_ctx|
-      Cogni::Workflow::WorkflowNodeResult.continue({"p1" => json_str("ok")})
+    parallel_continue = Ocawe::Workflow::WorkflowNode.new("parallel-continue", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+      Ocawe::Workflow::WorkflowNodeResult.continue({"p1" => json_str("ok")})
     end
-    parallel_suspend = Cogni::Workflow::WorkflowNode.new("parallel-suspend", Cogni::Workflow::NodeKind::Control) do |_ctx|
-      Cogni::Workflow::WorkflowNodeResult.suspend(
+    parallel_suspend = Ocawe::Workflow::WorkflowNode.new("parallel-suspend", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+      Ocawe::Workflow::WorkflowNodeResult.suspend(
         {"type" => json_str("human_approval")},
         resume_label: "approval:parallel-suspend",
       )
     end
 
     workflow
-      .step(Cogni::Workflow::WorkflowNode.new("seed", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"value" => json_str("v1")})
+      .step(Ocawe::Workflow::WorkflowNode.new("seed", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.continue({"value" => json_str("v1")})
       end)
-      .step(Cogni::Workflow::WorkflowNode.new("mapped", Cogni::Workflow::NodeKind::Control) do |ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({
+      .step(Ocawe::Workflow::WorkflowNode.new("mapped", Ocawe::Workflow::NodeKind::Control) do |ctx|
+        Ocawe::Workflow::WorkflowNodeResult.continue({
           "mapped" => json_str("#{ctx.get_node_result("seed").try(&.["value"]?.try(&.as_s?)) || "none"}:#{ctx.get_init_data["value"]?.try(&.as_s?) || "init-none"}"),
         })
       end)
       .parallel([parallel_continue, parallel_suspend])
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("wf-controls")
@@ -70,15 +70,15 @@ describe Cogni::Workflow::Engine do
   end
 
   it "supports other workflow methods" do
-    workflow = Cogni::Workflow.create_workflow("wf-methods", "method coverage")
+    workflow = Ocawe::Workflow.create_workflow("wf-methods", "method coverage")
 
-    foreach_node = Cogni::Workflow::WorkflowNode.new("foreach-node", Cogni::Workflow::NodeKind::Control) do |_ctx|
-      Cogni::Workflow::WorkflowNodeResult.continue({"foreach_ran" => json_bool(true)})
+    foreach_node = Ocawe::Workflow::WorkflowNode.new("foreach-node", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+      Ocawe::Workflow::WorkflowNodeResult.continue({"foreach_ran" => json_bool(true)})
     end
 
     workflow
-      .step(Cogni::Workflow::WorkflowNode.new("then-node", Cogni::Workflow::NodeKind::Control) do |_ctx|
-        Cogni::Workflow::WorkflowNodeResult.continue({"then_ran" => json_bool(true)})
+      .step(Ocawe::Workflow::WorkflowNode.new("then-node", Ocawe::Workflow::NodeKind::Control) do |_ctx|
+        Ocawe::Workflow::WorkflowNodeResult.continue({"then_ran" => json_bool(true)})
       end)
       .sleep(0)
       .sleep_until(Time.utc.to_unix)
@@ -86,7 +86,7 @@ describe Cogni::Workflow::Engine do
       .wait_for_event("deploy", "event:deploy")
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     run = workflow.create_run_async
@@ -101,22 +101,22 @@ describe Cogni::Workflow::Engine do
   end
 
   it "runs internal function nodes through node kind API" do
-    Cogni::Workflow.register_function("create-sandbox") do |_ctx|
+    Ocawe::Workflow.register_function("create-sandbox") do |_ctx|
       {
         "tool" => json_any("create-sandbox"),
         "status" => json_any("ok"),
       }
     end
-    Cogni::RegistryApi.node_kind("create-sandbox") do |ctx, _parameters|
-      Cogni::RegistryApi.call_function("create-sandbox", ctx)
+    Ocawe::RegistryApi.node_kind("create-sandbox") do |ctx, _parameters|
+      Ocawe::RegistryApi.call_function("create-sandbox", ctx)
     end
 
-    workflow = Cogni::Workflow.create_workflow("wf-runs", "run dispatch")
+    workflow = Ocawe::Workflow.create_workflow("wf-runs", "run dispatch")
     workflow
-      .step(Cogni::NodeKind.new("create-sandbox"), id: "create-sandbox")
+      .step(Ocawe::NodeKind.new("create-sandbox"), id: "create-sandbox")
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("wf-runs")
@@ -126,27 +126,27 @@ describe Cogni::Workflow::Engine do
   end
 
   it "supports internal node kinds mapped to function aliases" do
-    Cogni::Workflow.register_system_function("conflict-fn") do |_ctx|
+    Ocawe::Workflow.register_system_function("conflict-fn") do |_ctx|
       {"which" => json_any("system")}
     end
-    user_alias = Cogni::Workflow.register_function("conflict-fn") do |_ctx|
+    user_alias = Ocawe::Workflow.register_function("conflict-fn") do |_ctx|
       {"which" => json_any("user")}
     end
     user_alias.should eq("conflict-fn:1")
-    Cogni::RegistryApi.node_kind("conflict-fn") do |ctx, _parameters|
-      Cogni::RegistryApi.call_function("conflict-fn", ctx)
+    Ocawe::RegistryApi.node_kind("conflict-fn") do |ctx, _parameters|
+      Ocawe::RegistryApi.call_function("conflict-fn", ctx)
     end
-    Cogni::RegistryApi.node_kind("conflict-fn:1") do |ctx, _parameters|
-      Cogni::RegistryApi.call_function("conflict-fn:1", ctx)
+    Ocawe::RegistryApi.node_kind("conflict-fn:1") do |ctx, _parameters|
+      Ocawe::RegistryApi.call_function("conflict-fn:1", ctx)
     end
 
-    workflow = Cogni::Workflow.create_workflow("wf-fn-collision", "function collision")
+    workflow = Ocawe::Workflow.create_workflow("wf-fn-collision", "function collision")
     workflow
-      .step(Cogni::NodeKind.new("conflict-fn"), id: "conflict-fn")
-      .step(Cogni::NodeKind.new("conflict-fn:1"), id: "conflict-fn:1")
+      .step(Ocawe::NodeKind.new("conflict-fn"), id: "conflict-fn")
+      .step(Ocawe::NodeKind.new("conflict-fn:1"), id: "conflict-fn:1")
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     result = engine.create_run("wf-fn-collision").start
@@ -155,7 +155,7 @@ describe Cogni::Workflow::Engine do
   end
 
   it "supports mastra-compatible rag keys and output shape" do
-    workflow = Cogni::Workflow.create_workflow("wf-rag", "rag compatibility")
+    workflow = Ocawe::Workflow.create_workflow("wf-rag", "rag compatibility")
     workflow
       .rag("rag-ingest", config: {
         "operation"       => json_str("upsert"),
@@ -170,7 +170,7 @@ describe Cogni::Workflow::Engine do
       })
       .commit
 
-    engine = Cogni::Workflow::Engine.new
+    engine = Ocawe::Workflow::Engine.new
     engine.register(workflow)
 
     run = engine.create_run("wf-rag")
@@ -195,7 +195,7 @@ describe Cogni::Workflow::Engine do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      workflow = Cogni::Workflow.create_workflow("wf-guardrails", "guardrails")
+      workflow = Ocawe::Workflow.create_workflow("wf-guardrails", "guardrails")
       workflow
         .agent(
           "guarded-agent",
@@ -209,7 +209,7 @@ describe Cogni::Workflow::Engine do
         )
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       blocked = engine.create_run("wf-guardrails").start(input_data: {"task" => json_str("this is forbidden input")})
@@ -227,12 +227,12 @@ describe Cogni::Workflow::Engine do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      input_schema = Cogni::Workflows::DSL::CrystalDSL.compile(
+      input_schema = Ocawe::Workflows::DSL::CrystalDSL.compile(
         "Schema::Types.object({\"input\" => Schema::Types.object({\"task\" => Schema::Types.of(String)})}, strict: false)",
         "wf-schema-input"
       )
 
-      workflow = Cogni::Workflow.create_workflow("wf-schema", "schema")
+      workflow = Ocawe::Workflow.create_workflow("wf-schema", "schema")
       workflow
         .agent(
           "schema-agent",
@@ -242,7 +242,7 @@ describe Cogni::Workflow::Engine do
         )
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       invalid = engine.create_run("wf-schema").start(input_data: {"query" => json_str("missing task")})
@@ -260,12 +260,12 @@ describe Cogni::Workflow::Engine do
     ENV["COGNICORE_MOCK_LLM"] = "1"
 
     begin
-      workflow = Cogni::Workflow.create_workflow("wf-models", "model selection")
+      workflow = Ocawe::Workflow.create_workflow("wf-models", "model selection")
       workflow
         .agent("model-agent", prompt: "system", model: "openai/gpt-4.1")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       run_agent_model = engine.create_run("wf-models")
@@ -281,7 +281,7 @@ describe Cogni::Workflow::Engine do
       result_request_model.status.should eq("success")
       result_request_model.state.not_nil!["last_model"].as_s.should eq("openai/gpt-4.1-nano")
 
-      workflow_default_only = Cogni::Workflow.create_workflow("wf-model-default", "model selection default")
+      workflow_default_only = Ocawe::Workflow.create_workflow("wf-model-default", "model selection default")
       workflow_default_only
         .agent("model-agent-default", prompt: "system", model: "openai/gpt-4.1-mini")
         .commit

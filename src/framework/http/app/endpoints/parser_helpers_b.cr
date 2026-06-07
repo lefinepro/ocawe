@@ -24,10 +24,10 @@ module ACD
         workflow_file : String,
         fn_name : String,
         kind : String
-      ) : Cogni::Workflows::DSL::Validator
+      ) : Ocawe::Workflows::DSL::Validator
         raise "#{workflow_file}: function #{fn_name} requires #{kind}_schema" unless literal
         stripped = literal.strip
-        Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
+        Ocawe::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
       end
 
       private def compile_optional_function_schema(
@@ -35,20 +35,20 @@ module ACD
         workflow_file : String,
         fn_name : String,
         kind : String
-      ) : Cogni::Workflows::DSL::Validator?
+      ) : Ocawe::Workflows::DSL::Validator?
         return nil unless literal
         stripped = literal.strip
-        Cogni::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
+        Ocawe::Workflows::DSL::CrystalDSL.compile(stripped, "#{workflow_file}: function #{fn_name} #{kind} schema")
       end
 
       private def ensure_output_schema_superset!(
         workflow_file : String,
         fn_name : String,
-        input_schema : Cogni::Workflows::DSL::Validator,
-        output_schema : Cogni::Workflows::DSL::Validator
+        input_schema : Ocawe::Workflows::DSL::Validator,
+        output_schema : Ocawe::Workflows::DSL::Validator
       )
-        Cogni::Workflows::DSL::Compatibility.ensure_output_superset!(input_schema, output_schema)
-      rescue ex : Cogni::Workflows::DSL::ValidationError
+        Ocawe::Workflows::DSL::Compatibility.ensure_output_superset!(input_schema, output_schema)
+      rescue ex : Ocawe::Workflows::DSL::ValidationError
         raise "#{workflow_file}: function #{fn_name} output_schema must cover input_schema: #{ex.message}"
       end
 
@@ -189,7 +189,7 @@ module ACD
         literal[1, literal.size - 2]
       end
 
-      private def parse_runtime_object(literal : String, workflow_file : String) : Cogni::Workflow::AnyHash
+      private def parse_runtime_object(literal : String, workflow_file : String) : Ocawe::Workflow::AnyHash
         parsed = YAML.parse(literal)
         hash = JSON.parse(parsed.to_json).as_h?
         raise "#{workflow_file}: runtime must be an object: #{literal}" unless hash
@@ -198,7 +198,7 @@ module ACD
         raise "#{workflow_file}: invalid runtime object '#{literal}': #{ex.message}"
       end
 
-      private def parse_workspace_annotation_params(content : String, workflow_file : String) : Cogni::Workflow::AnyHash
+      private def parse_workspace_annotation_params(content : String, workflow_file : String) : Ocawe::Workflow::AnyHash
         parse_runtime_object("{#{content}}", workflow_file)
       end
 

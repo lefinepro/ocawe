@@ -1,8 +1,8 @@
 require "set"
-module CogniCore
+module OcaweCore
   module Utils
     module ConfigParser
-      private def self.apply_rcl_settings(base : Cogni::Config::Settings, raw : Hash(String, RCL::Value)) : Cogni::Config::Settings
+      private def self.apply_rcl_settings(base : Ocawe::Config::Settings, raw : Hash(String, RCL::Value)) : Ocawe::Config::Settings
         root = raw["root"]?
         tree = root.is_a?(Hash(String, RCL::Value)) ? root : raw
         apply_credentials_env_overrides(tree["credentials"]?)
@@ -11,7 +11,7 @@ module CogniCore
         if wf_raw = tree["workflows"]?
           if wf = wf_raw.as?(Hash(String, RCL::Value))
             preferred = string_or_nil(wf["preferred_workflows_root"]?) || workflows.preferred_workflows_root
-            workflows = Cogni::Config::WorkflowSettings.new(preferred)
+            workflows = Ocawe::Config::WorkflowSettings.new(preferred)
           end
         end
 
@@ -20,7 +20,7 @@ module CogniCore
           if ds = ds_raw.as?(Hash(String, RCL::Value))
             adapter = string_or_nil(ds["adapter"]?) || datasets.adapter
             file_root = string_or_nil(ds["file_root"]?) || datasets.file_root
-            datasets = Cogni::Config::DatasetSettings.new(adapter, file_root)
+            datasets = Ocawe::Config::DatasetSettings.new(adapter, file_root)
           end
         end
 
@@ -36,7 +36,7 @@ module CogniCore
             local_actor = string_or_nil(fed["local_actor"]?) || federation.local_actor
             local_key_id = string_or_nil(fed["local_key_id"]?) || federation.local_key_id
             local_private_key_path = string_or_nil(fed["local_private_key_path"]?) || federation.local_private_key_path
-            federation = Cogni::Config::FederationSettings.new(
+            federation = Ocawe::Config::FederationSettings.new(
               auto_subscribe, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path
             )
           end
@@ -45,7 +45,7 @@ module CogniCore
         api = base.api
         if api_raw = tree["api"]?
           parsed_api = parse_api_value(api_raw)
-          api = Cogni::Config::ApiSettings.new(parsed_api) unless parsed_api.empty?
+          api = Ocawe::Config::ApiSettings.new(parsed_api) unless parsed_api.empty?
         end
 
         functions = base.functions
@@ -53,8 +53,8 @@ module CogniCore
           if fn = fn_raw.as?(Hash(String, RCL::Value))
             enabled = parse_functions_value(fn["enabled"]?)
             unless enabled.empty?
-              available = Cogni::Config::DefaultFunctionHandlers.available
-              resolved = {} of String => Cogni::Workflow::FunctionHandler
+              available = Ocawe::Config::DefaultFunctionHandlers.available
+              resolved = {} of String => Ocawe::Workflow::FunctionHandler
               enabled.each do |name|
                 key = name.strip.downcase
                 handler = available[key]?
@@ -66,7 +66,7 @@ module CogniCore
           end
         end
 
-        Cogni::Config::Settings.new(
+        Ocawe::Config::Settings.new(
           workflows: workflows,
           node_kinds: base.node_kinds,
           datasets: datasets,

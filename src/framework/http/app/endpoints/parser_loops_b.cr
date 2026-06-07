@@ -2,7 +2,7 @@ module ACD
   module Kemal
     class App
       private def parse_loop_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
-        loop_nodes = [] of Cogni::Workflow::WorkflowNode
+        loop_nodes = [] of Ocawe::Workflow::WorkflowNode
 
         i = start_line + 1
         while i <= end_line
@@ -98,22 +98,22 @@ module ACD
         return if loop_nodes.empty?
 
         loop_body = wrap_nodes_in_control(loop_nodes, "loop-body")
-        control_node = Cogni::Workflow::WorkflowNode.new("loop-#{start_line}", Cogni::Workflow::NodeKind::Control) do |node_ctx|
+        control_node = Ocawe::Workflow::WorkflowNode.new("loop-#{start_line}", Ocawe::Workflow::NodeKind::Control) do |node_ctx|
           iterations = 0
           merged = {} of String => JSON::Any
-          result = Cogni::Workflow::WorkflowNodeResult.continue
+          result = Ocawe::Workflow::WorkflowNodeResult.continue
 
           while iterations < 100
             iterations += 1
             result = loop_body.execute(with_state(node_ctx, merged))
-            break if result.action != Cogni::Workflow::NodeAction::Continue.to_s.downcase
+            break if result.action != Ocawe::Workflow::NodeAction::Continue.to_s.downcase
             if data = result.data
               data.each { |k, v| merged[k] = v }
             end
           end
 
-          if result.action == Cogni::Workflow::NodeAction::Continue.to_s.downcase
-            Cogni::Workflow::WorkflowNodeResult.continue(merged)
+          if result.action == Ocawe::Workflow::NodeAction::Continue.to_s.downcase
+            Ocawe::Workflow::WorkflowNodeResult.continue(merged)
           else
             result
           end
@@ -126,14 +126,14 @@ module ACD
         id : String,
         prompt : String? = nil,
         model : String? = nil,
-        resume_schema : Cogni::Workflows::DSL::Validator? = nil,
-        voice_config : Cogni::Workflow::AnyHash? = nil,
-        guardrails_config : Cogni::Workflow::AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
-      ) : Cogni::Workflow::WorkflowNode
-        builder = Cogni::Workflow::WorkflowDefinition.new("__registry_builder__")
-        Cogni::RegistryApi.build_node(
+        resume_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        voice_config : Ocawe::Workflow::AnyHash? = nil,
+        guardrails_config : Ocawe::Workflow::AnyHash? = nil,
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+      ) : Ocawe::Workflow::WorkflowNode
+        builder = Ocawe::Workflow::WorkflowDefinition.new("__registry_builder__")
+        Ocawe::RegistryApi.build_node(
           builder,
           "agent",
           id,
@@ -149,17 +149,17 @@ module ACD
 
       private def create_exec_node(
         ref : String,
-        runtime : Cogni::Workflow::AnyHash? = nil,
-        env : Cogni::Workflow::AnyHash? = nil,
-        attributes : Cogni::Workflow::AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil,
+        runtime : Ocawe::Workflow::AnyHash? = nil,
+        env : Ocawe::Workflow::AnyHash? = nil,
+        attributes : Ocawe::Workflow::AnyHash? = nil,
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil,
         workflow_root : String? = nil
-      ) : Cogni::Workflow::WorkflowNode
+      ) : Ocawe::Workflow::WorkflowNode
         raise "exec requires runtime for non-mcp refs: #{ref}" if runtime.nil? && !ref.starts_with?("mcp:")
 
-        builder = Cogni::Workflow::WorkflowDefinition.new("__registry_builder__")
-        Cogni::RegistryApi.build_node(
+        builder = Ocawe::Workflow::WorkflowDefinition.new("__registry_builder__")
+        Ocawe::RegistryApi.build_node(
           builder,
           "exec",
           ref,
@@ -175,12 +175,12 @@ module ACD
       private def create_internal_node(
         node_kind : String,
         id : String,
-        attributes : Cogni::Workflow::AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
-      ) : Cogni::Workflow::WorkflowNode
-        builder = Cogni::Workflow::WorkflowDefinition.new("__registry_builder__")
-        Cogni::RegistryApi.build_node(
+        attributes : Ocawe::Workflow::AnyHash? = nil,
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+      ) : Ocawe::Workflow::WorkflowNode
+        builder = Ocawe::Workflow::WorkflowDefinition.new("__registry_builder__")
+        Ocawe::RegistryApi.build_node(
           builder,
           "node_kind",
           id,

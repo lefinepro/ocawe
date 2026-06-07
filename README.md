@@ -1,6 +1,6 @@
-# Cogni
+# Ocawe
 
-Cogni is a Crystal-first runtime for workflow bundles, agents, tools, and skills.
+Ocawe is a Crystal-first runtime for workflow bundles, agents, tools, and skills.
 
 Licenses: [ISC](https://spdx.org/licenses/ISC.html) (`LICENSE`) and [0BSD](https://spdx.org/licenses/0BSD.html) (`LICENSE-0BSD`).
 
@@ -9,7 +9,7 @@ It includes:
 - A Svelte playground for workflows, tools, skills, and agent chat.
 - VitePress docs with a custom `/playground/` route.
 
-## Why Cogni
+## Why Ocawe
 
 - Crystal workflow runtime with ACD-style bundles (`*.acd.cr`).
 - Agent + skill + tool discovery from workflow directories.
@@ -22,20 +22,20 @@ It includes:
 Build CLI:
 
 ```bash
-crystal build src/cli/main.cr -o build/cogni
+crystal build src/cli/main.cr -o build/ocawe
 ```
 
-`cogni build/dev/up` now auto-bootstrap Crystal when `crystal` is missing by downloading a platform archive into `./.tools/crystal`.
+`ocawe build/dev/up` now auto-bootstrap Crystal when `crystal` is missing by downloading a platform archive into `./.tools/crystal`.
 You can control bootstrap with env vars:
-- `COGNI_CRYSTAL_VERSION` (default `1.13.3`)
-- `COGNI_CRYSTAL_BASE_URL` (default Crystal GitHub releases URL)
-- `COGNI_CRYSTAL_FORCE_BOOTSTRAP=1` (force local toolchain even if system `crystal` exists)
-- `COGNI_CRYSTAL_VERBOSE=1` (print toolchain version during bootstrap)
+- `OCAWE_CRYSTAL_VERSION` (default `1.13.3`)
+- `OCAWE_CRYSTAL_BASE_URL` (default Crystal GitHub releases URL)
+- `OCAWE_CRYSTAL_FORCE_BOOTSTRAP=1` (force local toolchain even if system `crystal` exists)
+- `OCAWE_CRYSTAL_VERBOSE=1` (print toolchain version during bootstrap)
 
 Run runtime server:
 
 ```bash
-./build/cogni up --port 4111
+./build/ocawe up --port 4111
 ```
 
 ## Docker Compose (solver)
@@ -45,16 +45,16 @@ For auth, mount only `/root/.codex`.
 
 ```yaml
 services:
-  cogni:
-    image: cogni:test
-    container_name: cogni-solver
+  ocawe:
+    image: ocawe:test
+    container_name: ocawe-solver
     ports:
       - "4111:4111"
     environment:
-      - COGNI_BUILD_ARGS=--release
-      - COGNI_CONFIG_RCL=/cogni/cogni.config.rcl
+      - OCAWE_BUILD_ARGS=--release
+      - OCAWE_CONFIG_RCL=/ocawe/ocawe.config.rcl
     volumes:
-      - ./cogni.config.rcl:/cogni/cogni.config.rcl:ro
+      - ./ocawe.config.rcl:/ocawe/ocawe.config.rcl:ro
       - /root/.codex:/root/.codex
     restart: unless-stopped
 ```
@@ -79,7 +79,7 @@ curl -sS -X POST http://127.0.0.1:4111/v1/workflows/provider-credentials-codex/r
   -d '{"input":{"content":"run mock credentials check"}}' | jq
 ```
 
-The flow runs `tools/mock-data.rb` (Ruby), saves a file under `/cogni/.cogni/mock-data`, then runs `agent_codex` through `tools/mock-agent-cli.rb`, which saves a credentials report under `/cogni/.cogni/mock-agent`.
+The flow runs `tools/mock-data.rb` (Ruby), saves a file under `/ocawe/.ocawe/mock-data`, then runs `agent_codex` through `tools/mock-agent-cli.rb`, which saves a credentials report under `/ocawe/.ocawe/mock-agent`.
 
 Direct local demo (without HTTP runtime):
 
@@ -110,21 +110,21 @@ bun run dev
 ## CLI Commands
 
 ```bash
-./build/cogni build --release
-./build/cogni dev --port 4111
-./build/cogni up --port 4111
+./build/ocawe build --release
+./build/ocawe dev --port 4111
+./build/ocawe up --port 4111
 
 # explicit workflow trigger by id
-./build/cogni workflow solver task=deploy env=prod
+./build/ocawe workflow solver task=deploy env=prod
 
 # agent/function/tool/skill/support triggers
-./build/cogni agent code-reviewer --prompt "review this patch"
-./build/cogni tool project_healthcheck
-./build/cogni support onboarding-check
+./build/ocawe agent code-reviewer --prompt "review this patch"
+./build/ocawe tool project_healthcheck
+./build/ocawe support onboarding-check
 
 # alias executable style (workflow id from executable name)
-ln -sf ./build/cogni /usr/local/bin/cogni_example_workflow
-cogni_example_workflow
+ln -sf ./build/ocawe /usr/local/bin/ocawe_example_workflow
+ocawe_example_workflow
 ```
 
 Workflow trigger CLI calls `POST /v1/triggers/workflows/:id` and sends:
@@ -137,7 +137,7 @@ Trigger command mapping:
 - `skill`/`support` -> `/v1/triggers/skills/:id`
 - `function`/`tool` -> `/v1/triggers/functions/:id`
 
-Use `COGNI_TRIGGER_BASE_URL` or `--base-url` to target a non-default runtime URL.
+Use `OCAWE_TRIGGER_BASE_URL` or `--base-url` to target a non-default runtime URL.
 
 ## Runtime APIs
 
@@ -171,7 +171,7 @@ S2S ticket ingestion mode:
 
 ```text
 src/
-  cli/                     # cogni CLI (build/dev/up)
+  cli/                     # ocawe CLI (build/dev/up)
   framework/               # runtime framework + HTTP endpoints
 packages/
   playground/              # Svelte playground (Vite + Bun)
@@ -195,7 +195,7 @@ See `shards/examples`:
 Run all examples:
 
 ```bash
-./build/cogni up --port 4111 --workflows-root ./shards/examples
+./build/ocawe up --port 4111 --workflows-root ./shards/examples
 ```
 
 ## Crystal Configuration
@@ -207,7 +207,7 @@ Federation defaults:
 - `auto_subscribe` remains supported for startup remote actor tracking.
 
 Alternative config format (RCL) is also supported.
-Static config file `./cogni.config.rcl` is auto-loaded when present.
+Static config file `./ocawe.config.rcl` is auto-loaded when present.
 
 Example `config.rcl`:
 
@@ -220,7 +220,7 @@ end
 
 datasets do
   adapter = "file"
-  file_root = "./.cogni/datasets"
+  file_root = "./.ocawe/datasets"
 end
 
 workflows do
@@ -228,7 +228,7 @@ workflows do
 end
 ```
 
-Default static file in repo: `cogni.config.rcl`.
+Default static file in repo: `ocawe.config.rcl`.
 
 `api` supports string or array of strings:
 - `"federation"`: ForgeFed-only mode (mounts Aptok ActivityPub routes (`/actors/*`, `/inbox`, WebFinger/NodeInfo) plus health/docs)
@@ -241,7 +241,7 @@ Federation persistence:
 
 Function handler selection via RCL:
 - `functions.enabled = ["agent_opencode", "agent_codex", "agent_cliproxy", "agent_claude_code", "agent_qwen"]`
-- handlers are optional and available only if external shard `cogni-agent-functions` is connected by the host app
+- handlers are optional and available only if external shard `ocawe-agent-functions` is connected by the host app
 
 Agent CLI defaults:
 - `agent_codex`, `agent_claude_code`, `agent_opencode`, `agent_qwen` can auto-install their CLI on first use.
@@ -293,22 +293,22 @@ Optional external handler install in host `shard.yml`:
 
 ```yaml
 dependencies:
-  cogni:
-    path: ../cogni
-  cogni-agent-functions:
-    path: ../cogni/shards/agent-functions
+  ocawe:
+    path: ../ocawe
+  ocawe-agent-functions:
+    path: ../ocawe/shards/agent-functions
 ```
 
 Run with RCL:
 
 ```bash
-./build/cogni up --port 4111 --config-rcl ./config.rcl
+./build/ocawe up --port 4111 --config-rcl ./config.rcl
 ```
 
 Or with env:
 
 ```bash
-COGNI_CONFIG_RCL=./config.rcl ./build/cogni up --port 4111
+OCAWE_CONFIG_RCL=./config.rcl ./build/ocawe up --port 4111
 ```
 
 Template example:

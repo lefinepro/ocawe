@@ -1,5 +1,5 @@
 require "../workflows/declarative/run"
-require "../cognicore/ai/client"
+require "../ocawecore/ai/client"
 require "../config/settings"
 require "../utils/config_parser"
 require "aptok"

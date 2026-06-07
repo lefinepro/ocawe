@@ -5,8 +5,8 @@ module ACD
         {
           "openapi" => "3.0.3",
           "info" => {
-            "title" => "CogniCore API",
-            "version" => CogniCore::VERSION,
+            "title" => "OcaweCore API",
+            "version" => OcaweCore::VERSION,
             "description" => "Current HTTP API surface with scaffolded workflow endpoints.",
           },
           "servers" => [

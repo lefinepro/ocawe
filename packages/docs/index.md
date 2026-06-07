@@ -1,4 +1,4 @@
-# Cogni
+# Ocawe
 
 Crystal-first runtime for workflows, agents, triggers, and skills.
 
@@ -14,8 +14,8 @@ Licenses: [ISC](https://spdx.org/licenses/ISC.html) (`LICENSE`) and [0BSD](https
 ## Quickstart
 
 ```bash
-crystal build src/cli/main.cr -o build/cogni
-./build/cogni up --port 4111
+crystal build src/cli/main.cr -o build/ocawe
+./build/ocawe up --port 4111
 ```
 
 Start the Svelte playground:

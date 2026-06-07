@@ -2,12 +2,12 @@ module ACD
   module Kemal
     class App
       private def parse_conditional_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
-        conditions = [] of Tuple(String, Cogni::Workflow::WorkflowNode)
-        otherwise_node = nil.as(Cogni::Workflow::WorkflowNode?)
+        conditions = [] of Tuple(String, Ocawe::Workflow::WorkflowNode)
+        otherwise_node = nil.as(Ocawe::Workflow::WorkflowNode?)
 
         i = start_line
         current_condition = nil.as(String?)
-        current_nodes = [] of Cogni::Workflow::WorkflowNode
+        current_nodes = [] of Ocawe::Workflow::WorkflowNode
         in_else = false
 
         while i <= end_line
@@ -29,7 +29,7 @@ module ACD
               conditions << {current_condition, node}
             end
             current_condition = match[1].strip
-            current_nodes = [] of Cogni::Workflow::WorkflowNode
+            current_nodes = [] of Ocawe::Workflow::WorkflowNode
             next
           end
 
@@ -40,7 +40,7 @@ module ACD
               conditions << {current_condition, node}
             end
             current_condition = nil
-            current_nodes = [] of Cogni::Workflow::WorkflowNode
+            current_nodes = [] of Ocawe::Workflow::WorkflowNode
             in_else = true
             next
           end
@@ -139,12 +139,12 @@ module ACD
 
         return if conditions.empty? && otherwise_node.nil?
 
-        conditional_node = Cogni::Workflow::WorkflowNode.new("if-#{start_line}", Cogni::Workflow::NodeKind::Control) do |node_ctx|
+        conditional_node = Ocawe::Workflow::WorkflowNode.new("if-#{start_line}", Ocawe::Workflow::NodeKind::Control) do |node_ctx|
           selected = conditions.find { |(condition, _)| evaluate_dsl_condition(condition, node_ctx) }.try(&.[1]) || otherwise_node
           if selected
             selected.execute(node_ctx)
           else
-            Cogni::Workflow::WorkflowNodeResult.continue
+            Ocawe::Workflow::WorkflowNodeResult.continue
           end
         end
         ctx.workflow.step(conditional_node)
@@ -153,8 +153,8 @@ module ACD
       private def parse_unless_block(ctx : WorkflowParserContext, start_line : Int32, end_line : Int32) : Nil
         i = start_line
         condition = nil.as(String?)
-        unless_nodes = [] of Cogni::Workflow::WorkflowNode
-        else_nodes = [] of Cogni::Workflow::WorkflowNode
+        unless_nodes = [] of Ocawe::Workflow::WorkflowNode
+        else_nodes = [] of Ocawe::Workflow::WorkflowNode
         in_else = false
 
         while i <= end_line
@@ -283,12 +283,12 @@ module ACD
 
         unless_branch_node = wrap_nodes_in_control(unless_nodes, "unless-branch")
         else_branch_node = else_nodes.empty? ? nil : wrap_nodes_in_control(else_nodes, "else-branch")
-        control_node = Cogni::Workflow::WorkflowNode.new("unless-#{start_line}", Cogni::Workflow::NodeKind::Control) do |node_ctx|
+        control_node = Ocawe::Workflow::WorkflowNode.new("unless-#{start_line}", Ocawe::Workflow::NodeKind::Control) do |node_ctx|
           selected = evaluate_dsl_condition(condition_value, node_ctx) ? else_branch_node : unless_branch_node
           if selected
             selected.execute(node_ctx)
           else
-            Cogni::Workflow::WorkflowNodeResult.continue
+            Ocawe::Workflow::WorkflowNodeResult.continue
           end
         end
         ctx.workflow.step(control_node)

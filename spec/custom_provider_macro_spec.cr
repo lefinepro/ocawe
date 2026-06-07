@@ -1,6 +1,6 @@
 require "./spec_helper"
 
-CogniCore::AI.create_custom_provider(
+OcaweCore::AI.create_custom_provider(
   TestMacroProvider,
   "testmacro",
   "TESTMACRO_BASE_URL",
@@ -8,17 +8,17 @@ CogniCore::AI.create_custom_provider(
   "http://127.0.0.1:9999/v1"
 )
 
-describe "CogniCore::AI.create_custom_provider" do
+describe "OcaweCore::AI.create_custom_provider" do
   it "generates a provider class compatible with AI::Client" do
     old = ENV["COGNICORE_MOCK_LLM"]?
     begin
       ENV["COGNICORE_MOCK_LLM"] = "1"
 
       providers = {
-        "testmacro" => CogniCore::AI::TestMacroProvider.new,
-      } of String => CogniCore::AI::Provider
+        "testmacro" => OcaweCore::AI::TestMacroProvider.new,
+      } of String => OcaweCore::AI::Provider
 
-      response = CogniCore::AI::Client.new(providers).generate_text(
+      response = OcaweCore::AI::Client.new(providers).generate_text(
         "testmacro/demo-model",
         "hello from macro"
       )

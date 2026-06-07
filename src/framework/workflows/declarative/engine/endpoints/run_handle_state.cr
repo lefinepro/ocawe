@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     class WorkflowRunHandle
       def get_result : WorkflowRunResult
@@ -45,7 +45,7 @@ module Cogni
         resume_data : AnyHash?,
         explicit_node : String?
       ) : WorkflowRunResult
-        runtime_logger = Cogni::Logging::WorkflowLogger.new(@workflow_id, @run_id)
+        runtime_logger = Ocawe::Logging::WorkflowLogger.new(@workflow_id, @run_id)
         runtime_logger.run_started(@definition.default_logger)
         @status = RunStatus::Running
         @state = input_data.dup
@@ -90,11 +90,11 @@ module Cogni
           )
 
           workspace = node.metadata["workspace"]?.try(&.as_h?)
-          Cogni::Workflow.workspace_registry.emit("before_node", ctx, workspace.not_nil!) if workspace
+          Ocawe::Workflow.workspace_registry.emit("before_node", ctx, workspace.not_nil!) if workspace
           result = node.execute(ctx)
           if workspace
             event_name = result.action == NodeAction::Fail.to_s.downcase ? "on_error" : "after_node"
-            Cogni::Workflow.workspace_registry.emit(event_name, ctx, workspace)
+            Ocawe::Workflow.workspace_registry.emit(event_name, ctx, workspace)
           end
 
           case result.action

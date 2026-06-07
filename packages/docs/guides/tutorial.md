@@ -3,33 +3,33 @@
 ## 1) Build runtime binary
 
 ```bash
-crystal build src/cli/main.cr -o build/cogni
+crystal build src/cli/main.cr -o build/ocawe
 ```
 
 ## 2) Run dev mode and runtime up
 
 ```bash
-./build/cogni dev --port 4111
-./build/cogni up --port 4111
+./build/ocawe dev --port 4111
+./build/ocawe up --port 4111
 ```
 
-`cogni up` runs auto-build and starts only the runtime server.
+`ocawe up` runs auto-build and starts only the runtime server.
 Docs/playground previews are not part of `up`.
 
 Run workflow as CLI command (Trigger API):
 
 ```bash
 # explicit workflow command
-./build/cogni workflow solver task=deploy env=prod
+./build/ocawe workflow solver task=deploy env=prod
 
 # other trigger kinds
-./build/cogni agent code-reviewer --prompt "review this patch"
-./build/cogni tool project_healthcheck
-./build/cogni support onboarding-check
+./build/ocawe agent code-reviewer --prompt "review this patch"
+./build/ocawe tool project_healthcheck
+./build/ocawe support onboarding-check
 
 # alias executable
-ln -sf ./build/cogni /usr/local/bin/cogni_example_workflow
-cogni_example_workflow
+ln -sf ./build/ocawe /usr/local/bin/ocawe_example_workflow
+ocawe_example_workflow
 ```
 
 ## 3) Explore examples
@@ -45,7 +45,7 @@ Example bundles are in `shards/examples`:
 ## 4) Register a node kind
 
 ```crystal
-Cogni::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
+Ocawe::RegistryApi.node_kind("crystal_native") do |_ctx, attributes|
   {
     "status" => JSON.parse("ok".to_json),
     "message" => attributes["message"]? || JSON.parse("none".to_json),

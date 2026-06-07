@@ -3,7 +3,7 @@ require "file_utils"
 
 describe ACD::Agents::Loader do
   it "loads voice and guardrails frontmatter plus crystal schema blocks" do
-    root = "/tmp/cogni_agents_loader_#{Random.rand(1_000_000)}"
+    root = "/tmp/ocawe_agents_loader_#{Random.rand(1_000_000)}"
     Dir.mkdir_p(root)
 
     begin

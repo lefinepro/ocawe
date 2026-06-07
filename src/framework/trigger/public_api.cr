@@ -1,7 +1,7 @@
 require "http/client"
 require "../workflows/declarative/run"
 
-module Cogni
+module Ocawe
   class Trigger
     @base_url : String
 
@@ -32,7 +32,7 @@ module Cogni
       def initialize(@base_url : String, @kind : String, @id : String)
       end
 
-      def run(payload : Cogni::Workflow::AnyHash = {} of String => JSON::Any) : JSON::Any
+      def run(payload : Ocawe::Workflow::AnyHash = {} of String => JSON::Any) : JSON::Any
         url = "#{trimmed_base_url}/v1/triggers/#{@kind}/#{@id}"
         response = HTTP::Client.post(url, headers: HTTP::Headers{"Content-Type" => "application/json"}, body: payload.to_json)
         JSON.parse(response.body)

@@ -3,13 +3,13 @@ require "./spec_helper"
 describe "workspace bootstrap in settings" do
   it "runs workspace bootstrap during configured function registration" do
     called = false
-    settings = Cogni::Config::Settings.new(
-      workflows: Cogni::Config::WorkflowSettings.new(
+    settings = Ocawe::Config::Settings.new(
+      workflows: Ocawe::Config::WorkflowSettings.new(
         preferred_workflows_root: "./shards/examples",
       ),
       workspace_bootstrap: -> : Nil do
         called = true
-        Cogni::RegistryApi.workspace_resolver do |workspace|
+        Ocawe::RegistryApi.workspace_resolver do |workspace|
           resolved = JSON.parse(workspace.to_json).as_h
           resolved["from_bootstrap"] = json_bool(true)
           resolved
@@ -20,7 +20,7 @@ describe "workspace bootstrap in settings" do
     app = ACD::Kemal::App.new(0, settings: settings)
     app.test_register_configured_functions!
 
-    workflow = Cogni::Workflow.create_workflow("workspace-bootstrap")
+    workflow = Ocawe::Workflow.create_workflow("workspace-bootstrap")
     workflow
       .workspace({"provider" => json_str("docker")})
       .agent_codex("noop")

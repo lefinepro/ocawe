@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     class WorkflowDefinition
       def wait_for_event(event_name : String, resume_label : String? = nil) : self

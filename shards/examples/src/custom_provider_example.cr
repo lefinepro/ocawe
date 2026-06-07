@@ -1,8 +1,8 @@
-require "cogni"
+require "ocawe"
 
-module CogniExamples
-  # Creates CogniCore::AI::AcmeProvider at compile-time.
-  CogniCore::AI.create_custom_provider(
+module OcaweExamples
+  # Creates OcaweCore::AI::AcmeProvider at compile-time.
+  OcaweCore::AI.create_custom_provider(
     AcmeProvider,
     "acme",
     "ACME_BASE_URL",
@@ -11,12 +11,12 @@ module CogniExamples
   )
 
   # Example helper showing how to inject custom providers into AI::Client.
-  def self.custom_provider_client : CogniCore::AI::Client
+  def self.custom_provider_client : OcaweCore::AI::Client
     providers = {
-      "acme" => CogniCore::AI::AcmeProvider.new,
-      "openai" => CogniCore::AI::OpenAIProvider.new,
-    } of String => CogniCore::AI::Provider
+      "acme" => OcaweCore::AI::AcmeProvider.new,
+      "openai" => OcaweCore::AI::OpenAIProvider.new,
+    } of String => OcaweCore::AI::Provider
 
-    CogniCore::AI::Client.new(providers)
+    OcaweCore::AI::Client.new(providers)
   end
 end

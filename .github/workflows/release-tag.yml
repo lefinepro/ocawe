@@ -50,7 +50,7 @@ jobs:
       - name: Build runtime binary
         run: |
           mkdir -p build release
-          crystal build src/cogni.cr --release -o build/cognicore
+          crystal build src/ocawe.cr --release -o build/ocawecore
 
       - name: Build playground prebuild
         run: |
@@ -66,9 +66,9 @@ jobs:
 
       - name: Package assets
         run: |
-          tar -czf release/cognicore-linux.tar.gz -C build cognicore
-          tar -czf release/cogni-playground-dist.tar.gz -C packages/playground dist
-          tar -czf release/cogni-docs-dist.tar.gz -C packages/docs/.vitepress dist
+          tar -czf release/ocawecore-linux.tar.gz -C build ocawecore
+          tar -czf release/ocawe-playground-dist.tar.gz -C packages/playground dist
+          tar -czf release/ocawe-docs-dist.tar.gz -C packages/docs/.vitepress dist
 
       - name: Upload release bundles
         uses: actions/upload-artifact@v4
@@ -92,7 +92,7 @@ jobs:
         with:
           tag_name: ${{ needs.build-release-assets.outputs.tag_name }}
           files: |
-            release/cognicore-linux.tar.gz
-            release/cogni-playground-dist.tar.gz
-            release/cogni-docs-dist.tar.gz
+            release/ocawecore-linux.tar.gz
+            release/ocawe-playground-dist.tar.gz
+            release/ocawe-docs-dist.tar.gz
           generate_release_notes: true

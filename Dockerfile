@@ -1,6 +1,6 @@
 FROM crystallang/crystal:1.13.3
 
-WORKDIR /cogni
+WORKDIR /ocawe
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends libsqlite3-dev nodejs npm ruby \
@@ -10,9 +10,9 @@ COPY shard.yml shard.lock ./
 RUN shards update --production
 
 COPY . .
-RUN shards build cogni --release --no-debug
-RUN chmod +x /cogni/entrypoint.sh
+RUN shards build ocawe --release --no-debug
+RUN chmod +x /ocawe/entrypoint.sh
 
 EXPOSE 4111
 
-ENTRYPOINT ["bash", "/cogni/entrypoint.sh"]
+ENTRYPOINT ["bash", "/ocawe/entrypoint.sh"]

@@ -15,7 +15,7 @@
 
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand">Cogni Playground</div>
+    <div class="brand">Ocawe Playground</div>
     {#each navCategories as nav}
       <a class="nav-item {route === nav.id ? 'active' : ''}" href={`#/${nav.id}`}>{nav.label}</a>
     {/each}
@@ -35,7 +35,7 @@
     {:else if route === "rag"}
       <SimpleTextPage title="RAG" body="Use workflow id rag-playground and Crystal RAG tools." />
     {:else if route === "settings"}
-      <SimpleTextPage title="Settings" body="Dev proxy uses /api -> CogniCore server configured in vite proxy." />
+      <SimpleTextPage title="Settings" body="Dev proxy uses /api -> OcaweCore server configured in vite proxy." />
     {:else}
       <SimpleTextPage title="Not found" body="Unknown route" />
     {/if}

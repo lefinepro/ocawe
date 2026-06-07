@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     class WorkflowDefinition
       def exec(
@@ -8,10 +8,10 @@ module Cogni
         workflow_root : String? = nil,
         attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "exec",
           ref,
@@ -29,10 +29,10 @@ module Cogni
         id : String = "agent_codex",
         attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "node_kind",
           id,
@@ -48,10 +48,10 @@ module Cogni
         id : String = "agent_cliproxy",
         attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "node_kind",
           id,
@@ -67,10 +67,10 @@ module Cogni
         id : String = "agent_opencode",
         attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "node_kind",
           id,
@@ -86,10 +86,10 @@ module Cogni
         id : String = "agent_claude_code",
         attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "node_kind",
           id,
@@ -105,10 +105,10 @@ module Cogni
         id : String = "agent_qwen",
         attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           "node_kind",
           id,
@@ -135,7 +135,7 @@ module Cogni
         attributes : AnyHash? = nil,
         prompt : String? = nil,
         model : String? = nil,
-        resume_schema : Cogni::Workflows::DSL::Validator? = nil,
+        resume_schema : Ocawe::Workflows::DSL::Validator? = nil,
         voice_config : AnyHash? = nil,
         guardrails_config : AnyHash? = nil,
         agent_id : String? = nil,
@@ -145,10 +145,10 @@ module Cogni
         node_kind_name : String? = nil,
         node_kind_attributes : AnyHash? = nil,
         workspace : AnyHash? = nil,
-        input_schema : Cogni::Workflows::DSL::Validator? = nil,
-        output_schema : Cogni::Workflows::DSL::Validator? = nil
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        append_node(Cogni::RegistryApi.build_node(
+        append_node(Ocawe::RegistryApi.build_node(
           self,
           type,
           id,

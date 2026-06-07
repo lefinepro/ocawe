@@ -40,7 +40,7 @@ module ACD
             "workflow_id" => skill[:workflow_id],
             "status" => "ok",
             "result" => {
-              "message" => "Skill execution scaffolded in CogniCore",
+              "message" => "Skill execution scaffolded in OcaweCore",
               "input" => body,
             },
           }.to_json

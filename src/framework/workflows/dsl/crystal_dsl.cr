@@ -1,6 +1,6 @@
 require "./types"
 
-module Cogni
+module Ocawe
   module Workflows
     module DSL
     module CrystalDSL

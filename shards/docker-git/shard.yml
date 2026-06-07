@@ -1,15 +1,15 @@
-name: cogni-docker-git
+name: ocawe-docker-git
 version: 0.1.0
 
 authors:
-  - CogniCore Team
+  - OcaweCore Team
 
 crystal: ">= 1.12.0"
 
 license: MIT
 
 dependencies:
-  cogni:
+  ocawe:
     path: ../..
 
 targets:

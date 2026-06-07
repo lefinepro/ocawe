@@ -1,13 +1,13 @@
-# Cogni Workflow API Specification
+# Ocawe Workflow API Specification
 
 ## Scope
 
-This specification defines the workflow-building API exposed by `Cogni::Workflow`.
+This specification defines the workflow-building API exposed by `Ocawe::Workflow`.
 
 ## Core Type
 
-- `Cogni::Workflow::WorkflowDefinition`
-- Factory: `Cogni::Workflow.build(id, description = nil)`
+- `Ocawe::Workflow::WorkflowDefinition`
+- Factory: `Ocawe::Workflow.build(id, description = nil)`
 
 ## Node Construction
 

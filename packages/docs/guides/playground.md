@@ -1,6 +1,6 @@
 # Playground
 
-Cogni ships a Svelte playground and exposes it as a VitePress custom route at `/playground/`.
+Ocawe ships a Svelte playground and exposes it as a VitePress custom route at `/playground/`.
 
 ## Local Development
 

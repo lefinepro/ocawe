@@ -1,4 +1,4 @@
-# docker-git foundation example built on Cogni primitives.
+# docker-git foundation example built on Ocawe primitives.
 
 workflow "docker-git" do
   @[Workspace(

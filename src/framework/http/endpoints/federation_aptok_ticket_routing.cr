@@ -6,7 +6,7 @@ module ACD
         follow = if remote_actor.empty?
                    Aptok::JsonMap.new
                  else
-                   @federation_kv.get("cogni:federation:follow:#{remote_actor}").try { |raw| JSON.parse(raw).as_h } || Aptok::JsonMap.new
+                   @federation_kv.get("ocawe:federation:follow:#{remote_actor}").try { |raw| JSON.parse(raw).as_h } || Aptok::JsonMap.new
                  end
         process_polled_activity(follow, activity)
       end

@@ -1,0 +1,14 @@
+api = "federation"
+
+federation do
+  auto_subscribe = ["@oq.col.pub"]
+end
+
+datasets do
+  adapter = "memory"
+  file_root = "./.ocawe/datasets"
+end
+
+workflows do
+  preferred_workflows_root = "./workflows"
+end

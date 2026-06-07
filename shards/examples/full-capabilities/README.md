@@ -15,7 +15,7 @@ Runnable example for all active `.acd.cr` directives used by the current loader:
 ## Run
 
 ```bash
-./build/cogni up --port 4111 --workflows-root ./shards/examples/full-capabilities --fallback-workflows-root ./shards/examples/full-capabilities
+./build/ocawe up --port 4111 --workflows-root ./shards/examples/full-capabilities --fallback-workflows-root ./shards/examples/full-capabilities
 ```
 
 ## API

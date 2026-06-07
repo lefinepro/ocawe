@@ -1,7 +1,7 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
-  title: "Cogni",
+  title: "Ocawe",
   description: "Crystal-first runtime for workflows, agents, triggers, and skills",
   themeConfig: {
     nav: [

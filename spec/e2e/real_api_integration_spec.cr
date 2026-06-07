@@ -15,12 +15,12 @@ describe "E2E: Real Model API Integration" do
       if E2ETestHelpers.mock_mode?
         model = E2ETestHelpers.default_model
 
-        workflow = Cogni::Workflow.create_workflow("e2e-real-api", "Real API test")
+        workflow = Ocawe::Workflow.create_workflow("e2e-real-api", "Real API test")
         workflow
           .agent("api-agent", model: model, prompt: "You are a helpful assistant. Respond with exactly: OK")
           .commit
 
-        engine = Cogni::Workflow::Engine.new
+        engine = Ocawe::Workflow::Engine.new
         engine.register(workflow)
 
         result = engine.create_run("e2e-real-api").start(input_data: {
@@ -40,12 +40,12 @@ describe "E2E: Real Model API Integration" do
 
       model = E2ETestHelpers.default_model
 
-      workflow = Cogni::Workflow.create_workflow("e2e-real-api", "Real API test")
+      workflow = Ocawe::Workflow.create_workflow("e2e-real-api", "Real API test")
       workflow
         .agent("api-agent", model: model, prompt: "You are a helpful assistant. Respond with exactly: OK")
         .commit
 
-      engine = Cogni::Workflow::Engine.new
+      engine = Ocawe::Workflow::Engine.new
       engine.register(workflow)
 
       result = engine.create_run("e2e-real-api").start(input_data: {

@@ -1,7 +1,7 @@
 # E2E Test Example Workflow
 #
 # This workflow demonstrates comprehensive E2E testing scenarios.
-# It uses the clipproxyapi/qwen3-coder-model (configurable via COGNI_E2E_MODEL).
+# It uses the clipproxyapi/qwen3-coder-model (configurable via OCAWE_E2E_MODEL).
 #
 # Features demonstrated:
 # - Model API configuration
@@ -11,7 +11,7 @@
 # - Voice integration
 #
 # Usage:
-#   ./build/cogni up --port 4111 --workflows-root ./shards/examples/e2e-test
+#   ./build/ocawe up --port 4111 --workflows-root ./shards/examples/e2e-test
 
 workflow "e2e-test" do
   # Use model from environment or default to qwen3-coder-model

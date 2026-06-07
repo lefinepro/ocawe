@@ -1,30 +1,30 @@
-module Cogni
+module Ocawe
   module Registry
     extend self
     def node_kind(
       kind : String,
-      &block : Cogni::Workflow::NodeContext, Cogni::Workflow::AnyHash -> Cogni::Workflow::NodeKindResult
+      &block : Ocawe::Workflow::NodeContext, Ocawe::Workflow::AnyHash -> Ocawe::Workflow::NodeKindResult
     ) : Nil
-      Cogni::RegistryApi.node_kind(kind, &block)
+      Ocawe::RegistryApi.node_kind(kind, &block)
     end
 
     def resource(
       name : String,
-      &block : Cogni::Workflow::NodeContext, Cogni::Workflow::AnyHash -> Cogni::Workflow::AnyHash
+      &block : Ocawe::Workflow::NodeContext, Ocawe::Workflow::AnyHash -> Ocawe::Workflow::AnyHash
     ) : Nil
-      Cogni::RegistryApi.resource(name, &block)
+      Ocawe::RegistryApi.resource(name, &block)
     end
 
-    def workspace_schema(name : String, &block : Cogni::Workflow::AnyHash -> Nil) : Nil
-      Cogni::RegistryApi.workspace_schema(name, &block)
+    def workspace_schema(name : String, &block : Ocawe::Workflow::AnyHash -> Nil) : Nil
+      Ocawe::RegistryApi.workspace_schema(name, &block)
     end
 
-    def workspace_resolver(&block : Cogni::Workflow::AnyHash -> Cogni::Workflow::AnyHash) : Nil
-      Cogni::RegistryApi.workspace_resolver(&block)
+    def workspace_resolver(&block : Ocawe::Workflow::AnyHash -> Ocawe::Workflow::AnyHash) : Nil
+      Ocawe::RegistryApi.workspace_resolver(&block)
     end
 
-    def workspace_hook(event : String, &block : Cogni::Workflow::NodeContext, Cogni::Workflow::AnyHash -> Nil) : Nil
-      Cogni::RegistryApi.workspace_hook(event, &block)
+    def workspace_hook(event : String, &block : Ocawe::Workflow::NodeContext, Ocawe::Workflow::AnyHash -> Nil) : Nil
+      Ocawe::RegistryApi.workspace_hook(event, &block)
     end
   end
 end

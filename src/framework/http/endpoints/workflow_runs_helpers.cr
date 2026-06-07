@@ -18,7 +18,7 @@ module ACD
         @workflow_service.load_snapshot(workflow_id, run_id).try(&.to_json) || {"status" => "ok"}.to_json
       end
 
-      private def start_workflow_run_from_body(env, workflow_id : String, body : Cogni::Workflow::AnyHash) : String
+      private def start_workflow_run_from_body(env, workflow_id : String, body : Ocawe::Workflow::AnyHash) : String
         input_data = body["input_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body.dup
         resources = body["resources"]?.try(&.as_h?)
         input_data.delete("resources")
@@ -30,13 +30,13 @@ module ACD
         end
         return result_or_error if result_or_error.is_a?(String)
 
-        run_result = result_or_error.as(Cogni::Workflow::WorkflowRunResult)
+        run_result = result_or_error.as(Ocawe::Workflow::WorkflowRunResult)
         env.response.status_code = 201
         env.response.content_type = "application/json"
         @workflow_service.load_snapshot(workflow_id, run_result.run_id).try(&.to_json) || run_result.to_json
       end
 
-      private def resume_workflow_run_from_body(env, workflow_id : String, run_id : String, body : Cogni::Workflow::AnyHash, node : (String | Array(String) | Nil) = nil, wait_for_all_paths : Bool = false) : (String | Nil)
+      private def resume_workflow_run_from_body(env, workflow_id : String, run_id : String, body : Ocawe::Workflow::AnyHash, node : (String | Array(String) | Nil) = nil, wait_for_all_paths : Bool = false) : (String | Nil)
         resume_data = body["resume_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body.dup
         resources = body["resources"]?.try(&.as_h?)
         resume_data.delete("action")

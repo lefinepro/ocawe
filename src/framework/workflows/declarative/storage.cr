@@ -1,4 +1,4 @@
-module Cogni
+module Ocawe
   module Workflow
     module SnapshotStore
       abstract def persist(snapshot : WorkflowRunSnapshot)

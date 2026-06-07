@@ -1,10 +1,10 @@
 require "rcl"
 require "../config/settings"
 
-module CogniCore
+module OcaweCore
   module Utils
     module ConfigParser
-      DEFAULT_RCL_PATH = "cogni.config.rcl"
+      DEFAULT_RCL_PATH = "ocawe.config.rcl"
 
       # Parses a key=value assignment line, handling quoted values
       def self.parse_assignment(line : String) : Tuple(String?, String)
@@ -46,8 +46,8 @@ module CogniCore
         end
       end
 
-      def self.load_settings(default_settings : Cogni::Config::Settings, rcl_path : String? = nil) : Cogni::Config::Settings
-        explicit = rcl_path || ENV["COGNI_CONFIG_RCL"]?
+      def self.load_settings(default_settings : Ocawe::Config::Settings, rcl_path : String? = nil) : Ocawe::Config::Settings
+        explicit = rcl_path || ENV["OCAWE_CONFIG_RCL"]?
         explicit_path = explicit && !explicit.to_s.strip.empty? ? explicit.to_s.strip : nil
         path = if explicit_path
                  explicit_path
@@ -66,7 +66,7 @@ module CogniCore
           apply_rcl_settings(default_settings, document_to_h(doc))
         rescue ex
           raise ex if explicit_path
-          STDERR.puts "[cogni] warning: failed to parse #{resolved}: #{ex.message}; using defaults"
+          STDERR.puts "[ocawe] warning: failed to parse #{resolved}: #{ex.message}; using defaults"
           default_settings
         end
       end

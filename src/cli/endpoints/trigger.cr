@@ -1,9 +1,9 @@
-module CogniCore
+module OcaweCore
   module CLI
     class Main
       private def run_trigger_command(kind : String, target_id : String, args : Array(String)) : Nil
         endpoint = trigger_endpoint_for(kind)
-        base_url = ENV["COGNI_TRIGGER_BASE_URL"]? || DEFAULT_TRIGGER_BASE_URL
+        base_url = ENV["OCAWE_TRIGGER_BASE_URL"]? || DEFAULT_TRIGGER_BASE_URL
         run_id = nil.as(String?)
         resource_id = nil.as(String?)
         input_json = nil.as(Hash(String, JSON::Any)?)
@@ -60,12 +60,12 @@ module CogniCore
           if success_status?(response.status_code)
             print_json_or_raw(response.body)
           else
-            STDERR.puts "[cogni] #{kind} trigger failed: HTTP #{response.status_code}"
+            STDERR.puts "[ocawe] #{kind} trigger failed: HTTP #{response.status_code}"
             print_json_or_raw(response.body, io: STDERR)
             exit(1)
           end
         rescue ex
-          STDERR.puts "[cogni] failed to call #{kind} trigger: #{ex.message}"
+          STDERR.puts "[ocawe] failed to call #{kind} trigger: #{ex.message}"
           exit(1)
         end
       end

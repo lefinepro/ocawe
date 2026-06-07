@@ -45,7 +45,7 @@ cp scripts/maddy-outbound-ip/outbound-ip-map.example.env /tmp/maddy-outbound-ip.
 - `PTR_HOSTS` - соответствие `ip=ptr-hostname`.
 - `TEST_FROM` и `TEST_RECIPIENT` - для smoke-теста отправки (опционально).
 
-3. Скопируйте env на сервер (или создайте `/etc/cogni/maddy-outbound-ip.env` вручную).
+3. Скопируйте env на сервер (или создайте `/etc/ocawe/maddy-outbound-ip.env` вручную).
 
 4. Запустите playbook:
 
@@ -63,8 +63,8 @@ Playbook:
 - проверяет соответствие `domain -> IP` по DNS (`STRICT_DNS_MATCH`),
 - проверяет PTR для исходящих IP (`STRICT_PTR_MATCH`),
 - валидирует, что `DOMAIN_IP_MAP` использует только адреса из `SERVER_IPS`,
-- рендерит multi-IP snippet в `/etc/cogni/maddy-outbound-multiip.rendered.conf`,
-- рендерит route hints в `/etc/cogni/maddy-outbound-routes.generated.txt`,
+- рендерит multi-IP snippet в `/etc/ocawe/maddy-outbound-multiip.rendered.conf`,
+- рендерит route hints в `/etc/ocawe/maddy-outbound-routes.generated.txt`,
 - опционально запускает smoke-тест отправки и замер enqueue latency (`STRICT_ENQUEUE_LATENCY`),
 - оставляет fallback-маршрут через основной IP.
 
@@ -73,8 +73,8 @@ Playbook:
 По умолчанию auto-append выключен (`APPLY_MADDY_SNIPPET="no"`).
 
 Рекомендовано:
-1. Вручную объединить `/etc/cogni/maddy-outbound-multiip.rendered.conf` с вашим `/etc/maddy/maddy.conf`.
-2. Встроить блоки из `/etc/cogni/maddy-outbound-routes.generated.txt` в `submission` endpoint.
+1. Вручную объединить `/etc/ocawe/maddy-outbound-multiip.rendered.conf` с вашим `/etc/maddy/maddy.conf`.
+2. Встроить блоки из `/etc/ocawe/maddy-outbound-routes.generated.txt` в `submission` endpoint.
 3. Перезапустить Maddy и проверить логи.
 
 Минимальная схема:

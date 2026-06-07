@@ -2,14 +2,14 @@ require "./spec_helper"
 
 describe "ACD::Kemal::App federation actor document" do
   it "builds an actor document for a loaded workflow" do
-    key_path = File.tempname("cogni-fed-key", ".pem")
+    key_path = File.tempname("ocawe-fed-key", ".pem")
     Process.run("openssl", args: ["genrsa", "-out", key_path, "2048"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?.should be_true
 
-    settings = Cogni::Config::Settings.new(
-      workflows: Cogni::Config::WorkflowSettings.new(
+    settings = Ocawe::Config::Settings.new(
+      workflows: Ocawe::Config::WorkflowSettings.new(
         preferred_workflows_root: "./src/workflows"
       ),
-      federation: Cogni::Config::FederationSettings.new(
+      federation: Ocawe::Config::FederationSettings.new(
         local_actor: "https://deployer.col.pub/actors/deploy-on-akash",
         local_key_id: "https://deployer.col.pub/actors/deploy-on-akash#main-key",
         local_private_key_path: key_path
