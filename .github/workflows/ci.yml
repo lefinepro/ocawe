@@ -26,7 +26,6 @@ jobs:
         run: |
           mkdir -p bin
           crystal build -Dpreview_mt -o bin/ameba lib/ameba/src/cli.cr
-
       - name: Run Ameba
         run: bin/ameba
 
