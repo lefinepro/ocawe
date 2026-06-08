@@ -133,10 +133,11 @@ module ACD
         cawfile.agents.each do |agent_spec|
           agent_index[agent_spec.id] = Agents::LoadedAgent.new(
             id: agent_spec.id,
+            file_path: bundle.workflow_file,
+            description: agent_spec.description || "",
+            frontmatter: {} of String => YAML::Any,
             prompt: agent_spec.prompt || "",
             model: agent_spec.model,
-            description: agent_spec.description || "",
-            file_path: bundle.workflow_file,
             voice_config: agent_spec.voice_config.try { |h| h.transform_values { |v| JSON.parse(v.to_json) } } || {} of String => JSON::Any,
             guardrails_config: agent_spec.guardrails_config.try { |h| h.transform_values { |v| JSON.parse(v.to_json) } } || {} of String => JSON::Any,
           )
@@ -187,25 +188,25 @@ module ACD
             when "exec"
               workflow.exec(
                 step.id,
-                runtime: step.params["runtime"]?.try { |v| rcl_value_to_json_any(v).as_h? },
-                env: step.params["env"]?.try { |v| rcl_value_to_json_any(v).as_h? },
+                runtime: step.params["runtime"]?.try(&.as_h?),
+                env: step.params["env"]?.try(&.as_h?),
                 workflow_root: bundle.root_path,
               )
             when "suspend"
-              workflow.suspend(step.id, reason: step.params["reason"]?.try { |v| v.is_a?(String) ? v : v.to_s } || "human input required")
+              workflow.suspend(step.id, reason: step.params["reason"]?.try(&.as_s?) || "human input required")
             when "rag"
-              workflow.rag(step.id, config: step.params["config"]?.try { |v| rcl_value_to_json_any(v).as_h? } || {} of String => JSON::Any)
+              workflow.rag(step.id, config: step.params["config"]?.try(&.as_h?) || {} of String => JSON::Any)
             when "voice"
-              workflow.voice(step.id, config: step.params["config"]?.try { |v| rcl_value_to_json_any(v).as_h? } || {} of String => JSON::Any)
+              workflow.voice(step.id, config: step.params["config"]?.try(&.as_h?) || {} of String => JSON::Any)
             when "control", "node_kind"
               workflow.step("node_kind", step.id,
-                node_kind_name: step.params["kind"]?.try { |v| v.is_a?(String) ? v : v.to_s } || step.id,
-                node_kind_attributes: step.params.reject { |k, _| k == "kind" }.transform_values { |v| rcl_value_to_json_any(v) },
+                node_kind_name: step.params["kind"]?.try(&.as_s?) || step.id,
+                node_kind_attributes: step.params.reject { |k, _| k == "kind" },
               )
             else
               workflow.step("node_kind", step.id,
                 node_kind_name: step.type,
-                node_kind_attributes: step.params.transform_values { |v| rcl_value_to_json_any(v) },
+                node_kind_attributes: step.params,
               )
             end
           end

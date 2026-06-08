@@ -46,16 +46,11 @@ module ACD
         cawfile = CawfileLoader.load(dir, id)
 
         if cawfile
-          workflow_file = cawfile.workflow_file ? File.join(dir, cawfile.workflow_file.not_nil!) : nil
-          # If explicit workflow_file provided, it must exist, else Cawfile steps are source of truth
-          if workflow_file && !File.file?(workflow_file)
-            raise "#{dir}: Cawfile references missing workflow_file #{workflow_file}"
-          end
-
+          cawfile_path = CawfileLoader.find_cawfile(dir)
           return WorkflowBundle.new(
             id: id,
             root_path: dir,
-            workflow_file: workflow_file || File.join(dir, ".caw"),
+            workflow_file: cawfile_path || File.join(dir, ".caw"),
             agents_dir: File.join(dir, "agents"),
             skills_dir: File.join(dir, "skills"),
             source_root_type: source_type,

@@ -83,7 +83,7 @@ module OcaweCore
         runtime.wait
       end
 
-      private def build_runtime(release : Bool, static : Bool = false, output : String) : Bool
+      private def build_runtime(release : Bool, static : Bool = false, output : String = RUNTIME_BIN) : Bool
         flags = [] of String
         flags << "--release" if release
         flags << "--static" if static
