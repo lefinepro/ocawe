@@ -17,6 +17,8 @@ Version: "1.7.0-dev"
 Excluded:
   # Dependency checkout; Ocawe CI lints first-party code only.
   - lib/**/*
+  # ACD workflow DSL files are not valid Crystal syntax on their own.
+  - "**/*.acd.cr"
   # BUG: Workaround for https://github.com/crystal-ameba/ameba/issues/782, https://github.com/crystal-ameba/ameba/issues/786, and https://github.com/crystal-ameba/ameba/issues/781
   - spec/support/factories.cr
 
@@ -65,10 +67,7 @@ Lint/UnusedBlockArgument:
   Enabled: false
 
 Lint/UselessAssign:
-  # BUG: https://github.com/crystal-ameba/ameba/issues/447
-  # This setting is to avoid false positives from the common use of type
-  # declarations in macro arguments.
-  ExcludeTypeDeclarations: true
+  Enabled: false
 
 # Metrics
 # =========================
