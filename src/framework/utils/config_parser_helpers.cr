@@ -2,9 +2,7 @@ require "set"
 module OcaweCore
   module Utils
     module ConfigParser
-      private def self.apply_rcl_settings(base : Ocawe::Config::Settings, raw : Hash(String, RCL::Value)) : Ocawe::Config::Settings
-        root = raw["root"]?
-        tree = root.is_a?(Hash(String, RCL::Value)) ? root : raw
+      private def self.apply_raw_settings(base : Ocawe::Config::Settings, tree : Hash(String, RCL::Value)) : Ocawe::Config::Settings
         apply_credentials_env_overrides(tree["credentials"]?)
 
         workflows = base.workflows
@@ -76,6 +74,25 @@ module OcaweCore
           workspace_bootstrap: base.workspace_bootstrap,
           mcp: base.mcp,
         )
+      end
+
+      private def self.apply_rcl_settings(base : Ocawe::Config::Settings, raw : Hash(String, RCL::Value)) : Ocawe::Config::Settings
+        root = raw["root"]?
+        tree = root.is_a?(Hash(String, RCL::Value)) ? root : raw
+        apply_raw_settings(base, tree)
+      end
+
+      # Applies settings from a root Cawfile bundle (no workflow context).
+      def self.apply_cawfile_settings(base : Ocawe::Config::Settings, bundle : ACD::Discovery::CawfileBundle) : Ocawe::Config::Settings
+        tree = {} of String => RCL::Value
+        tree["api"] = bundle.config_workflows unless bundle.config_workflows.empty?
+        tree["federation"] = bundle.config_federation unless bundle.config_federation.empty?
+        tree["datasets"] = bundle.config_datasets unless bundle.config_datasets.empty?
+        tree["workflows"] = bundle.config_workflows unless bundle.config_workflows.empty?
+        tree["node_kinds"] = bundle.config_node_kinds unless bundle.config_node_kinds.empty?
+        tree["functions"] = bundle.config_functions unless bundle.config_functions.empty?
+        tree["mcp"] = bundle.config_mcp unless bundle.config_mcp.empty?
+        apply_raw_settings(base, tree)
       end
 
       private def self.document_to_h(doc : RCL::Document) : Hash(String, RCL::Value)
@@ -178,11 +195,11 @@ module OcaweCore
         name == "region" ? "regions" : name
       end
 
-      private def self.string_or_nil(value : RCL::Value?) : String?
+      def self.string_or_nil(value : RCL::Value?) : String?
         value.is_a?(String) ? value : nil
       end
 
-      private def self.int32_or_nil(value : RCL::Value?) : Int32?
+      def self.int32_or_nil(value : RCL::Value?) : Int32?
         case value
         when Int32
           value

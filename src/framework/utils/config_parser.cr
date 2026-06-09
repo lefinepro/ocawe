@@ -1,5 +1,6 @@
 require "rcl"
 require "../config/settings"
+require "../discovery/cawfile_loader"
 
 module OcaweCore
   module Utils
@@ -49,26 +50,46 @@ module OcaweCore
       def self.load_settings(default_settings : Ocawe::Config::Settings, rcl_path : String? = nil) : Ocawe::Config::Settings
         explicit = rcl_path || ENV["OCAWE_CONFIG_RCL"]?
         explicit_path = explicit && !explicit.to_s.strip.empty? ? explicit.to_s.strip : nil
-        path = if explicit_path
-                 explicit_path
-               elsif File.exists?(DEFAULT_RCL_PATH)
-                 DEFAULT_RCL_PATH
-               else
-                 nil
-               end
-        return default_settings unless path
 
-        resolved = path
-        raise "RCL config file not found: #{resolved}" unless File.exists?(resolved)
-
-        begin
-          doc = parse_rcl_with_legacy_api_support(resolved)
-          apply_rcl_settings(default_settings, document_to_h(doc))
-        rescue ex
-          raise ex if explicit_path
-          STDERR.puts "[ocawe] warning: failed to parse #{resolved}: #{ex.message}; using defaults"
-          default_settings
+        # 1. Explicit RCL path takes highest precedence
+        if explicit_path
+          raise "RCL config file not found: #{explicit_path}" unless File.exists?(explicit_path)
+          doc = parse_rcl_with_legacy_api_support(explicit_path)
+          return apply_rcl_settings(default_settings, document_to_h(doc))
         end
+
+        # 2. Root Cawfile (mirrors ocawe.config.rcl settings)
+        if cawfile_bundle = ACD::Discovery::CawfileLoader.load_root
+          return apply_cawfile_settings(default_settings, cawfile_bundle)
+        end
+
+        # 3. Legacy ocawe.config.rcl fallback
+        if File.exists?(DEFAULT_RCL_PATH)
+          doc = parse_rcl_with_legacy_api_support(DEFAULT_RCL_PATH)
+          return apply_rcl_settings(default_settings, document_to_h(doc))
+        end
+
+        default_settings
+      rescue ex
+        raise ex if explicit_path
+        STDERR.puts "[ocawe] warning: failed to load settings: #{ex.message}; using defaults"
+        default_settings
+      end
+
+      def self.load_start_settings(default_settings : Ocawe::Config::StartSettings) : Ocawe::Config::StartSettings
+        if cawfile_bundle = ACD::Discovery::CawfileLoader.load_root
+          start = cawfile_bundle.start_settings
+          port = int32_or_nil(start["port"]?)
+          workflows_root = string_or_nil(start["workflows_root"]?)
+          return Ocawe::Config::StartSettings.new(
+            port: port || default_settings.port,
+            workflows_root: workflows_root || default_settings.workflows_root
+          )
+        end
+        default_settings
+      rescue ex
+        STDERR.puts "[ocawe] warning: failed to load start settings from Cawfile: #{ex.message}; using defaults"
+        default_settings
       end
 
       private def self.parse_rcl_with_legacy_api_support(path : String) : RCL::Document

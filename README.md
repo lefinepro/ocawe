@@ -52,9 +52,7 @@ services:
       - "4111:4111"
     environment:
       - OCAWE_BUILD_ARGS=--release
-      - OCAWE_CONFIG_RCL=/ocawe/ocawe.config.rcl
     volumes:
-      - ./ocawe.config.rcl:/ocawe/ocawe.config.rcl:ro
       - /root/.codex:/root/.codex
     restart: unless-stopped
 ```
@@ -206,35 +204,38 @@ Federation defaults:
 - Aptok in-process KV and queues are used by default.
 - `auto_subscribe` remains supported for startup remote actor tracking.
 
-Alternative config format (RCL) is also supported.
-Static config file `./ocawe.config.rcl` is auto-loaded when present.
+Alternative config format (RCL) is also supported via an explicit `--config-rcl` path, or a root `Cawfile` (`.caw`) in the working directory is auto-loaded when present.
 
-Example `config.rcl`:
+Example root `Cawfile`:
 
 ```rcl
-api = "federation"
-
-federation do
-  auto_subscribe = [".col.pub"]
+settings do
+  data.adapter = "memory"
+  port = 4111
 end
 
-datasets do
-  adapter = "file"
-  file_root = "./.ocawe/datasets"
+import do
+  workflows = ["./workflows/*.acd.cr"]
 end
 
-workflows do
-  preferred_workflows_root = "./workflows"
+workflow "solver-codex" do
+  follow = ["@coder@example.com"]
+  description = "Codex solver"
 end
 ```
 
-Default static file in repo: `ocawe.config.rcl`.
+The `settings` block holds all configuration (`federation.*`, `data.*`, `port`, etc.).
+The `import` block specifies workflow files to load (supports glob patterns and regex).
+The `workflow` block defines a workflow with optional `follow` for federation auto-subscribe.
 
-`api` supports string or array of strings:
+Default static file in repo: `Cawfile`.
+
+API types:
+- API type is now determined by workflow schema (`input_schema` and `output_schema`)
 - `"federation"`: ForgeFed-only mode (mounts Aptok ActivityPub routes (`/actors/*`, `/inbox`, WebFinger/NodeInfo) plus health/docs)
 - `"classic"`: default runtime APIs (`/v1/*`)
 - `"mastra"`: backward-compatible alias for `"classic"`
-- `["classic", "federation"]`: enable both groups
+- Schemas specify API type via their structure (e.g., ForgeFed activities for federation, JSON for classic)
 
 Federation persistence:
 - Federation state is managed through Aptok KV/queue primitives. The current runtime uses in-process Aptok storage; configure durable Aptok storage when adding a persistent deployment adapter.
@@ -247,7 +248,7 @@ Agent CLI defaults:
 - `agent_codex`, `agent_claude_code`, `agent_opencode`, `agent_qwen` can auto-install their CLI on first use.
 - `CODEX_BIN` / `CLAUDE_BIN` / `OPENCODE_BIN` / `QWEN_BIN` are optional executable overrides.
 - per-provider credentials/config paths can be set in node params (`path_to_credentials`, `path_to_config`, `path_to_config_codex`) or via env.
-- federation merge runs (`api=federation`, `activity=merge`) inject strict prompt instructions for `agent_*` to return ForgeFed `Offer(Ticket)` JSON only.
+- federation merge runs inject strict prompt instructions for `agent_*` to return ForgeFed `Offer(Ticket)` JSON only.
 
 Minimal workflow snippets:
 

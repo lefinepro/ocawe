@@ -1,89 +1,40 @@
 require "rcl"
-require "json"
 
 module ACD
   module Discovery
     struct CawfileBundle
       getter id : String
-      getter version : String?
-      getter description : String?
-      getter packages : Array(String)
-      getter keys : Array(CawfileKeySpec)
-      getter agents : Array(CawfileAgentSpec)
-      getter skills : Array(CawfileSkillSpec)
-      getter workflow_steps : Array(CawfileWorkflowStep)
       # Embedded config (mirrors ocawe.config.rcl fields)
-      getter config_api : Array(String)
       getter config_federation : Hash(String, RCL::Value)
       getter config_datasets : Hash(String, RCL::Value)
+      getter config_workflows : Hash(String, RCL::Value)
       getter config_node_kinds : Hash(String, RCL::Value)
       getter config_functions : Hash(String, RCL::Value)
       getter config_mcp : Hash(String, RCL::Value)
+      getter start_settings : Hash(String, RCL::Value)
+      # Raw .acd.cr-style DSL source lines inside the workflow block
+      getter dsl_source : Array(String)?
+      # Federation follow targets extracted from workflow block
+      getter follow : Array(String)
+      # Import paths for workflow files
+      getter import_paths : Array(String)
+      # Nix packages to install inside the container
+      getter packages : Array(String)
 
       def initialize(
         @id : String,
-        @version : String? = nil,
-        @description : String? = nil,
-        @packages : Array(String) = [] of String,
-        @keys : Array(CawfileKeySpec) = [] of CawfileKeySpec,
-        @agents : Array(CawfileAgentSpec) = [] of CawfileAgentSpec,
-        @skills : Array(CawfileSkillSpec) = [] of CawfileSkillSpec,
-        @workflow_steps : Array(CawfileWorkflowStep) = [] of CawfileWorkflowStep,
-        @config_api : Array(String) = ["classic"] of String,
         @config_federation : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_datasets : Hash(String, RCL::Value) = {} of String => RCL::Value,
+        @config_workflows : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_node_kinds : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_functions : Hash(String, RCL::Value) = {} of String => RCL::Value,
-        @config_mcp : Hash(String, RCL::Value) = {} of String => RCL::Value
+        @config_mcp : Hash(String, RCL::Value) = {} of String => RCL::Value,
+        @start_settings : Hash(String, RCL::Value) = {} of String => RCL::Value,
+        @dsl_source : Array(String)? = nil,
+        @follow : Array(String) = [] of String,
+        @import_paths : Array(String) = [] of String,
+        @packages : Array(String) = [] of String
       )
-      end
-    end
-
-    struct CawfileKeySpec
-      getter name : String
-      getter required : Bool
-      getter description : String?
-      getter provider : String?
-
-      def initialize(@name : String, @required : Bool = false, @description : String? = nil, @provider : String? = nil)
-      end
-    end
-
-    struct CawfileAgentSpec
-      getter id : String
-      getter prompt : String?
-      getter model : String?
-      getter description : String?
-      getter voice_config : Hash(String, String)?
-      getter guardrails_config : Hash(String, String)?
-
-      def initialize(
-        @id : String,
-        @prompt : String? = nil,
-        @model : String? = nil,
-        @description : String? = nil,
-        @voice_config : Hash(String, String)? = nil,
-        @guardrails_config : Hash(String, String)? = nil
-      )
-      end
-    end
-
-    struct CawfileSkillSpec
-      getter id : String
-      getter name : String?
-      getter description : String?
-      getter file : String?
-
-      def initialize(@id : String, @name : String? = nil, @description : String? = nil, @file : String? = nil)
-      end
-    end
-
-    struct CawfileWorkflowStep
-      getter type : String
-      getter id : String
-      getter params : Hash(String, JSON::Any)
-
-      def initialize(@type : String, @id : String, @params : Hash(String, JSON::Any) = {} of String => JSON::Any)
       end
     end
 
@@ -102,222 +53,445 @@ module ACD
         path = find_cawfile(dir)
         return nil unless path
 
-        doc = RCL.parse_file(path)
-        workflow_block = find_workflow_block(doc)
+        raw_content = File.read(path)
+        raw_lines = raw_content.lines
 
-        if workflow_block
-          workflow_id = workflow_block.argument || id
-          bundles = [parse_workflow_block_content(workflow_block, workflow_id)]
-        else
-          # No workflow block: treat root-level blocks as config + anonymous workflow
-          bundles = [parse_root_document(doc, id)]
+        # First, try to parse with RCL to extract settings, import, and follow
+        begin
+          doc = RCL.parse_string(raw_content)
+          workflow_block = find_workflow_block(doc)
+
+          if workflow_block
+            workflow_id = workflow_block.argument || id
+            root_config = parse_settings_block(doc)
+            import_paths = extract_import_paths(doc)
+            follow = extract_follow(workflow_block)
+            packages = extract_packages_from_raw(raw_lines)
+            dsl_lines = extract_workflow_body_lines(raw_lines)
+
+            return CawfileBundle.new(
+              id: workflow_id,
+              dsl_source: dsl_lines,
+              config_federation: root_config.config_federation,
+              config_datasets: root_config.config_datasets,
+              config_workflows: root_config.config_workflows,
+              config_node_kinds: root_config.config_node_kinds,
+              config_functions: root_config.config_functions,
+              config_mcp: root_config.config_mcp,
+              start_settings: root_config.start_settings,
+              follow: follow,
+              import_paths: import_paths,
+              packages: packages
+            )
+          end
+
+          # No workflow block: just parse settings
+          return nil
+        rescue ex
+          # RCL parse failed - fall back to raw line-based parsing
+          # Extract import and follow from raw lines
+          import_paths = extract_import_paths_from_raw(raw_lines)
+          follow = extract_follow_from_raw(raw_lines)
+          packages = extract_packages_from_raw(raw_lines)
+          dsl_lines = extract_workflow_body_lines(raw_lines)
+
+          # Extract settings from raw lines
+          fed = {} of String => RCL::Value
+          ds = {} of String => RCL::Value
+          wf = {} of String => RCL::Value
+          nk = {} of String => RCL::Value
+          fn = {} of String => RCL::Value
+          mcp = {} of String => RCL::Value
+          start = {} of String => RCL::Value
+
+          in_settings = false
+          settings_depth = 0
+          raw_lines.each do |line|
+            stripped = line.strip
+            if stripped.match(/^\s*settings\s+do/)
+              in_settings = true
+              settings_depth = 1
+              next
+            end
+            if in_settings
+              if stripped.match(/^do/)
+                settings_depth += 1
+                next
+              end
+              if stripped.match(/^end/)
+                settings_depth -= 1
+                if settings_depth <= 0
+                  in_settings = false
+                  next
+                end
+              end
+              # Parse dot-notation keys
+              if eq_idx = stripped.index('=')
+                key = stripped[0, eq_idx].strip
+                value_raw = stripped[eq_idx + 1, stripped.size - eq_idx - 1].strip
+                case key
+                when "port"
+                  start["port"] = parse_value(value_raw)
+                else
+                  if key.includes?('.')
+                    parts = key.split('.', 2)
+                    block_name = parts[0]
+                    prop_name = parts[1]
+                    case block_name
+                    when "federation"
+                      fed[prop_name] = parse_value(value_raw)
+                    when "data", "datasets"
+                      ds[prop_name] = parse_value(value_raw)
+                    when "workflows"
+                      wf[prop_name] = parse_value(value_raw)
+                    end
+                  end
+                end
+              end
+            end
+          end
+
+          workflow_id = "root"
+          if wf_block_line = raw_lines.find { |l| l.match(/^\s*workflow\s+"/) }
+            workflow_id = wf_block_line.match(/^\s*workflow\s+"([^"]+)"/).try { |m| m[1] } || "root"
+          end
+
+          CawfileBundle.new(
+            id: workflow_id,
+            dsl_source: dsl_lines,
+            config_federation: fed,
+            config_datasets: ds,
+            config_workflows: wf,
+            config_node_kinds: nk,
+            config_functions: fn,
+            config_mcp: mcp,
+            start_settings: start,
+            follow: follow,
+            import_paths: import_paths,
+            packages: packages
+          )
+        end
+      end
+
+      def self.load_root(dir : String = Dir.current) : CawfileBundle?
+        path = find_cawfile(dir)
+        return nil unless path
+
+        raw_content = File.read(path)
+        raw_lines = raw_content.lines
+
+        begin
+          doc = RCL.parse_string(raw_content)
+          workflow_block = find_workflow_block(doc)
+
+          if workflow_block
+            root_config = parse_settings_block(doc)
+            import_paths = extract_import_paths(doc)
+            dsl_lines = extract_workflow_body_lines(raw_lines)
+            follow = extract_follow(workflow_block)
+            packages = extract_packages_from_raw(raw_lines)
+
+            CawfileBundle.new(
+              id: workflow_block.argument || "root",
+              dsl_source: dsl_lines,
+              config_federation: root_config.config_federation,
+              config_datasets: root_config.config_datasets,
+              config_workflows: root_config.config_workflows,
+              config_node_kinds: root_config.config_node_kinds,
+              config_functions: root_config.config_functions,
+              config_mcp: root_config.config_mcp,
+              start_settings: root_config.start_settings,
+              follow: follow,
+              import_paths: import_paths,
+              packages: packages
+            )
+          else
+            parse_settings_block(doc)
+          end
+        rescue ex
+          # RCL parse failed - fall back to raw line-based parsing
+          import_paths = extract_import_paths_from_raw(raw_lines)
+          follow = extract_follow_from_raw(raw_lines)
+          packages = extract_packages_from_raw(raw_lines)
+          dsl_lines = extract_workflow_body_lines(raw_lines)
+
+          fed = {} of String => RCL::Value
+          ds = {} of String => RCL::Value
+          wf = {} of String => RCL::Value
+          nk = {} of String => RCL::Value
+          fn = {} of String => RCL::Value
+          mcp = {} of String => RCL::Value
+          start = {} of String => RCL::Value
+
+          in_settings = false
+          settings_depth = 0
+          raw_lines.each do |line|
+            stripped = line.strip
+            if stripped.match(/^\s*settings\s+do/)
+              in_settings = true
+              settings_depth = 1
+              next
+            end
+            if in_settings
+              if stripped.match(/^do/)
+                settings_depth += 1
+                next
+              end
+              if stripped.match(/^end/)
+                settings_depth -= 1
+                if settings_depth <= 0
+                  in_settings = false
+                  next
+                end
+              end
+              if eq_idx = stripped.index('=')
+                key = stripped[0, eq_idx].strip
+                value_raw = stripped[eq_idx + 1, stripped.size - eq_idx - 1].strip
+                case key
+                when "port"
+                  start["port"] = parse_value(value_raw)
+                else
+                  if key.includes?('.')
+                    parts = key.split('.', 2)
+                    block_name = parts[0]
+                    prop_name = parts[1]
+                    case block_name
+                    when "federation"
+                      fed[prop_name] = parse_value(value_raw)
+                    when "data", "datasets"
+                      ds[prop_name] = parse_value(value_raw)
+                    when "workflows"
+                      wf[prop_name] = parse_value(value_raw)
+                    end
+                  end
+                end
+              end
+            end
+          end
+
+          workflow_id = "root"
+          if wf_block_line = raw_lines.find { |l| l.match(/^\s*workflow\s+"/) }
+            workflow_id = wf_block_line.match(/^\s*workflow\s+"([^"]+)"/).try { |m| m[1] } || "root"
+          end
+
+          CawfileBundle.new(
+            id: workflow_id,
+            dsl_source: dsl_lines,
+            config_federation: fed,
+            config_datasets: ds,
+            config_workflows: wf,
+            config_node_kinds: nk,
+            config_functions: fn,
+            config_mcp: mcp,
+            start_settings: start,
+            follow: follow,
+            import_paths: import_paths,
+            packages: packages
+          )
+        end
+      end
+
+      # Parses settings block for federation, data, etc.
+      # settings do
+      #   federation.auto_subscribe = [...]
+      #   data.adapter = "memory"
+      #   port = 8080
+      # end
+      private def self.parse_settings_block(doc : RCL::Document) : CawfileBundle
+        settings_block = doc.blocks.find { |b| b.name == "settings" }
+        return CawfileBundle.new(id: "root") unless settings_block
+
+        fed = {} of String => RCL::Value
+        ds = {} of String => RCL::Value
+        wf = {} of String => RCL::Value
+        nk = {} of String => RCL::Value
+        fn = {} of String => RCL::Value
+        mcp = {} of String => RCL::Value
+        start = {} of String => RCL::Value
+
+        # Parse properties in settings block
+        settings_block.properties.each do |key, value|
+          case key
+          when "port"
+            start["port"] = ast_node_to_value(value)
+          else
+            # Check for dot-notation keys like "data.adapter"
+            if key.includes?('.')
+              parts = key.split('.', 2)
+              block_name = parts[0]
+              prop_name = parts[1]
+              case block_name
+              when "federation"
+                fed[prop_name] = ast_node_to_value(value)
+              when "data", "datasets"
+                ds[prop_name] = ast_node_to_value(value)
+              when "workflows"
+                wf[prop_name] = ast_node_to_value(value)
+              end
+            end
+          end
         end
 
-        bundles.first
+        # Parse nested blocks in settings
+        settings_block.blocks.each do |name, child|
+          case name
+          when "federation"
+            fed.merge!(block_to_rcl_value_h(child))
+          when "datasets", "data"
+            ds.merge!(block_to_rcl_value_h(child))
+          when "workflows"
+            wf.merge!(block_to_rcl_value_h(child))
+          when "node_kinds"
+            nk.merge!(block_to_rcl_value_h(child))
+          when "functions"
+            fn.merge!(block_to_rcl_value_h(child))
+          when "mcp"
+            mcp.merge!(block_to_rcl_value_h(child))
+          end
+        end
+
+        CawfileBundle.new(
+          id: "root",
+          config_federation: fed,
+          config_datasets: ds,
+          config_workflows: wf,
+          config_node_kinds: nk,
+          config_functions: fn,
+          config_mcp: mcp,
+          start_settings: start
+        )
       end
 
       private def self.find_workflow_block(doc : RCL::Document) : RCL::BlockNode?
         doc.blocks.each do |top_block|
-          # Top-level named block: workflow "name" do ... end
-          # OR top-level block: workflow do ... end
           return top_block if top_block.name == "workflow"
         end
         nil
       end
 
-      private def self.parse_workflow_block_content(block : RCL::BlockNode, workflow_id : String) : CawfileBundle
-        packages = ast_rcl_string_array(block["packages"]?)
-        version = ast_rcl_string(block["version"]?)
-        description = ast_rcl_string(block["description"]?)
+      private def self.extract_follow(workflow_block : RCL::BlockNode) : Array(String)
+        follow_node = workflow_block.properties["follow"]? || workflow_block["follow"]?
+        return [] of String unless follow_node
 
-        keys = [] of CawfileKeySpec
-        each_named_child(block, "key") do |arg, child|
-          ast_bool = ast_rcl_bool(child["required"]?)
-          keys << CawfileKeySpec.new(
-            name: arg,
-            required: ast_bool,
-            description: ast_rcl_string(child["description"]?),
-            provider: ast_rcl_string(child["provider"]?)
-          )
+        arr = follow_node.as?(RCL::ArrayNode)
+        return [] of String unless arr
+
+        arr.elements.compact_map { |e| e.is_a?(RCL::StringNode) ? e.value : nil }
+      rescue
+        [] of String
+      end
+
+      private def self.extract_workflow_body_lines(lines : Array(String)) : Array(String)?
+        start_idx = nil
+        lines.each_with_index do |line, idx|
+          if line.match(/^\s*workflow\s+"[^"]+"\s+do\s*(?:#.*)?$/)
+            start_idx = idx + 1
+            break
+          end
         end
+        return nil unless start_idx
 
-        agents = [] of CawfileAgentSpec
-        each_named_child(block, "agent") do |arg, child|
-          agents << CawfileAgentSpec.new(
-            id: arg,
-            prompt: ast_rcl_string(child["prompt"]?),
-            model: ast_rcl_string(child["model"]?),
-            description: ast_rcl_string(child["description"]?),
-            voice_config: ast_rcl_string_h(child["voice"]?),
-            guardrails_config: ast_rcl_string_h(child["guardrails"]?)
-          )
-        end
-
-        skills = [] of CawfileSkillSpec
-        each_named_child(block, "skill") do |arg, child|
-          skills << CawfileSkillSpec.new(
-            id: arg,
-            name: ast_rcl_string(child["name"]?),
-            description: ast_rcl_string(child["description"]?),
-            file: ast_rcl_string(child["file"]?)
-          )
-        end
-
-        workflow_steps = [] of CawfileWorkflowStep
-        each_named_child(block, "step") do |arg, child|
-          workflow_steps << parse_step(arg, child)
-        end
-
-        # Config sub-blocks
-        api_val = ["classic"] of String
-        fed = {} of String => RCL::Value
-        ds = {} of String => RCL::Value
-        nk = {} of String => RCL::Value
-        fn = {} of String => RCL::Value
-        mcp = {} of String => RCL::Value
-
-        block.blocks.each do |name, child|
-          case name
-          when "api"
-            api_val = block_to_string_array(child)
-          when "federation"
-            fed = block_to_rcl_value_h(child)
-          when "datasets"
-            ds = block_to_rcl_value_h(child)
-          when "node_kinds"
-            nk = block_to_rcl_value_h(child)
-          when "functions"
-            fn = block_to_rcl_value_h(child)
-          when "mcp"
-            mcp = block_to_rcl_value_h(child)
+        depth = 1
+        end_idx = start_idx
+        (start_idx...lines.size).each do |idx|
+          stripped = lines[idx].strip
+          if stripped.match(/^\s*\bdo\b(?!\w)/)
+            depth += 1
+          elsif stripped.match(/^\s*\bend\b/)
+            depth -= 1
+            if depth == 0
+              end_idx = idx
+              break
+            end
           end
         end
 
-        CawfileBundle.new(
-          id: workflow_id,
-          version: version,
-          description: description,
-          packages: packages,
-          keys: keys,
-          agents: agents,
-          skills: skills,
-          workflow_steps: workflow_steps,
-          config_api: api_val,
-          config_federation: fed,
-          config_datasets: ds,
-          config_node_kinds: nk,
-          config_functions: fn,
-          config_mcp: mcp
-        )
+        lines[start_idx...end_idx]
       end
 
-      private def self.parse_root_document(doc : RCL::Document, id : String) : CawfileBundle
-        # Treat top-level named blocks as workflow children when no workflow block
-        steps = [] of CawfileWorkflowStep
-        agents = [] of CawfileAgentSpec
-        skills = [] of CawfileSkillSpec
-        keys = [] of CawfileKeySpec
+      private def self.extract_import_paths(doc : RCL::Document) : Array(String)
+        import_node = doc["import"]?
+        return [] of String unless import_node
 
-        doc.blocks.each do |block|
-          case block.name
-          when "agent"
-            agents << parse_agent_block_node(block)
-          when "skill"
-            skills << parse_skill_block_node(block)
-          when "key"
-            keys << parse_key_block_node(block)
-          else
-            steps << parse_step_block_node(block)
+        arr = import_node.as?(RCL::ArrayNode)
+        return [] of String unless arr
+
+        arr.elements.compact_map { |e| e.is_a?(RCL::StringNode) ? e.value : nil }
+      rescue
+        [] of String
+      end
+
+      private def self.extract_import_paths_from_raw(lines : Array(String)) : Array(String)
+        lines.each do |line|
+          stripped = line.strip
+          if stripped.starts_with?("import")
+            # Try to find array on same line or next lines
+            if arr_match = stripped.match(/^import\s*=\s*\[(.*)\]/)
+              content = arr_match[1]
+              return content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
+            end
+            # Multi-line array
+            if stripped.match(/^import\s*=\s*\[/)
+              result = [] of String
+              in_array = true
+              idx = lines.index(line)
+              next unless idx
+              (idx + 1...lines.size).each do |i|
+                l = lines[i].strip
+                break if l == "]"
+                l = l.rchop(',') if l.ends_with?(',')
+                l = l.delete('"')
+                result << l unless l.empty?
+              end
+              return result
+            end
           end
         end
-
-        CawfileBundle.new(
-          id: id,
-          workflow_steps: steps,
-          agents: agents,
-          skills: skills,
-          keys: keys
-        )
+        [] of String
       end
 
-      private def self.parse_step(arg : String, block : RCL::BlockNode) : CawfileWorkflowStep
-        parts = arg.split("-", 2)
-        type = parts[0]
-        id_arg = parts[1] || arg
-        params = {} of String => JSON::Any
-        block.properties.each do |k, v|
-          params[k] = ast_node_to_json(v)
-        end
-        block.blocks.each do |k, v|
-          params[k] = ast_node_to_json(v)
-        end
-        CawfileWorkflowStep.new(type: type, id: id_arg, params: params)
-      end
-
-      private def self.parse_agent_block_node(block : RCL::BlockNode) : CawfileAgentSpec
-        CawfileAgentSpec.new(
-          id: block.argument || "agent",
-          prompt: ast_rcl_string(block["prompt"]?),
-          model: ast_rcl_string(block["model"]?),
-          description: ast_rcl_string(block["description"]?)
-        )
-      end
-
-      private def self.parse_skill_block_node(block : RCL::BlockNode) : CawfileSkillSpec
-        CawfileSkillSpec.new(
-          id: block.argument || "skill",
-          name: ast_rcl_string(block["name"]?),
-          description: ast_rcl_string(block["description"]?),
-          file: ast_rcl_string(block["file"]?)
-        )
-      end
-
-      private def self.parse_key_block_node(block : RCL::BlockNode) : CawfileKeySpec
-        CawfileKeySpec.new(
-          name: block.argument || "key",
-          required: ast_rcl_bool(block["required"]?),
-          description: ast_rcl_string(block["description"]?),
-          provider: ast_rcl_string(block["provider"]?)
-        )
-      end
-
-      private def self.parse_step_block_node(block : RCL::BlockNode) : CawfileWorkflowStep
-        type = block.name
-        id = block.argument || type
-        params = {} of String => JSON::Any
-        block.properties.each do |k, v|
-          params[k] = ast_node_to_json(v)
-        end
-        block.blocks.each do |k, v|
-          params[k] = ast_node_to_json(v)
-        end
-        CawfileWorkflowStep.new(type: type, id: id, params: params)
-      end
-
-      private def self.each_named_child(parent : RCL::BlockNode, name : String, & : String, RCL::BlockNode ->)
-        parent.named_blocks.each do |nb|
-          if nb.name == name
-            arg = nb.argument
-            next unless arg
-            yield arg, nb
+      private def self.extract_follow_from_raw(lines : Array(String)) : Array(String)
+        lines.each do |line|
+          stripped = line.strip
+          if stripped.starts_with?("follow")
+            if arr_match = stripped.match(/^follow\s+\[(.*)\]/)
+              content = arr_match[1]
+              return content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
+            end
           end
         end
-        parent.blocks.each do |bname, bnode|
-          next unless bname == name
-          arg = bnode.argument
-          next unless arg
-          yield arg, bnode
-        end
+        [] of String
       end
 
-      private def self.block_to_string_array(block : RCL::BlockNode) : Array(String)
-        out = [] of String
-        block.properties.each do |_k, v|
-          if v.is_a?(RCL::StringNode)
-            out << v.value
+      private def self.extract_packages_from_raw(lines : Array(String)) : Array(String)
+        lines.each do |line|
+          stripped = line.strip
+          # Match @[Packages(["pkg1", "pkg2", ...])]
+          if pkg_match = stripped.match(/\@\[Packages\(\s*\[(.*?)\]\s*\)\]/)
+            content = pkg_match[1]
+            return content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
           end
         end
-        out
+        [] of String
+      end
+
+      private def self.parse_value(raw : String) : RCL::Value
+        raw = raw.strip
+        if raw.starts_with?('"') && raw.ends_with?('"')
+          raw[1, raw.size - 2]
+        elsif raw == "true"
+          true
+        elsif raw == "false"
+          false
+        elsif raw.match(/^\d+$/)
+          raw.to_i
+        elsif raw.match(/^\d+\.\d+$/)
+          raw.to_f
+        elsif raw.starts_with?('[') && raw.ends_with?(']')
+          raw[1, raw.size - 2].split(',').map { |s| parse_value(s) }
+        else
+          raw
+        end
       end
 
       private def self.block_to_rcl_value_h(block : RCL::BlockNode) : Hash(String, RCL::Value)
@@ -329,48 +503,6 @@ module ACD
           hash_out[k] = ast_node_to_value(v)
         end
         hash_out
-      end
-
-      private def self.ast_rcl_string(node : RCL::ASTNode?) : String?
-        return nil unless node
-        case node
-        when RCL::StringNode
-          node.value
-        when RCL::NumberNode, RCL::BooleanNode
-          node.value.to_s
-        else
-          nil
-        end
-      end
-
-      private def self.ast_rcl_bool(node : RCL::ASTNode?, default : Bool = false) : Bool
-        return default unless node
-        case node
-        when RCL::BooleanNode
-          node.value
-        when RCL::StringNode
-          node.value.strip.downcase.in?("true", "1", "yes")
-        else
-          default
-        end
-      end
-
-      private def self.ast_rcl_string_array(node : RCL::ASTNode?) : Array(String)
-        return [] of String unless node
-        arr = node.as?(RCL::ArrayNode)
-        return [] of String unless arr
-        arr.elements.compact_map { |e| e.is_a?(RCL::StringNode) ? e.value : nil }
-      end
-
-      private def self.ast_rcl_string_h(node : RCL::ASTNode?) : Hash(String, String)?
-        return nil unless node
-        block = node.as?(RCL::BlockNode)
-        return nil unless block
-        result = {} of String => String
-        block.properties.each do |k, v|
-          result[k] = v.is_a?(RCL::StringNode) ? v.value : v.to_s
-        end
-        result.empty? ? nil : result
       end
 
       private def self.ast_node_to_value(node : RCL::ASTNode) : RCL::Value
@@ -394,35 +526,6 @@ module ACD
           h
         else
           ""
-        end
-      end
-
-      private def self.ast_node_to_json(node : RCL::ASTNode) : JSON::Any
-        case node
-        when RCL::StringNode
-          JSON.parse(node.value.to_json)
-        when RCL::NumberNode
-          JSON.parse(node.value.to_json)
-        when RCL::BooleanNode
-          JSON.parse(node.value.to_json)
-        when RCL::ArrayNode
-          JSON.parse(node.elements.map { |e| ast_node_to_json(e) }.to_json)
-        when RCL::BlockNode
-          h = {} of String => JSON::Any
-          node.properties.each do |k, v|
-            h[k] = ast_node_to_json(v)
-          end
-          node.blocks.each do |k, v|
-            h[k] = ast_node_to_json(v)
-          end
-          node.named_blocks.each do |nb|
-            arg = nb.argument
-            key = arg ? "#{nb.name}-#{arg}" : nb.name
-            h[key] = ast_node_to_json(nb)
-          end
-          JSON.parse(h.to_json)
-        else
-          JSON.parse("null")
         end
       end
     end

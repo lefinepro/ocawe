@@ -17,9 +17,10 @@ module OcaweCore
   def self.run
     OcaweCore::Utils::ConfigParser.load_dotenv
     settings = Ocawe::Config::Settings.default
+    start_settings = OcaweCore::Utils::ConfigParser.load_start_settings(Ocawe::Config::StartSettings.new)
 
-    port = DEFAULT_PORT
-    workflows_root = nil.as(String?)
+    port = start_settings.port
+    workflows_root = start_settings.workflows_root.as(String?)
     config_rcl = nil.as(String?)
 
     OptionParser.parse do |parser|
@@ -41,7 +42,6 @@ module OcaweCore
 
     # Use default config values if not overridden by command line
     workflows_root ||= settings.workflows.preferred_workflows_root
-    
 
     ACD::Kemal::App.new(
       port,

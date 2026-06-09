@@ -1,0 +1,35 @@
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+import = [
+    "./workflows/*.acd.cr"
+]
+
+struct InputCodex
+  include Api::Federation::Inbox
+end
+
+struct OutputCodex
+  include Api::Federation::Outbox
+end
+
+# Expand this structure
+  input_type InputCodex
+
+  input_validate Schema::Types.object({
+    "inbox" => Api::Federation::Inbox
+  })
+@[Validate(InputCodex,OutputCodex)]
+# Import skills or Agents files into even prompt
+@[Load(["AGENTS.md"])]
+# Nix packages to install inside the container
+@[Packages(["git", "curl"])]
+# Support Model
+# @[Model(api: "https://api.deepseek.com", model: "deepseek/deepseek-chat")]
+workflow "codex" do
+  # Functions on crystal, make do yours
+  follow ["@searcher@lefine.pro", "@coder@lefine.pro"]
+  agent_codex
+end

@@ -129,88 +129,19 @@ module ACD
         cawfile : Discovery::CawfileBundle,
         agent_index : Hash(String, Agents::LoadedAgent)
       )
-        # Register Cawfile agents into index so parser can reference them
-        cawfile.agents.each do |agent_spec|
-          agent_index[agent_spec.id] = Agents::LoadedAgent.new(
-            id: agent_spec.id,
-            file_path: bundle.workflow_file,
-            description: agent_spec.description || "",
-            frontmatter: {} of String => YAML::Any,
-            prompt: agent_spec.prompt || "",
-            model: agent_spec.model,
-            voice_config: agent_spec.voice_config.try { |h| h.transform_values { |v| JSON.parse(v.to_json) } } || {} of String => JSON::Any,
-            guardrails_config: agent_spec.guardrails_config.try { |h| h.transform_values { |v| JSON.parse(v.to_json) } } || {} of String => JSON::Any,
-          )
-        end
+        # Cawfile workflow body is always .acd.cr-style DSL
+        dsl_lines = cawfile.dsl_source
+        raise "#{bundle.workflow_file}: Cawfile workflow has no DSL body" unless dsl_lines
 
-        # Load Cawfile keys as workspace annotations
-        unless cawfile.keys.empty?
-          workspace = {} of String => JSON::Any
-          cawfile.keys.each do |key_spec|
-            workspace["key_#{key_spec.name}"] = JSON.parse({
-              "required"    => key_spec.required,
-              "description" => key_spec.description,
-              "provider"    => key_spec.provider,
-            }.to_json)
-          end
-          workflow.workspace(workspace)
-        end
-
-        if File.extname(bundle.workflow_file) == ".cr"
-          lines = File.read_lines(bundle.workflow_file)
-          ctx = WorkflowParserContext.new(
-            workflow: workflow,
-            agent_index: agent_index,
-            workflow_file: bundle.workflow_file,
-            workflow_root: bundle.root_path,
-            lines: lines,
-            dataset_service: @dataset_service
-          )
-          parse_workflow_body(ctx, 0, lines.size)
-        elsif cawfile.workflow_steps.empty?
-          raise "#{bundle.workflow_file}: Cawfile has no workflow steps and no .acd.cr fallback"
-        else
-          cawfile.workflow_steps.each do |step|
-            case step.type
-            when "agent"
-              agent_id = step.id
-              loaded = agent_index[agent_id]?
-              attrs = step.params
-              workflow.agent(
-                agent_id,
-                prompt: loaded.try(&.prompt),
-                model: loaded.try(&.model),
-                input_schema: nil,
-                output_schema: nil,
-              )
-            when "skill"
-              workflow.skill(step.id, agent: nil)
-            when "exec"
-              workflow.exec(
-                step.id,
-                runtime: step.params["runtime"]?.try(&.as_h?),
-                env: step.params["env"]?.try(&.as_h?),
-                workflow_root: bundle.root_path,
-              )
-            when "suspend"
-              workflow.suspend(step.id, reason: step.params["reason"]?.try(&.as_s?) || "human input required")
-            when "rag"
-              workflow.rag(step.id, config: step.params["config"]?.try(&.as_h?) || {} of String => JSON::Any)
-            when "voice"
-              workflow.voice(step.id, config: step.params["config"]?.try(&.as_h?) || {} of String => JSON::Any)
-            when "control", "node_kind"
-              workflow.step("node_kind", step.id,
-                node_kind_name: step.params["kind"]?.try(&.as_s?) || step.id,
-                node_kind_attributes: step.params.reject { |k, _| k == "kind" },
-              )
-            else
-              workflow.step("node_kind", step.id,
-                node_kind_name: step.type,
-                node_kind_attributes: step.params,
-              )
-            end
-          end
-        end
+        ctx = WorkflowParserContext.new(
+          workflow: workflow,
+          agent_index: agent_index,
+          workflow_file: bundle.workflow_file,
+          workflow_root: bundle.root_path,
+          lines: dsl_lines,
+          dataset_service: @dataset_service
+        )
+        parse_workflow_body(ctx, 0, dsl_lines.size)
       end
 
       private def enforce_enabled_node_kinds!(workflow : Ocawe::Workflow::WorkflowDefinition, workflow_file : String) : Nil

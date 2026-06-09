@@ -3,6 +3,14 @@ require "./default_function_handlers"
 
 module Ocawe
   module Config
+    struct StartSettings
+      getter port : Int32
+      getter workflows_root : String
+
+      def initialize(@port : Int32 = 4111, @workflows_root : String = "./workflows")
+      end
+    end
+
     struct WorkflowSettings
       getter preferred_workflows_root : String
 
