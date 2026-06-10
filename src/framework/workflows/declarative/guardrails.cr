@@ -4,6 +4,9 @@ module Ocawe
       class Violation < Exception
       end
 
+      @@regex_cache = {} of String => Regex
+      @@cache_lock = Mutex.new
+
       def self.validate_input!(agent_id : String, text : String, config : AnyHash?) : Nil
         validate_stage!("input", agent_id, text, config.try(&.["input"]?).try(&.as_h?))
       end
@@ -37,7 +40,7 @@ module Ocawe
             pattern = pattern_any.as_s?
             next unless pattern
             begin
-              regex = Regex.new(pattern)
+              regex = get_cached_regex(pattern)
               if regex.matches?(text)
                 raise Violation.new("guardrail violation: #{agent_id} #{stage}.blocked_patterns matched '#{pattern}'")
               end
@@ -45,6 +48,12 @@ module Ocawe
               raise Violation.new("guardrail violation: #{agent_id} #{stage}.blocked_patterns invalid regex '#{pattern}': #{ex.message}")
             end
           end
+        end
+      end
+
+      private def self.get_cached_regex(pattern : String) : Regex
+        @@cache_lock.synchronize do
+          @@regex_cache[pattern] ||= Regex.new(pattern)
         end
       end
     end

@@ -75,8 +75,10 @@ module Ocawe
           RunStatus::Suspended
         when RunStatus::Cancelled.to_s.downcase
           RunStatus::Cancelled
-        else
+        when RunStatus::Running.to_s.downcase
           RunStatus::Running
+        else
+          raise "invalid run status: #{status}"
         end
       end
     end

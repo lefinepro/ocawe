@@ -11,15 +11,16 @@ module Ocawe
       getter node_workspaces : Hash(String, AnyHash)
 
       def initialize(@id : String, @description : String? = nil)
-        @nodes = [] of WorkflowNode
-        @committed = false
-        @default_model = nil
-        @default_logger = nil.as(AnyHash?)
-        @node_loggers = {} of String => AnyHash
-        @default_workspace = nil.as(AnyHash?)
-        @node_workspaces = {} of String => AnyHash
-        @pending_node_workspace = nil.as(AnyHash?)
-      end
+         @nodes = [] of WorkflowNode
+         @committed = false
+         @default_model = nil
+         @default_logger = nil.as(AnyHash?)
+         @node_loggers = {} of String => AnyHash
+         @default_workspace = nil.as(AnyHash?)
+         @node_workspaces = {} of String => AnyHash
+         @pending_node_workspace = nil.as(AnyHash?)
+         @next_node_id = 0
+       end
 
       def logger(config : AnyHash) : self
         ensure_not_committed!

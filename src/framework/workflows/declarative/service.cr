@@ -132,12 +132,13 @@ module Ocawe
       private def hydrate_run(workflow_id : String, run_id : String)
         definition = @engine.get(workflow_id)
         snapshot = @engine.load(workflow_id, run_id)
-        run = definition.create_run(WorkflowRunOptions.new(run_id, snapshot.try(&.resource_id)))
-
-        if snapshot
-          run.restore_from_snapshot(snapshot)
+        
+        unless snapshot
+          raise "run not found: workflow_id=#{workflow_id}, run_id=#{run_id}"
         end
-
+        
+        run = definition.create_run(WorkflowRunOptions.new(run_id, snapshot.resource_id))
+        run.restore_from_snapshot(snapshot)
         run
       end
     end

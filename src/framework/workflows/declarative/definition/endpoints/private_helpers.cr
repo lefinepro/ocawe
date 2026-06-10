@@ -39,6 +39,11 @@ module Ocawe
         raise "workflow '#{@id}' already committed" if @committed
       end
 
+      private def next_node_counter : Int32
+        @next_node_id += 1
+        @next_node_id
+      end
+
       private def with_context_for(ctx : NodeContext, node : WorkflowNode)
         NodeContext.new(
           workflow_id: ctx.workflow_id,
@@ -48,6 +53,23 @@ module Ocawe
           state: ctx.state,
           init_data: ctx.init_data,
           node_results: ctx.node_results,
+          runtime_context: ctx.runtime_context,
+          request_context: ctx.request_context,
+          trigger_data: ctx.trigger_data,
+          resume_data: ctx.resume_data,
+        )
+      end
+
+      private def with_isolated_state_context(ctx : NodeContext, node : WorkflowNode)
+        # Creates a context with a deep-copied state to prevent cross-node mutation in parallel branches
+        NodeContext.new(
+          workflow_id: ctx.workflow_id,
+          run_id: ctx.run_id,
+          node_id: node.id,
+          input_data: ctx.input_data,
+          state: ctx.state.dup,
+          init_data: ctx.init_data,
+          node_results: ctx.node_results.dup,
           runtime_context: ctx.runtime_context,
           request_context: ctx.request_context,
           trigger_data: ctx.trigger_data,

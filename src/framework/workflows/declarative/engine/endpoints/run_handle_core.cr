@@ -156,8 +156,8 @@ module Ocawe
       end
 
       def cancel(request_context : AnyHash? = nil)
-        _ = request_context
         @status = RunStatus::Cancelled
+        # TODO: Implement proper fiber interruption for running nodes
         current_result
       end
 
@@ -192,7 +192,7 @@ module Ocawe
                  end
 
         idx = @definition.nodes.index { |n| n.id == target }
-        raise "unknown node for time_travel: #{target}" unless idx
+        raise "unknown node '#{target}' for time_travel in workflow '#{@workflow_id}'" unless idx
 
         @node_index = idx
         @status = RunStatus::Running

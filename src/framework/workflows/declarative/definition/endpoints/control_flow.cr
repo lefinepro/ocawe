@@ -33,7 +33,7 @@ module Ocawe
         input_schema : Ocawe::Workflows::DSL::Validator? = nil,
         output_schema : Ocawe::Workflows::DSL::Validator? = nil
       ) : self
-        node_id = id || "#{kind.node}-#{@nodes.size}"
+        node_id = id || "#{kind.node}-#{next_node_counter}"
         append_node(Ocawe::RegistryApi.build_node(
           self,
           "node_kind",
@@ -121,14 +121,15 @@ module Ocawe
       def parallel(parallel_nodes : Array(WorkflowNode)) : self
         ensure_not_committed!
 
-        aggregator = WorkflowNode.new("parallel-#{@nodes.size}", NodeKind::Control) do |ctx|
+        aggregator = WorkflowNode.new("parallel-#{next_node_counter}", NodeKind::Control) do |ctx|
           branch_results = Array(Tuple(Int32, WorkflowNodeResult)).new
           ch = Channel(Tuple(Int32, WorkflowNodeResult)).new
 
           parallel_nodes.each_with_index do |node, idx|
             spawn do
               begin
-                ch.send({idx, node.execute(with_context_for(ctx, node))})
+                # Use isolated state context to prevent cross-branch mutations
+                ch.send({idx, node.execute(with_isolated_state_context(ctx, node))})
               rescue ex
                 ch.send({idx, WorkflowNodeResult.fail(ex.message || "parallel node failed")})
               end
@@ -188,7 +189,7 @@ module Ocawe
       def while_do(condition : String, nodes : Array(WorkflowNode), max_iterations : Int32 = 100) : self
         ensure_not_committed!
         body = wrap_nodes_in_control(nodes, "while-body")
-        append_node(WorkflowNode.new("while-#{@nodes.size}", NodeKind::Control) do |ctx|
+        append_node(WorkflowNode.new("while-#{next_node_counter}", NodeKind::Control) do |ctx|
           iterations = 0
           merged = {} of String => JSON::Any
           result = WorkflowNodeResult.continue
@@ -209,7 +210,7 @@ module Ocawe
       def until_do(condition : String, nodes : Array(WorkflowNode), max_iterations : Int32 = 100) : self
         ensure_not_committed!
         body = wrap_nodes_in_control(nodes, "until-body")
-        append_node(WorkflowNode.new("until-#{@nodes.size}", NodeKind::Control) do |ctx|
+        append_node(WorkflowNode.new("until-#{next_node_counter}", NodeKind::Control) do |ctx|
           iterations = 0
           merged = {} of String => JSON::Any
           result = WorkflowNodeResult.continue
@@ -230,7 +231,7 @@ module Ocawe
       def loop_do(nodes : Array(WorkflowNode), max_iterations : Int32 = 100) : self
         ensure_not_committed!
         body = wrap_nodes_in_control(nodes, "loop-body")
-        append_node(WorkflowNode.new("loop-#{@nodes.size}", NodeKind::Control) do |ctx|
+        append_node(WorkflowNode.new("loop-#{next_node_counter}", NodeKind::Control) do |ctx|
           iterations = 0
           merged = {} of String => JSON::Any
           result = WorkflowNodeResult.continue

@@ -12,8 +12,7 @@ module ACD
           workflow = workflow_by_id(workflow_id)
 
           unless workflow
-            env.response.status_code = 404
-            next({error: {type: "not_found", message: "workflow not found: #{workflow_id}"}}.to_json)
+            next json_error(env, 404, "not_found", "workflow not found: #{workflow_id}")
           end
           workflow = workflow.not_nil!
 

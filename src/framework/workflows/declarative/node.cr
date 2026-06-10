@@ -64,7 +64,8 @@ module Ocawe
         validate_output!(result)
         result
       rescue ex
-        WorkflowNodeResult.fail(ex.message || "unknown node failure")
+        error_message = ex.message || "unknown node failure"
+        WorkflowNodeResult.fail("node '#{@id}' failed: #{error_message}")
       end
 
       private def validate_input!(ctx : NodeContext)

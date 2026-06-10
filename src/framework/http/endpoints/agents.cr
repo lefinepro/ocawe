@@ -25,9 +25,7 @@ module ACD
           agent = agent_by_id(agent_id)
 
           unless agent
-            env.response.status_code = 404
-            env.response.content_type = "application/json"
-            next({error: {type: "not_found", message: "agent not found: #{agent_id}"}}.to_json)
+            next json_error(env, 404, "not_found", "agent not found: #{agent_id}")
           end
 
           env.response.content_type = "application/json"
@@ -47,9 +45,7 @@ module ACD
           agent = agent_by_id(agent_id)
 
           unless agent
-            env.response.status_code = 404
-            env.response.content_type = "application/json"
-            next({error: {type: "not_found", message: "agent not found: #{agent_id}"}}.to_json)
+            next json_error(env, 404, "not_found", "agent not found: #{agent_id}")
           end
 
           body = json_body(env)

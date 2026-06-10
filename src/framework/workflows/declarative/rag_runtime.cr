@@ -36,10 +36,12 @@ module Ocawe
         return if docs.empty?
 
         @@lock.synchronize do
-          existing = @@indexes[index_name]? || [] of StoredDocument
+          existing = (@@indexes[index_name]? || [] of StoredDocument).dup
           docs.each_with_index do |text, idx|
             id = "doc_#{Time.utc.to_unix_ms}_#{idx}_#{Random.rand(100000)}"
-            existing << StoredDocument.new(id, text, metadata.dup)
+            # Deep copy metadata to prevent shared state mutations
+            metadata_copy = JSON.parse(metadata.to_json).as_h
+            existing << StoredDocument.new(id, text, metadata_copy)
           end
           @@indexes[index_name] = existing
         end
