@@ -170,11 +170,6 @@ settings do
   port = 4111
 end
 
-import = [
-  "./agents/*.md",
-  "./skills/*.md"
-]
-
 # Federation is enabled by including Api::Federation types
 struct Input
   include Api::Federation::Inbox
@@ -194,7 +189,6 @@ end
 
 *Key directives:*
 - =settings do ... end= — runtime config (port, data adapter, federation)
-- =import = [...]= — glob patterns for agents/skills
 - =@[Model("provider")]= — default model for the workflow
 - =@[Packages(["pkg1"])]= — Nix packages for container
 - =@[Validate(Input, Output)]= — input/output type validation

@@ -8,11 +8,6 @@ settings do
   port = 4111
 end
 
-import = [
-  "./agents/*.md",
-  "./skills/*.md"
-]
-
 struct RagInput
   include JSON::Serializable
   getter text : String?

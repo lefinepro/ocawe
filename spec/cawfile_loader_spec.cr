@@ -64,27 +64,6 @@ RCL
       end
     end
 
-    it "extracts import paths" do
-      dir = File.tempname("cawfile_test")
-      Dir.mkdir_p(dir)
-      begin
-        File.write(File.join(dir, "Cawfile"), <<-RCL)
-import = [
-  "./workflows/*.acd.cr",
-  "./workflows/*.rcl"
-]
-
-workflow "import-test" do
-end
-RCL
-        bundle = ACD::Discovery::CawfileLoader.load(dir, "import-test")
-        bundle.should_not be_nil
-        bundle.not_nil!.import_paths.should eq(["./workflows/*.acd.cr", "./workflows/*.rcl"])
-      ensure
-        FileUtils.rm_rf(dir)
-      end
-    end
-
     it "extracts DSL body from workflow block" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)

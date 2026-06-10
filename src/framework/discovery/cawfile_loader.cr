@@ -17,8 +17,6 @@ module ACD
       getter dsl_source : Array(String)?
       # Federation follow targets extracted from workflow block
       getter follow : Array(String)
-      # Import paths for workflow files
-      getter import_paths : Array(String)
       # Nix packages to install inside the container
       getter packages : Array(String)
       # Whether federation API should be enabled (detected from Api::Federation usage)
@@ -36,7 +34,6 @@ module ACD
         @start_settings : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
-        @import_paths : Array(String) = [] of String,
         @packages : Array(String) = [] of String,
         @enable_federation : Bool = false
       )
@@ -69,7 +66,6 @@ module ACD
           if workflow_block
             workflow_id = workflow_block.argument || id
             root_config = parse_settings_block(doc)
-            import_paths = extract_import_paths(doc)
             follow = extract_follow(workflow_block)
             packages = extract_packages_from_raw(raw_lines)
             dsl_lines = extract_workflow_body_lines(raw_lines)
@@ -88,7 +84,6 @@ module ACD
               config_log: root_config.config_log,
               start_settings: root_config.start_settings,
               follow: follow,
-              import_paths: import_paths,
               packages: packages,
               enable_federation: enable_federation
             )
@@ -98,8 +93,6 @@ module ACD
           return nil
         rescue ex
           # RCL parse failed - fall back to raw line-based parsing
-          # Extract import and follow from raw lines
-          import_paths = extract_import_paths_from_raw(raw_lines)
           follow = extract_follow_from_raw(raw_lines)
           packages = extract_packages_from_raw(raw_lines)
           enable_federation = detect_federation_from_raw(raw_lines)
@@ -180,7 +173,6 @@ module ACD
             config_log: {} of String => RCL::Value,
             start_settings: start,
             follow: follow,
-            import_paths: import_paths,
             packages: packages,
             enable_federation: enable_federation
           )
@@ -200,7 +192,6 @@ module ACD
 
           if workflow_block
             root_config = parse_settings_block(doc)
-            import_paths = extract_import_paths(doc)
             dsl_lines = extract_workflow_body_lines(raw_lines)
             follow = extract_follow(workflow_block)
             packages = extract_packages_from_raw(raw_lines)
@@ -217,7 +208,6 @@ module ACD
               config_log: root_config.config_log,
               start_settings: root_config.start_settings,
               follow: follow,
-              import_paths: import_paths,
               packages: packages,
               enable_federation: detect_federation_from_raw(raw_lines)
             )
@@ -226,7 +216,6 @@ module ACD
           end
         rescue ex
           # RCL parse failed - fall back to raw line-based parsing
-          import_paths = extract_import_paths_from_raw(raw_lines)
           follow = extract_follow_from_raw(raw_lines)
           packages = extract_packages_from_raw(raw_lines)
           dsl_lines = extract_workflow_body_lines(raw_lines)
@@ -304,7 +293,6 @@ module ACD
             config_log: {} of String => RCL::Value,
             start_settings: start,
             follow: follow,
-            import_paths: import_paths,
             packages: packages
           )
         end
@@ -432,47 +420,6 @@ module ACD
         end
 
         lines[start_idx...end_idx]
-      end
-
-      private def self.extract_import_paths(doc : RCL::Document) : Array(String)
-        import_node = doc["import"]?
-        return [] of String unless import_node
-
-        arr = import_node.as?(RCL::ArrayNode)
-        return [] of String unless arr
-
-        arr.elements.compact_map { |e| e.is_a?(RCL::StringNode) ? e.value : nil }
-      rescue
-        [] of String
-      end
-
-      private def self.extract_import_paths_from_raw(lines : Array(String)) : Array(String)
-        lines.each do |line|
-          stripped = line.strip
-          if stripped.starts_with?("import")
-            # Try to find array on same line or next lines
-            if arr_match = stripped.match(/^import\s*=\s*\[(.*)\]/)
-              content = arr_match[1]
-              return content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
-            end
-            # Multi-line array
-            if stripped.match(/^import\s*=\s*\[/)
-              result = [] of String
-              in_array = true
-              idx = lines.index(line)
-              next unless idx
-              (idx + 1...lines.size).each do |i|
-                l = lines[i].strip
-                break if l == "]"
-                l = l.rchop(',') if l.ends_with?(',')
-                l = l.delete('"')
-                result << l unless l.empty?
-              end
-              return result
-            end
-          end
-        end
-        [] of String
       end
 
       private def self.extract_follow_from_raw(lines : Array(String)) : Array(String)

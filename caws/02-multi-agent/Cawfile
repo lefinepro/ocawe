@@ -8,10 +8,6 @@ settings do
   port = 4111
 end
 
-import = [
-  "./agents/*.md"
-]
-
 struct WorkflowInput
   include JSON::Serializable
   getter task : String

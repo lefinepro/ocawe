@@ -8,10 +8,6 @@ settings do
   port = 4111
 end
 
-import = [
-  "./agents/*.md"
-]
-
 @[Model("cliproxy")]
 workflow "01-simple-codex" do
   agent "codex-agent"

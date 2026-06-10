@@ -8,11 +8,6 @@ settings do
   port = 4111
 end
 
-import = [
-  "./agents/*.md",
-  "./skills/*.md"
-]
-
 @[Packages(["git", "curl", "jq"])]
 @[Model("cliproxy")]
 workflow "06-full-coding-suite" do
