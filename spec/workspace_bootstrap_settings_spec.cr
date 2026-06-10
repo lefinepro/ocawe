@@ -5,7 +5,7 @@ describe "workspace bootstrap in settings" do
     called = false
     settings = Ocawe::Config::Settings.new(
       workflows: Ocawe::Config::WorkflowSettings.new(
-        preferred_workflows_root: "./shards/examples",
+        preferred_workflows_root: "./caws",
       ),
       workspace_bootstrap: -> : Nil do
         called = true
@@ -23,7 +23,7 @@ describe "workspace bootstrap in settings" do
     workflow = Ocawe::Workflow.create_workflow("workspace-bootstrap")
     workflow
       .workspace({"provider" => json_str("docker")})
-      .agent_codex("noop")
+      .agent("noop")
       .commit
 
     workspace = workflow.nodes.first.metadata["workspace"].as_h

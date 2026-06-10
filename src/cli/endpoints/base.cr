@@ -16,13 +16,10 @@ module OcaweCore
       private PROJECT_ROOT             = File.expand_path("../..", __DIR__)
       private RUNTIME_ENTRY            = "#{PROJECT_ROOT}/src/ocawe.cr"
       private RUNTIME_BIN              = "#{PROJECT_ROOT}/build/ocawecore"
-      private DEV_RUNTIME_BIN          = "#{PROJECT_ROOT}/build/ocawecore-dev"
       private WORKFLOWS_PATH           = "#{PROJECT_ROOT}/src/workflows"
-      private AGENTS_PATH              = "#{PROJECT_ROOT}/agents"
-      private TOOLS_PATH               = "#{PROJECT_ROOT}/tools"
       private BOOTSTRAP_CRYSTAL        = "#{PROJECT_ROOT}/scripts/bootstrap-crystal.sh"
       private TRIGGER_COMMANDS         = Set{"workflow", "agent", "skill", "function", "tool", "support"}
-      private CORE_COMMANDS            = Set{"build", "dev", "up", "workflow", "agent", "skill", "function", "tool", "support", "-v", "--version", "-h", "--help"}
+      private CORE_COMMANDS            = Set{"build", "up", "workflow", "agent", "skill", "function", "tool", "support", "-v", "--version", "-h", "--help"}
 
       def initialize(@trigger_invoker : TriggerInvoker = ->(url : String, body : String) {
                        response = HTTP::Client.post(
@@ -53,8 +50,6 @@ module OcaweCore
         case command
         when "build"
           build(args)
-        when "dev"
-          dev(args)
         when "up"
           up(args)
         when "workflow", "agent", "skill", "function", "tool", "support"
@@ -83,12 +78,11 @@ module OcaweCore
           Commands:
             build [--release] [--output PATH]
                 Build runtime binary.
-            dev [--port N] [--interval SECONDS]
-                Watch workflows/global agents/tools, recompile and restart runtime in dev mode.
-            up [PATH] [-d] [--port N]
+            up [PATH] [-d] [--port N] [--log-level LEVEL]
                 Auto-build release runtime binary and start server.
                 PATH: optional workflow directory (default: current directory)
                 -d/--detach: run in background
+                --log-level: debug, warning, or critical (default: warning)
             workflow <workflow_id> [args ...] [--base-url URL] [--run-id ID] [--resource-id ID] [--input-json JSON]
                 Trigger workflow by id.
             agent <agent_id> [args ...] [--base-url URL] [--input-json JSON] [--prompt TEXT] [--system TEXT] [--metadata-json JSON]

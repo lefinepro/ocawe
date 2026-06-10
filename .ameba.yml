@@ -104,6 +104,9 @@ Naming/PredicateName:
 Naming/QueryBoolMethods:
   Enabled: false
 
+Style/QueryBoolMethods:
+  Enabled: false
+
 Naming/RescuedExceptionsVariableName:
   Enabled: false
 

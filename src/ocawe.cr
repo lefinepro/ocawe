@@ -21,12 +21,14 @@ module OcaweCore
 
     port = start_settings.port
     workflows_root = start_settings.workflows_root.as(String?)
+    log_level = start_settings.log_level
     config_rcl = nil.as(String?)
 
     OptionParser.parse do |parser|
       parser.banner = "Usage: ocawecore [arguments]"
       parser.on("-p PORT", "--port=PORT", "HTTP port") { |value| port = value.to_i }
       parser.on("--workflows-root=PATH", "Preferred workflows root path") { |value| workflows_root = value }
+      parser.on("--log-level=LEVEL", "Log level: debug, warning, critical") { |value| log_level = Ocawe::Config::LogLevel.parse(value) }
       parser.on("--config-rcl=PATH", "RCL config file path (alternative to Crystal-only defaults)") { |value| config_rcl = value }
       parser.on("-v", "--version", "Print version") do
         puts VERSION

@@ -20,11 +20,11 @@ describe "workspace annotation and registry integration" do
         "provider" => json_str("docker"),
         "repo" => json_str("org/repo"),
       })
-      .agent_codex("noop")
+      .agent("noop")
       .workspace_next({
         "branch" => json_str("main"),
       })
-      .agent_codex("noop2")
+      .agent("noop2")
       .commit
 
     first_workspace = workflow.nodes[0].metadata["workspace"].as_h

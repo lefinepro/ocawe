@@ -132,7 +132,7 @@ module Ocawe
         append_document_value(docs, ctx.state["text"]?)
         append_document_value(docs, ctx.input_data["text"]?)
 
-        docs.reject(&.empty?).uniq
+        docs.reject(&.empty?).uniq!
       end
 
       private def self.append_document_value(target : Array(String), value : JSON::Any?) : Nil

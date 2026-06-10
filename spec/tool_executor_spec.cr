@@ -1,7 +1,6 @@
 require "./spec_helper"
 require "file_utils"
 
-
 describe Ocawe::Workflow::ExecExecutor do
   it "rejects non-mcp refs without runtime" do
     executor = Ocawe::Workflow::ExecExecutor.new
@@ -19,23 +18,33 @@ describe Ocawe::Workflow::ExecExecutor do
   end
 
   it "runs external scripts with runtime metadata" do
-    executor = Ocawe::Workflow::ExecExecutor.new
-    ctx = Ocawe::Workflow::NodeContext.new(
-      workflow_id: "wf",
-      run_id: "run_2",
-      node_id: "external-tool",
-      input_data: {} of String => JSON::Any,
-      state: {} of String => JSON::Any,
-    )
-    runtime = {"shell" => json_any("bash")} of String => JSON::Any
+    tmp_dir = File.tempname("sandbox-example")
+    Dir.mkdir_p(File.join(tmp_dir, "tools"))
+    script = File.join(tmp_dir, "tools", "create-sandbox.sh")
+    File.write(script, "#!/usr/bin/env bash\nset -euo pipefail\necho '{\"status\":\"ok\"}'\n")
+    File.chmod(script, 0o755)
 
-    result = executor.exec(
-      "tools/create-sandbox.sh",
-      ctx,
-      runtime: runtime,
-      workflow_root: "./shards/examples/sandbox-example",
-    )
-    result["status"].as_s.should eq("ok")
+    begin
+      executor = Ocawe::Workflow::ExecExecutor.new
+      ctx = Ocawe::Workflow::NodeContext.new(
+        workflow_id: "wf",
+        run_id: "run_2",
+        node_id: "external-tool",
+        input_data: {} of String => JSON::Any,
+        state: {} of String => JSON::Any,
+      )
+      runtime = {"shell" => json_any("bash")} of String => JSON::Any
+
+      result = executor.exec(
+        "tools/create-sandbox.sh",
+        ctx,
+        runtime: runtime,
+        workflow_root: tmp_dir,
+      )
+      result["status"].as_s.should eq("ok")
+    ensure
+      FileUtils.rm_rf(tmp_dir)
+    end
   end
 
   it "fails when external run emits invalid json" do
@@ -70,8 +79,18 @@ describe Ocawe::Workflow::ExecExecutor do
       state: {"task" => json_any("hello")},
     )
 
-    expect_raises(Exception, /runtime object must contain at least one key/) do
-      executor.exec("tools/create-sandbox.sh", ctx, runtime: ({} of String => JSON::Any), workflow_root: "./shards/examples/sandbox-example")
+    tmp_dir = File.tempname("sandbox-example")
+    Dir.mkdir_p(File.join(tmp_dir, "tools"))
+    script = File.join(tmp_dir, "tools", "create-sandbox.sh")
+    File.write(script, "#!/usr/bin/env bash\nset -euo pipefail\necho '{\"status\":\"ok\"}'\n")
+    File.chmod(script, 0o755)
+
+    begin
+      expect_raises(Exception, /runtime object must contain at least one key/) do
+        executor.exec("tools/create-sandbox.sh", ctx, runtime: ({} of String => JSON::Any), workflow_root: tmp_dir)
+      end
+    ensure
+      FileUtils.rm_rf(tmp_dir)
     end
   end
 end

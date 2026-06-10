@@ -228,7 +228,6 @@ module ACD
           end
           if line.match(/^\s*approve\s+/)
             raise "#{ctx.workflow_file}: `approve` is deprecated. Use `suspend \"id\", reason: \"...\", resume_schema: ...`."
-            next
           end
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             fn_name = match[1]

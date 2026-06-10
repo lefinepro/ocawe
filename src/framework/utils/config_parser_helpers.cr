@@ -1,4 +1,5 @@
 require "set"
+
 module OcaweCore
   module Utils
     module ConfigParser
@@ -64,6 +65,16 @@ module OcaweCore
           end
         end
 
+        log_settings = base.log_settings
+        if log_raw = tree["log"]?
+          if log = log_raw.as?(Hash(String, RCL::Value))
+            level_str = string_or_nil(log["level"]?)
+            log_settings = Ocawe::Config::LogSettings.new(Ocawe::Config::LogLevel.parse(level_str)) if level_str
+          elsif (level_str = string_or_nil(log_raw))
+            log_settings = Ocawe::Config::LogSettings.new(Ocawe::Config::LogLevel.parse(level_str))
+          end
+        end
+
         Ocawe::Config::Settings.new(
           workflows: workflows,
           node_kinds: base.node_kinds,
@@ -73,6 +84,7 @@ module OcaweCore
           functions: functions,
           workspace_bootstrap: base.workspace_bootstrap,
           mcp: base.mcp,
+          log_settings: log_settings,
         )
       end
 
@@ -92,6 +104,7 @@ module OcaweCore
         tree["node_kinds"] = bundle.config_node_kinds unless bundle.config_node_kinds.empty?
         tree["functions"] = bundle.config_functions unless bundle.config_functions.empty?
         tree["mcp"] = bundle.config_mcp unless bundle.config_mcp.empty?
+        tree["log"] = bundle.config_log unless bundle.config_log.empty?
 
         # Auto-enable federation API when Api::Federation types are used in Cawfile
         if bundle.enable_federation

@@ -91,7 +91,7 @@ RCL
       begin
         File.write(File.join(dir, "Cawfile"), <<-RCL)
 workflow "dsl-test" do
-  agent_codex
+  agent "analyzer"
   follow ["@agent@example.com"]
 end
 RCL
@@ -100,7 +100,7 @@ RCL
         dsl = bundle.not_nil!.dsl_source
         dsl.should_not be_nil
         dsl.not_nil!.size.should be > 0
-        dsl.not_nil!.join.should contain("agent_codex")
+        dsl.not_nil!.join.should contain("agent \"analyzer\"")
       ensure
         FileUtils.rm_rf(dir)
       end
@@ -148,6 +148,50 @@ RCL
       end
     end
 
+    it "parses log_level from settings" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+settings do
+  port = 4111
+  log_level = "debug"
+end
+
+workflow "log-test" do
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "log-test")
+        bundle.should_not be_nil
+        bundle.not_nil!.start_settings["port"].should eq(4111)
+        bundle.not_nil!.start_settings["log_level"].should eq("debug")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "parses nested log block in settings" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+settings do
+  log do
+    level = "critical"
+  end
+end
+
+workflow "nested-log-test" do
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "nested-log-test")
+        bundle.should_not be_nil
+        bundle.not_nil!.config_log["level"].should eq("critical")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it "returns nil when no workflow block exists" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)
@@ -171,7 +215,7 @@ RCL
         File.write(File.join(dir, "Cawfile"), <<-RCL)
 @[Packages(["git", "curl", "jq"])]
 workflow "pkg-test" do
-  agent_codex
+  agent "analyzer"
 end
 RCL
         bundle = ACD::Discovery::CawfileLoader.load(dir, "pkg-test")
@@ -192,7 +236,7 @@ struct Input
 end
 
 workflow "fed-test" do
-  agent_codex
+  agent "analyzer"
 end
 RCL
         bundle = ACD::Discovery::CawfileLoader.load(dir, "fed-test")
@@ -213,7 +257,7 @@ struct Output
 end
 
 workflow "fed-test" do
-  agent_codex
+  agent "analyzer"
 end
 RCL
         bundle = ACD::Discovery::CawfileLoader.load(dir, "fed-test")

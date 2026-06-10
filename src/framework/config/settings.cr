@@ -3,11 +3,31 @@ require "./default_function_handlers"
 
 module Ocawe
   module Config
+    enum LogLevel
+      Debug
+      Warning
+      Critical
+
+      def self.parse(value : String) : LogLevel
+        case value.strip.downcase
+        when "debug"
+          Debug
+        when "warning"
+          Warning
+        when "critical"
+          Critical
+        else
+          Warning
+        end
+      end
+    end
+
     struct StartSettings
       getter port : Int32
       getter workflows_root : String
+      getter log_level : LogLevel
 
-      def initialize(@port : Int32 = 4111, @workflows_root : String = "./workflows")
+      def initialize(@port : Int32 = 4111, @workflows_root : String = "./workflows", @log_level : LogLevel = LogLevel::Warning)
       end
     end
 
@@ -58,7 +78,7 @@ module Ocawe
       getter enabled : Array(String)
 
       def initialize(enabled : Array(String) = ["classic"] of String)
-        normalized = enabled.map(&.strip.downcase).reject(&.empty?).uniq
+        normalized = enabled.map(&.strip.downcase).reject(&.empty?).uniq!
         normalized = normalized.map do |name|
           case name
           when "mastra"
@@ -91,6 +111,7 @@ module Ocawe
       getter functions : Hash(String, Ocawe::Workflow::FunctionHandler)
       getter workspace_bootstrap : Proc(Nil)?
       getter mcp : MCPSettings
+      getter log_settings : LogSettings
 
       def initialize(
         @workflows : WorkflowSettings,
@@ -100,7 +121,8 @@ module Ocawe
         @api : ApiSettings = ApiSettings.new,
         @functions : Hash(String, Ocawe::Workflow::FunctionHandler) = {} of String => Ocawe::Workflow::FunctionHandler,
         @workspace_bootstrap : Proc(Nil)? = nil,
-        @mcp : MCPSettings = MCPSettings.new
+        @mcp : MCPSettings = MCPSettings.new,
+        @log_settings : LogSettings = LogSettings.new
       )
       end
 
@@ -118,7 +140,15 @@ module Ocawe
           functions: functions,
           workspace_bootstrap: nil,
           mcp: MCPSettings.new,
+          log_settings: LogSettings.new,
         )
+      end
+    end
+
+    struct LogSettings
+      getter level : LogLevel
+
+      def initialize(@level : LogLevel = LogLevel::Warning)
       end
     end
 

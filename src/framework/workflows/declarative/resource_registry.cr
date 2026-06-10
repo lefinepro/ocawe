@@ -32,7 +32,7 @@ module Ocawe
         end
 
         def names : Array(String)
-          @handlers.keys.sort
+          @handlers.keys.sort!
         end
 
         private def normalize(name : String) : String

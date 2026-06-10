@@ -43,10 +43,10 @@ module ACD
 
       private def bundle_from_dir(id : String, dir : String, source_type : String)
         # Primary: Cawfile / .caw
-        cawfile = CawfileLoader.load(dir, id)
+        cawfile = ACD::Discovery::CawfileLoader.load(dir, id)
 
         if cawfile
-          cawfile_path = CawfileLoader.find_cawfile(dir)
+          cawfile_path = ACD::Discovery::CawfileLoader.find_cawfile(dir)
           return WorkflowBundle.new(
             id: id,
             root_path: dir,

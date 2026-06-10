@@ -11,6 +11,7 @@ module ACD
       getter config_node_kinds : Hash(String, RCL::Value)
       getter config_functions : Hash(String, RCL::Value)
       getter config_mcp : Hash(String, RCL::Value)
+      getter config_log : Hash(String, RCL::Value)
       getter start_settings : Hash(String, RCL::Value)
       # Raw .acd.cr-style DSL source lines inside the workflow block
       getter dsl_source : Array(String)?
@@ -31,6 +32,7 @@ module ACD
         @config_node_kinds : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_functions : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_mcp : Hash(String, RCL::Value) = {} of String => RCL::Value,
+        @config_log : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @start_settings : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
@@ -83,6 +85,7 @@ module ACD
               config_node_kinds: root_config.config_node_kinds,
               config_functions: root_config.config_functions,
               config_mcp: root_config.config_mcp,
+              config_log: root_config.config_log,
               start_settings: root_config.start_settings,
               follow: follow,
               import_paths: import_paths,
@@ -139,6 +142,8 @@ module ACD
                 case key
                 when "port"
                   start["port"] = parse_value(value_raw)
+                when "log_level"
+                  start["log_level"] = parse_value(value_raw)
                 else
                   if key.includes?('.')
                     parts = key.split('.', 2)
@@ -172,6 +177,7 @@ module ACD
             config_node_kinds: nk,
             config_functions: fn,
             config_mcp: mcp,
+            config_log: {} of String => RCL::Value,
             start_settings: start,
             follow: follow,
             import_paths: import_paths,
@@ -208,6 +214,7 @@ module ACD
               config_node_kinds: root_config.config_node_kinds,
               config_functions: root_config.config_functions,
               config_mcp: root_config.config_mcp,
+              config_log: root_config.config_log,
               start_settings: root_config.start_settings,
               follow: follow,
               import_paths: import_paths,
@@ -259,6 +266,8 @@ module ACD
                 case key
                 when "port"
                   start["port"] = parse_value(value_raw)
+                when "log_level"
+                  start["log_level"] = parse_value(value_raw)
                 else
                   if key.includes?('.')
                     parts = key.split('.', 2)
@@ -292,6 +301,7 @@ module ACD
             config_node_kinds: nk,
             config_functions: fn,
             config_mcp: mcp,
+            config_log: {} of String => RCL::Value,
             start_settings: start,
             follow: follow,
             import_paths: import_paths,
@@ -316,6 +326,7 @@ module ACD
         nk = {} of String => RCL::Value
         fn = {} of String => RCL::Value
         mcp = {} of String => RCL::Value
+        log = {} of String => RCL::Value
         start = {} of String => RCL::Value
 
         # Parse properties in settings block
@@ -323,6 +334,8 @@ module ACD
           case key
           when "port"
             start["port"] = ast_node_to_value(value)
+          when "log_level"
+            start["log_level"] = ast_node_to_value(value)
           else
             # Check for dot-notation keys like "data.adapter"
             if key.includes?('.')
@@ -356,6 +369,8 @@ module ACD
             fn.merge!(block_to_rcl_value_h(child))
           when "mcp"
             mcp.merge!(block_to_rcl_value_h(child))
+          when "log"
+            log.merge!(block_to_rcl_value_h(child))
           end
         end
 
@@ -367,6 +382,7 @@ module ACD
           config_node_kinds: nk,
           config_functions: fn,
           config_mcp: mcp,
+          config_log: log,
           start_settings: start
         )
       end

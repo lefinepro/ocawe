@@ -10,12 +10,12 @@ describe ACD::Discovery::WorkflowLocator do
       begin
         workflow_dir = File.join(root, "my-caw")
         Dir.mkdir(workflow_dir)
-        File.write(File.join(workflow_dir, "Cawfile"), "workflow \"my-caw\" do\n  description = \"Cawfile driven workflow\"\nend\n")
+        File.write(File.join(workflow_dir, "Cawfile"), "workflow \"my-caw\" do\n  agent \"analyzer\"\nend\n")
         locator = ACD::Discovery::WorkflowLocator.new(root)
         bundle = locator.resolve("my-caw")
         bundle.id.should eq("my-caw")
         bundle.cawfile.should_not be_nil
-        bundle.cawfile.not_nil!.description.should eq("Cawfile driven workflow")
+        bundle.cawfile.not_nil!.id.should eq("my-caw")
         bundle.workflow_file.should eq(File.join(workflow_dir, "Cawfile"))
       ensure
         FileUtils.rm_rf(root)

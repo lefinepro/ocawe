@@ -151,7 +151,7 @@ module Ocawe
             "resume_data" => JSON.parse(resume.to_json),
           })
         end
- 
+
       when "node_kind"
         kind_name = node_kind_name || id
         kind_attributes = node_kind_attributes || ({} of String => JSON::Any)

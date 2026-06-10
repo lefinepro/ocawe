@@ -196,7 +196,7 @@ module Ocawe
       end
 
       private def generated_item_id : String
-        "item_#{UUID.random.to_s}"
+        "item_#{UUID.random}"
       end
 
       private def compile_schema(schema_source : String?, dataset_id : String)
