@@ -2,6 +2,19 @@ require "rcl"
 
 module ACD
   module Discovery
+    enum ContainerMode
+      Static
+      Nix
+    end
+
+    struct CawfileContainer
+      getter mode : ContainerMode
+      getter packages : Array(String)
+
+      def initialize(@mode : ContainerMode = ContainerMode::Static, @packages : Array(String) = [] of String)
+      end
+    end
+
     struct CawfileBundle
       getter id : String
       # Embedded config (mirrors ocawe.config.rcl fields)
@@ -17,8 +30,8 @@ module ACD
       getter dsl_source : Array(String)?
       # Federation follow targets extracted from workflow block
       getter follow : Array(String)
-      # Nix packages to install inside the container
-      getter packages : Array(String)
+      # Container configuration (static or nix with packages)
+      getter container : CawfileContainer?
       # Whether federation API should be enabled (detected from Api::Federation usage)
       getter enable_federation : Bool
 
@@ -34,7 +47,7 @@ module ACD
         @start_settings : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
-        @packages : Array(String) = [] of String,
+        @container : CawfileContainer? = nil,
         @enable_federation : Bool = false
       )
       end
@@ -67,7 +80,7 @@ module ACD
             workflow_id = workflow_block.argument || id
             root_config = parse_settings_block(doc)
             follow = extract_follow(workflow_block)
-            packages = extract_packages_from_raw(raw_lines)
+            container = extract_container_from_raw(raw_lines)
             dsl_lines = extract_workflow_body_lines(raw_lines)
 
             enable_federation = detect_federation_from_raw(raw_lines)
@@ -84,7 +97,7 @@ module ACD
               config_log: root_config.config_log,
               start_settings: root_config.start_settings,
               follow: follow,
-              packages: packages,
+              container: container,
               enable_federation: enable_federation
             )
           end
@@ -94,7 +107,7 @@ module ACD
         rescue ex
           # RCL parse failed - fall back to raw line-based parsing
           follow = extract_follow_from_raw(raw_lines)
-          packages = extract_packages_from_raw(raw_lines)
+          container = extract_container_from_raw(raw_lines)
           enable_federation = detect_federation_from_raw(raw_lines)
           dsl_lines = extract_workflow_body_lines(raw_lines)
 
@@ -173,7 +186,7 @@ module ACD
             config_log: {} of String => RCL::Value,
             start_settings: start,
             follow: follow,
-            packages: packages,
+            container: container,
             enable_federation: enable_federation
           )
         end
@@ -194,7 +207,7 @@ module ACD
             root_config = parse_settings_block(doc)
             dsl_lines = extract_workflow_body_lines(raw_lines)
             follow = extract_follow(workflow_block)
-            packages = extract_packages_from_raw(raw_lines)
+            container = extract_container_from_raw(raw_lines)
 
             CawfileBundle.new(
               id: workflow_block.argument || "root",
@@ -208,7 +221,7 @@ module ACD
               config_log: root_config.config_log,
               start_settings: root_config.start_settings,
               follow: follow,
-              packages: packages,
+              container: container,
               enable_federation: detect_federation_from_raw(raw_lines)
             )
           else
@@ -217,7 +230,7 @@ module ACD
         rescue ex
           # RCL parse failed - fall back to raw line-based parsing
           follow = extract_follow_from_raw(raw_lines)
-          packages = extract_packages_from_raw(raw_lines)
+          container = extract_container_from_raw(raw_lines)
           dsl_lines = extract_workflow_body_lines(raw_lines)
 
           fed = {} of String => RCL::Value
@@ -293,7 +306,7 @@ module ACD
             config_log: {} of String => RCL::Value,
             start_settings: start,
             follow: follow,
-            packages: packages
+            container: container
           )
         end
       end
@@ -435,16 +448,30 @@ module ACD
         [] of String
       end
 
-      private def self.extract_packages_from_raw(lines : Array(String)) : Array(String)
+      private def self.extract_container_from_raw(lines : Array(String)) : CawfileContainer?
         lines.each do |line|
           stripped = line.strip
-          # Match @[Packages(["pkg1", "pkg2", ...])]
-          if pkg_match = stripped.match(/\@\[Packages\(\s*\[(.*?)\]\s*\)\]/)
-            content = pkg_match[1]
-            return content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
+          # Match @[Container(packages: ["pkg1", "pkg2", ...])]
+          if container_match = stripped.match(/\@\[Container(?:\((.*?)\))?\]/)
+            inner = container_match[1]?
+            if inner
+              # Check for explicit mode
+              mode = ContainerMode::Nix
+              if inner.includes?("mode:")
+                if md = inner.match(/mode:\s*"(\w+)"/)
+                  mode = ContainerMode.parse(md[1])
+                end
+              end
+              if pkg_match = inner.match(/packages:\s*\[(.*?)\]/)
+                content = pkg_match[1]
+                packages = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
+                return CawfileContainer.new(mode: mode, packages: packages)
+              end
+            end
+            return CawfileContainer.new(mode: ContainerMode::Static)
           end
         end
-        [] of String
+        nil
       end
 
       private def self.detect_federation_from_raw(lines : Array(String)) : Bool

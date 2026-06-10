@@ -187,19 +187,43 @@ RCL
       end
     end
 
-    it "extracts packages from @[Packages(...)] annotation" do
+    it "extracts container from @[Container(packages: [...])] annotation" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)
       begin
         File.write(File.join(dir, "Cawfile"), <<-RCL)
-@[Packages(["git", "curl", "jq"])]
-workflow "pkg-test" do
+@[Container(packages: ["git", "curl", "jq"])]
+workflow "container-test" do
   agent "analyzer"
 end
 RCL
-        bundle = ACD::Discovery::CawfileLoader.load(dir, "pkg-test")
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "container-test")
         bundle.should_not be_nil
-        bundle.not_nil!.packages.should eq(["git", "curl", "jq"])
+        container = bundle.not_nil!.container
+        container.should_not be_nil
+        container.not_nil!.mode.should eq(ACD::Discovery::ContainerMode::Nix)
+        container.not_nil!.packages.should eq(["git", "curl", "jq"])
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "defaults container to static when no packages specified" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+@[Container]
+workflow "static-test" do
+  agent "analyzer"
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "static-test")
+        bundle.should_not be_nil
+        container = bundle.not_nil!.container
+        container.should_not be_nil
+        container.not_nil!.mode.should eq(ACD::Discovery::ContainerMode::Static)
+        container.not_nil!.packages.should be_empty
       ensure
         FileUtils.rm_rf(dir)
       end

@@ -8,8 +8,7 @@ settings do
   port = 4111
 end
 
-@[Packages(["git", "curl", "jq"])]
-@[Model("cliproxy")]
+@[Container(packages: ["git", "curl", "jq"])]
 workflow "06-full-coding-suite" do
   # Skills and tools configured via @[Model] above
   @[Resources(skill: ["full-skill"], tool: ["echo-json"])]

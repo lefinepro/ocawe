@@ -16,8 +16,7 @@ end
 @[Validate(InputCodex, OutputCodex)]
 # Import skills or Agents files into even prompt
 @[Load(["AGENTS.md"])]
-# Nix packages to install inside the container
-@[Packages(["git", "curl"])]
+@[Container(packages: ["git", "curl"])]
 # Support Model
 # @[Model(api: "https://api.deepseek.com", model: "deepseek/deepseek-chat")]
 workflow "codex" do
