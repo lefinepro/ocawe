@@ -1,3 +1,6 @@
+require "option_parser"
+require "../../framework/discovery/cawfile_loader"
+
 module OcaweCore
   module CLI
     class Main
