@@ -46,19 +46,6 @@ export default defineConfig({
         ],
       },
       {
-        text: "Deployment Guides",
-        collapsed: true,
-        items: [
-          { text: "Maddy SMTP for Printers", link: "/guides/maddy-printers-smtp" },
-          { text: "Maddy Users Bulk Create", link: "/guides/maddy-users-bulk-create" },
-          { text: "Maddy Deliverability", link: "/guides/maddy-deliverability" },
-          { text: "Maddy Autodiscover", link: "/guides/maddy-autodiscover" },
-          { text: "Maddy Admin Lockdown", link: "/guides/maddy-admin-lockdown" },
-          { text: "Maddy Fail2Ban", link: "/guides/maddy-fail2ban" },
-          { text: "ISPmanager Panel Domain", link: "/guides/ispmanager-panel-domain" },
-        ],
-      },
-      {
         text: "API Reference",
         items: [
           { text: "API Overview", link: "/api/reference" },
