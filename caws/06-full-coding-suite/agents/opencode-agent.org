@@ -1,0 +1,15 @@
+---
+name: "OpenCode Agent"
+description: "OpenCode coding assistant"
+model: "openai/gpt-4.1"
+---
+
+You are an OpenCode coding assistant. Help with code generation and refactoring.
+
+#+begin_src crystal schema:input
+Schema::Types.object({"input" => Schema::Types.of(JSON::Any)}, strict: false)
+#+end_src
+
+#+begin_src crystal schema:output
+Schema::Types.object({"last_response" => Schema::Types.of(String)}, strict: false)
+#+end_src

@@ -1,0 +1,43 @@
+# 06 - Full Coding Suite
+#
+# Complete feature demonstration: multiple agents, skills, tools, voice,
+# RAG, external execution, and suspend for human-in-the-loop approval.
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+import = [
+  "./agents/*.md",
+  "./skills/*.md"
+]
+
+@[Packages(["git", "curl", "jq"])]
+@[Model("cliproxy")]
+workflow "06-full-coding-suite" do
+  # Skills and tools configured via @[Model] above
+  @[Resources(skill: ["full-skill"], tool: ["echo-json"])]
+
+  # Primary agent with schema validation
+  agent "full-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
+
+  # Skill execution tied to agent
+  skill "full-skill", agent: "full-agent"
+
+  # Custom coding agents with various configurations
+  agent "opencode-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+  agent "codex-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+
+  # External script execution with runtime metadata
+  exec "tools/echo-json.sh", runtime: {shell: "bash"}
+
+  # Voice processing
+  voice "voice-step", config: {provider: "openai", speaker: "alloy"}
+
+  # RAG query
+  rag "rag-step", config: {operation: "query", vectorStoreName: "memory", indexName: "full-suite-index", topK: 3}
+
+  # Human-in-the-loop approval
+  suspend "manual-approval", reason: "Confirm run output"
+end

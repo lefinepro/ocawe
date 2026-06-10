@@ -1,0 +1,59 @@
+** 05 - Voice Pipeline
+
+*** Description
+
+Voice-enabled coding assistant pipeline. Converts audio input to text, processes with a coding agent, and synthesizes the response back to audio.
+
+*** Features
+
+- Audio transcription via =voice "voice-transcribe"=
+- Agent processing with voice context
+- Audio synthesis via =voice "voice-synthesize"=
+- Guardrails for input filtering
+- OpenAI voice operator with "alloy" speaker
+
+*** Structure
+
+#+begin_src 
+05-voice-pipeline/
+├── Cawfile                      # Voice workflow configuration
+├── agents/
+│   └── voice-agent.md           # Voice-enabled agent
+├── skills/
+│   ├── voice-transcribe-skill.md
+│   └── voice-synthesize-skill.md
+└── README.md
+#+end_src
+
+*** Running Locally
+
+#+begin_src bash
+ocawe up caws/05-voice-pipeline
+#+end_src
+
+*** Testing
+
+#+begin_src bash
+# Text input (bypass transcription)
+curl -X POST http://localhost:4111/v1/workflows/05-voice-pipeline/runs \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Explain how Crystal fibers work"}'
+
+# Audio input (base64 encoded)
+curl -X POST http://localhost:4111/v1/workflows/05-voice-pipeline/runs \
+  -H "Content-Type: application/json" \
+  -d '{"audio": "base64-encoded-audio-data"}'
+#+end_src
+
+*** Voice Configuration
+
+| Parameter | Description |
+|-----------|-------------|
+| =voice_operator= | Voice service provider (e.g., ="openai"=) |
+| =speaker= | Voice profile (e.g., ="alloy"=, ="echo"=, ="fable"=) |
+| =guardrails.input.blocked_terms= | Terms to filter from input |
+
+*** Next Steps
+
+- See [[../06-full-coding-suite/][06-full-coding-suite]] for all features combined
+- Learn about [[../07-unified-resources/][07-unified-resources]] for resource management

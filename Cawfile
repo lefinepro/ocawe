@@ -7,6 +7,8 @@ import = [
     "./workflows/*.acd.cr"
 ]
 
+# Federation input/output types
+# Including Api::Federation::Inbox/Outbox automatically enables federation API
 struct InputCodex
   include Api::Federation::Inbox
 end
@@ -15,13 +17,7 @@ struct OutputCodex
   include Api::Federation::Outbox
 end
 
-# Expand this structure
-  input_type InputCodex
-
-  input_validate Schema::Types.object({
-    "inbox" => Api::Federation::Inbox
-  })
-@[Validate(InputCodex,OutputCodex)]
+@[Validate(InputCodex, OutputCodex)]
 # Import skills or Agents files into even prompt
 @[Load(["AGENTS.md"])]
 # Nix packages to install inside the container

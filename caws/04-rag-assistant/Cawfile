@@ -1,0 +1,48 @@
+# 04 - RAG Assistant
+#
+# Demonstrates Retrieval-Augmented Generation with coding agents.
+# Ingests code documentation, queries it for context-aware answers.
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+import = [
+  "./agents/*.md",
+  "./skills/*.md"
+]
+
+struct RagInput
+  include JSON::Serializable
+  getter text : String?
+  getter query : String?
+end
+
+struct RagOutput
+  include JSON::Serializable
+  getter answer : String?
+end
+
+@[Model("cliproxy")]
+workflow "04-rag-assistant" do
+  input_type RagInput
+  output_type RagOutput
+
+  input_validate Schema::Types.object({
+    "text" => Schema::Types.optional(Schema::Types.of(String)),
+    "query" => Schema::Types.optional(Schema::Types.of(String)),
+  })
+
+  output_validate Schema::Types.object({
+    "answer" => Schema::Types.optional(Schema::Types.of(String)),
+  })
+
+  # Ingest documentation into vector store
+  skill "rag-ingest-skill"
+  rag "rag-ingest", config: {operation: "upsert", vectorStoreName: "memory", indexName: "rag-assistant-index"}
+
+  # Query for context-aware answers
+  skill "rag-query-skill"
+  rag "rag-query", config: {operation: "query", vectorStoreName: "memory", indexName: "rag-assistant-index", topK: 5}
+end

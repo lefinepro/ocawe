@@ -1,0 +1,6 @@
+---
+name: "RAG Query"
+description: "Query indexed corpus and return best match"
+---
+
+Skill used by RAG assistant with DSL node =rag "rag-query"=.

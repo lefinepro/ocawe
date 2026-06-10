@@ -1,0 +1,49 @@
+** 02 - Multi-Agent Workflow
+
+*** Description
+
+Demonstrates multiple coding agents working together in a sequential pipeline. Shows how to combine different agent types (workflow orchestrator, opencode, codex, cliproxy) for complex tasks.
+
+*** Features
+
+- Sequential agent pipeline
+- Multiple custom agents: =agent "workflow-agent"=, =agent "opencode-agent"=, =agent "codex-agent"=
+- Input/output schema validation with =schema_ref=
+- Type-safe input with =WorkflowInput= struct
+
+*** Structure
+
+#+begin_src 
+02-multi-agent/
+├── Cawfile                   # Multi-agent configuration
+├── agents/
+│   └── workflow-agent.md     # Orchestrator agent
+└── README.md
+#+end_src
+
+*** Running Locally
+
+#+begin_src bash
+ocawe up caws/02-multi-agent
+ocawe up -d caws/02-multi-agent   # background mode
+#+end_src
+
+*** Testing
+
+#+begin_src bash
+curl -X POST http://localhost:4111/v1/workflows/02-multi-agent/runs \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Create a REST API endpoint in Crystal"}'
+#+end_src
+
+*** Configuration Notes
+
+- Each agent in the pipeline receives output from the previous agent
+- The =workflow-agent= orchestrates task distribution
+- Custom agents defined via markdown files with model frontmatter
+- Use =@[Model("cliproxy")]= to set default model for the workflow
+
+*** Next Steps
+
+- See [[../03-control-flow/][03-control-flow]] for conditional execution
+- Explore [[../06-full-coding-suite/][06-full-coding-suite]] for the complete feature set

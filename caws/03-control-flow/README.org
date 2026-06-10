@@ -1,0 +1,63 @@
+** 03 - Control Flow Example
+
+*** Description
+
+Demonstrates Crystal-native control flow in the Ocawe workflow DSL. Shows how to use =unless=, =if/elsif/else=, =parallel=, =while=, and =until= for dynamic agent orchestration.
+
+*** Features
+
+- =unless= - Skip preprocessing when =skip_preprocessing= is true
+- =if/else= - Conditional agent selection (translator vs passthrough)
+- =parallel= - Run validator and formatter concurrently
+- Sequential execution for analyzer and finalizer
+
+*** Structure
+
+#+begin_src 
+03-control-flow/
+├── Cawfile                # Control flow configuration
+├── agents/
+│   ├── preprocessor.md    # Data cleaning agent
+│   ├── analyzer.md        # Analysis agent
+│   ├── translator.md      # Translation agent
+│   ├── passthrough.md     # Pass-through agent
+│   ├── validator.md       # Validation agent
+│   ├── formatter.md       # Formatting agent
+│   └── finalizer.md       # Output finalizer
+└── README.md
+#+end_src
+
+*** Running Locally
+
+#+begin_src bash
+ocawe up caws/03-control-flow
+#+end_src
+
+*** Testing
+
+#+begin_src bash
+# With translation
+curl -X POST http://localhost:4111/v1/workflows/03-control-flow/runs \
+  -H "Content-Type: application/json" \
+  -d '{"skip_preprocessing": false, "needs_translation": true, "input": "Hello world"}'
+
+# Skip preprocessing, no translation
+curl -X POST http://localhost:4111/v1/workflows/03-control-flow/runs \
+  -H "Content-Type: application/json" \
+  -d '{"skip_preprocessing": true, "needs_translation": false, "input": "Hello world"}'
+#+end_src
+
+*** Control Flow Reference
+
+| Directive | Behavior |
+|-----------|----------|
+| =unless= | Execute block when condition is false |
+| =if/elsif/else= | Conditional branching |
+| =parallel= | Execute agents concurrently |
+| =while= | Loop while condition is true |
+| =until= | Loop until condition is true |
+
+*** Next Steps
+
+- Explore [[../04-rag-assistant/][04-rag-assistant]] for RAG integration
+- See [[../06-full-coding-suite/][06-full-coding-suite]] for all features combined

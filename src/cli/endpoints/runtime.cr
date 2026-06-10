@@ -19,19 +19,17 @@ module OcaweCore
       private def dev(args : Array(String)) : Nil
         port = DEFAULT_PORT
         interval = 1.0
-        config_rcl = nil.as(String?)
 
         OptionParser.parse(args) do |parser|
           parser.on("--port PORT", "Runtime port") { |v| port = v.to_i }
           parser.on("--interval SECONDS", "Watch interval") { |v| interval = v.to_f }
-          parser.on("--config-rcl PATH", "RCL config path") { |v| config_rcl = v }
         end
 
         tracked = [WORKFLOWS_PATH, AGENTS_PATH, TOOLS_PATH]
         fingerprint = compute_fingerprint(tracked)
 
         abort_unless_success(build_runtime(release: false, output: DEV_RUNTIME_BIN))
-        runtime = spawn_cmd(dev_runtime_cmd(port, config_rcl))
+        runtime = spawn_cmd(dev_runtime_cmd(port))
 
         Signal::INT.trap do
           terminate(runtime)
@@ -46,7 +44,7 @@ module OcaweCore
           puts "[ocawe] changes detected, recompiling runtime..."
           if build_runtime(release: false, output: DEV_RUNTIME_BIN)
             terminate(runtime)
-            runtime = spawn_cmd(dev_runtime_cmd(port, config_rcl))
+            runtime = spawn_cmd(dev_runtime_cmd(port))
             fingerprint = current
             puts "[ocawe] runtime restarted"
           else
@@ -56,31 +54,83 @@ module OcaweCore
       end
 
       private def up(args : Array(String)) : Nil
-        port = DEFAULT_PORT
-        workflows_root = nil.as(String?)
-        config_rcl = nil.as(String?)
+        port = nil
+        detached = false
+        workflow_path = nil.as(String?)
 
+        remaining = [] of String
         OptionParser.parse(args) do |parser|
-          parser.on("--port PORT", "Runtime port") { |v| port = v.to_i }
-          parser.on("--workflows-root PATH", "Preferred workflows root path") { |v| workflows_root = v }
-          parser.on("--config-rcl PATH", "RCL config path") { |v| config_rcl = v }
+          parser.on("-d", "--detach", "Run in background (detach)") { detached = true }
+          parser.on("--port PORT", "Runtime port (overrides Cawfile)") { |v| port = v.to_i }
         end
+
+        workflow_path = args.first?
+
+        workflows_root = if workflow_path
+          expanded = File.expand_path(workflow_path, PROJECT_ROOT)
+          if CawfileLoader.find_cawfile(expanded)
+            expanded
+          else
+            File.join(File.expand_path(Dir.current), workflow_path)
+          end
+        else
+          Dir.current
+        end
+
+        port ||= read_port_from_cawfile(workflows_root)
 
         abort_unless_success(build_runtime(release: true, output: RUNTIME_BIN))
 
         command = String.build do |io|
           io << RUNTIME_BIN
-          io << " --port #{port}"
-          io << " --workflows-root=#{workflows_root}" if workflows_root
-          io << " --config-rcl=#{config_rcl}" if config_rcl
+          io << " --port #{port || DEFAULT_PORT}"
+          io << " --workflows-root=#{workflows_root}"
         end
 
-        runtime = spawn_cmd(command)
-        Signal::INT.trap do
-          terminate(runtime)
-          exit(0)
+        if detached
+          pid = Process.fork do
+            Process.setsid
+            runtime = spawn_cmd(command)
+            runtime.wait
+          end
+
+          pid_file = File.join(workflows_root, ".ocawe.pid")
+          File.open(pid_file, "w") { |f| f.puts pid }
+
+          puts "[ocawe] started in background (PID #{pid}, port #{port || DEFAULT_PORT})"
+          puts "[ocawe] logs: ocawe up --follow"
+          puts "[ocawe] stop: kill #{pid}"
+        else
+          runtime = spawn_cmd(command)
+          Signal::INT.trap do
+            terminate(runtime)
+            exit(0)
+          end
+          runtime.wait
         end
-        runtime.wait
+      end
+
+      private def read_port_from_cawfile(path : String) : Int32?
+        cawfile = CawfileLoader.find_cawfile(path)
+        return nil unless cawfile
+
+        raw = File.read(cawfile)
+        raw.each_line do |line|
+          if line =~ /settings\s+do/
+            port = nil
+            while line = raw.each_line.next?
+              break if line =~ /^\s*end\s*$/
+              if line =~ /port\s*=\s*(\d+)/
+                port = $1.to_i
+                break
+              end
+            end
+            return port if port
+          end
+        end
+        nil
+      rescue
+        nil
       end
 
       private def build_runtime(release : Bool, static : Bool = false, output : String = RUNTIME_BIN) : Bool
@@ -92,11 +142,10 @@ module OcaweCore
         run_cmd("mkdir -p #{PROJECT_ROOT}/build && bash #{BOOTSTRAP_CRYSTAL} && crystal build #{RUNTIME_ENTRY} -D ocawe_runtime_main #{flag_str}-o #{output}")
       end
 
-      private def dev_runtime_cmd(port : Int32, config_rcl : String?) : String
+      private def dev_runtime_cmd(port : Int32) : String
         String.build do |io|
           io << DEV_RUNTIME_BIN
           io << " --port #{port}"
-          io << " --config-rcl=#{config_rcl}" if config_rcl
         end
       end
 

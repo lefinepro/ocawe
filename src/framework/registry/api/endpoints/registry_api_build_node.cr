@@ -151,18 +151,7 @@ module Ocawe
             "resume_data" => JSON.parse(resume.to_json),
           })
         end
-      when "agent_cliproxy", "agent_codex", "agent_opencode", "agent_claude_code", "agent_qwen"
-        kind_attributes = attributes || ({} of String => JSON::Any)
-        return build_node(
-          workflow,
-          "node_kind",
-          id,
-          node_kind_name: normalized,
-          node_kind_attributes: kind_attributes,
-          workspace: workspace,
-          input_schema: input_schema,
-          output_schema: output_schema,
-        )
+ 
       when "node_kind"
         kind_name = node_kind_name || id
         kind_attributes = node_kind_attributes || ({} of String => JSON::Any)

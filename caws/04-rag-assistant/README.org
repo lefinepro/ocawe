@@ -1,0 +1,59 @@
+** 04 - RAG Assistant
+
+*** Description
+
+Retrieval-Augmented Generation (RAG) assistant for coding agents. Ingests code documentation into a vector store, then queries it to provide context-aware answers.
+
+*** Features
+
+- Document ingestion via =rag "rag-ingest"= with upsert operation
+- Context-aware querying via =rag "rag-query"= with topK retrieval
+- Memory-based vector store for local development
+- Type-safe input/output with =RagInput=/=RagOutput= structs
+
+*** Structure
+
+#+begin_src 
+04-rag-assistant/
+├── Cawfile                     # RAG workflow configuration
+├── agents/
+│   └── (none - uses built-in RAG nodes)
+├── skills/
+│   ├── rag-ingest-skill.md     # Ingestion skill
+│   └── rag-query-skill.md      # Query skill
+└── README.md
+#+end_src
+
+*** Running Locally
+
+#+begin_src bash
+ocawe up caws/04-rag-assistant
+#+end_src
+
+*** Testing
+
+#+begin_src bash
+# Ingest documentation
+curl -X POST http://localhost:4111/v1/workflows/04-rag-assistant/runs \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Crystal is a statically typed compiled language with syntax inspired by Ruby. It uses LLVM for compilation and supports C bindings."}'
+
+# Query for context
+curl -X POST http://localhost:4111/v1/workflows/04-rag-assistant/runs \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is Crystal language?"}'
+#+end_src
+
+*** RAG Configuration
+
+| Parameter | Description |
+|-----------|-------------|
+| =operation= | ="upsert"= to index, ="query"= to retrieve |
+| =vectorStoreName= | ="memory"= for in-memory store |
+| =indexName= | Unique index identifier |
+| =topK= | Number of top results to return |
+
+*** Next Steps
+
+- See [[../05-voice-pipeline/][05-voice-pipeline]] for voice integration
+- Explore [[../06-full-coding-suite/][06-full-coding-suite]] for complete feature set

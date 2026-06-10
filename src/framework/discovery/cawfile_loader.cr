@@ -20,6 +20,8 @@ module ACD
       getter import_paths : Array(String)
       # Nix packages to install inside the container
       getter packages : Array(String)
+      # Whether federation API should be enabled (detected from Api::Federation usage)
+      getter enable_federation : Bool
 
       def initialize(
         @id : String,
@@ -33,7 +35,8 @@ module ACD
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
         @import_paths : Array(String) = [] of String,
-        @packages : Array(String) = [] of String
+        @packages : Array(String) = [] of String,
+        @enable_federation : Bool = false
       )
       end
     end
@@ -69,6 +72,8 @@ module ACD
             packages = extract_packages_from_raw(raw_lines)
             dsl_lines = extract_workflow_body_lines(raw_lines)
 
+            enable_federation = detect_federation_from_raw(raw_lines)
+
             return CawfileBundle.new(
               id: workflow_id,
               dsl_source: dsl_lines,
@@ -81,7 +86,8 @@ module ACD
               start_settings: root_config.start_settings,
               follow: follow,
               import_paths: import_paths,
-              packages: packages
+              packages: packages,
+              enable_federation: enable_federation
             )
           end
 
@@ -93,6 +99,7 @@ module ACD
           import_paths = extract_import_paths_from_raw(raw_lines)
           follow = extract_follow_from_raw(raw_lines)
           packages = extract_packages_from_raw(raw_lines)
+          enable_federation = detect_federation_from_raw(raw_lines)
           dsl_lines = extract_workflow_body_lines(raw_lines)
 
           # Extract settings from raw lines
@@ -168,7 +175,8 @@ module ACD
             start_settings: start,
             follow: follow,
             import_paths: import_paths,
-            packages: packages
+            packages: packages,
+            enable_federation: enable_federation
           )
         end
       end
@@ -203,7 +211,8 @@ module ACD
               start_settings: root_config.start_settings,
               follow: follow,
               import_paths: import_paths,
-              packages: packages
+              packages: packages,
+              enable_federation: detect_federation_from_raw(raw_lines)
             )
           else
             parse_settings_block(doc)
@@ -473,6 +482,10 @@ module ACD
           end
         end
         [] of String
+      end
+
+      private def self.detect_federation_from_raw(lines : Array(String)) : Bool
+        lines.any? { |line| line.includes?("Api::Federation::Inbox") || line.includes?("Api::Federation::Outbox") }
       end
 
       private def self.parse_value(raw : String) : RCL::Value

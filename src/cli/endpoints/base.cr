@@ -83,10 +83,12 @@ module OcaweCore
           Commands:
             build [--release] [--output PATH]
                 Build runtime binary.
-            dev [--port N] [--interval SECONDS] [--config-rcl PATH]
+            dev [--port N] [--interval SECONDS]
                 Watch workflows/global agents/tools, recompile and restart runtime in dev mode.
-            up [--port N] [--workflows-root PATH] [--config-rcl PATH]
+            up [PATH] [-d] [--port N]
                 Auto-build release runtime binary and start server.
+                PATH: optional workflow directory (default: current directory)
+                -d/--detach: run in background
             workflow <workflow_id> [args ...] [--base-url URL] [--run-id ID] [--resource-id ID] [--input-json JSON]
                 Trigger workflow by id.
             agent <agent_id> [args ...] [--base-url URL] [--input-json JSON] [--prompt TEXT] [--system TEXT] [--metadata-json JSON]

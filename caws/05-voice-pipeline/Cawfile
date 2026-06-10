@@ -1,0 +1,53 @@
+# 05 - Voice Pipeline
+#
+# Demonstrates voice transcription and synthesis in a coding workflow.
+# Converts audio input to text, processes with agent, synthesizes response.
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+import = [
+  "./agents/*.md",
+  "./skills/*.md"
+]
+
+struct VoiceInput
+  include JSON::Serializable
+  getter audio : String?
+  getter text : String?
+end
+
+struct VoiceOutput
+  include JSON::Serializable
+  getter text : String?
+  getter audio_url : String?
+end
+
+@[Model("openai/gpt-4.1-mini")]
+workflow "05-voice-pipeline" do
+  input_type VoiceInput
+  output_type VoiceOutput
+
+  input_validate Schema::Types.object({
+    "audio" => Schema::Types.optional(Schema::Types.of(String)),
+    "text" => Schema::Types.optional(Schema::Types.of(String)),
+  })
+
+  output_validate Schema::Types.object({
+    "text" => Schema::Types.optional(Schema::Types.of(String)),
+    "audio_url" => Schema::Types.optional(Schema::Types.of(String)),
+  })
+
+  # Voice agent with schema validation
+  agent "voice-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
+
+  # Transcribe audio to text
+  skill "voice-transcribe-skill"
+  voice "voice-transcribe"
+
+  # Synthesize response to audio
+  skill "voice-synthesize-skill"
+  voice "voice-synthesize"
+end

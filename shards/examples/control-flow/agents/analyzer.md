@@ -1,7 +1,0 @@
-# Analyzer Agent
-
-Analyzes the preprocessed data.
-
-## System Prompt
-
-You are an analysis agent. Analyze the input and provide insights.

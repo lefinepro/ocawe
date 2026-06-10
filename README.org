@@ -1,0 +1,265 @@
+#+TITLE: Ocawe
+#+AUTHOR: Konrad Geletey
+#+DATE: 2026-06-10
+
+* Ocawe
+
+Ocawe is a Crystal-first runtime for workflow bundles, agents, tools, and skills.
+
+*Licenses:* [[https://spdx.org/licenses/0BSD.html][0BSD]] (=LICENSE=).
+
+It includes:
+- A production-oriented HTTP runtime server
+- A Svelte playground for workflows, tools, skills, and agent chat
+- VitePress docs with a custom =/playground/= route
+
+* Why Ocawe
+
+- Crystal workflow runtime with Cawfile-based bundles (=*.acd.cr= or =Cawfile=)
+- Agent + skill + tool discovery from workflow directories
+- Voice and RAG patterns through workflow DSL
+- Schema validation and guardrails in agent/workflow execution
+- OpenAI-compatible chat completions endpoint support
+
+* Quickstart
+
+Build CLI:
+
+#+begin_src bash
+crystal build src/cli/main.cr -o build/ocawe
+#+end_src
+
+=ocawe build/dev/up= now auto-bootstrap Crystal when =crystal= is missing by downloading a platform archive into =./.tools/crystal=.
+
+You can control bootstrap with env vars:
+- =OCAWE_CRYSTAL_VERSION= (default =1.13.3=)
+- =OCAWE_CRYSTAL_BASE_URL= (default Crystal GitHub releases URL)
+- =OCAWE_CRYSTAL_FORCE_BOOTSTRAP=1= (force local toolchain even if system =crystal= exists)
+- =OCAWE_CRYSTAL_VERBOSE=1= (print toolchain version during bootstrap)
+
+Run runtime server:
+
+#+begin_src bash
+ocawe up
+#+end_src
+
+The port is configured in =Cawfile= via =settings { port = 4111 }=.
+
+* CLI Commands
+
+** Build and Run
+
+#+begin_src bash
+ocawe build --release
+ocawe dev --port 4111
+ocawe up                           # reads port from Cawfile
+ocawe up caws/01-simple-codex     # run specific workflow
+ocawe up -d caws/01-simple-codex  # background mode
+#+end_src
+
+** Workflow Triggers
+
+#+begin_src bash
+# explicit workflow trigger by id
+ocawe workflow solver task=deploy env=prod
+
+# agent/function/tool/skill/support triggers
+ocawe agent code-reviewer --prompt "review this patch"
+ocawe tool project_healthcheck
+ocawe support onboarding-check
+
+# alias executable style (workflow id from executable name)
+ln -sf ./build/ocawe /usr/local/bin/ocawe_example_workflow
+ocawe_example_workflow
+#+end_src
+
+Workflow trigger CLI calls =POST /v1/triggers/workflows/:id= and sends:
+- =input.<key>= from =key=value= args (values parsed as JSON when possible)
+- =input.args= from positional args without ===
+
+Trigger command mapping:
+- =workflow= → =/v1/triggers/workflows/:id=
+- =agent= → =/v1/triggers/agents/:id=
+- =skill=/=support= → =/v1/triggers/skills/:id=
+- =function=/=tool= → =/v1/triggers/functions/:id=
+
+Use =OCAWE_TRIGGER_BASE_URL= or =--base-url= to target a non-default runtime URL.
+
+* Runtime APIs
+
+** Primary APIs
+
+- =GET /v1/workflows=
+- =POST /v1/workflows/:workflowId/runs=
+- =GET /v1/tools=
+- =GET /v1/skills=
+- =GET /v1/agents=
+- =POST /v1/agents/:agentId/generate=
+- =GET /v1/mcp/servers=
+- =POST /v1/mcp/servers=
+- =GET /v1/mcp/catalog=
+- =POST /mcp=
+
+** Compatibility
+
+- =POST /v1/chat/completions=
+
+** Federation APIs
+
+- =POST /actors/{identifier}/inbox= (S2S inbound activities, signature-verified)
+- =GET /actors/{identifier}/outbox=
+- =POST /actors/{identifier}/outbox=
+- =GET /federation/metadata= (reported capabilities + supported FEPs from FEDERATION.md)
+- =GET /FEDERATION.md= (repo interoperability manifest)
+
+S2S ticket ingestion mode:
+- follow remote actor and poll remote =outbox= for =Create(Ticket)= activities
+- require HTTP Signatures for federation requests
+
+* Project Structure
+
+#+begin_example
+src/
+  cli/                     # ocawe CLI (build/dev/up)
+  framework/               # runtime framework + HTTP endpoints
+packages/
+  playground/              # Svelte playground (Vite + Bun)
+  docs/                    # VitePress docs and static playground route
+caws/                      # workflow bundle examples
+  01-simple-codex/         # minimal single agent
+  02-multi-agent/          # sequential agent pipeline
+  03-control-flow/         # if/else, parallel, while, until
+  04-rag-assistant/        # retrieval-augmented generation
+  05-voice-pipeline/       # voice transcription + synthesis
+  06-full-coding-suite/    # all features combined
+  07-unified-resources/    # resource management patterns
+  08-model-override/       # per-agent model override
+  09-custom-agent/         # how to write custom agents
+spec/                      # Crystal specs
+#+end_example
+
+* Examples
+
+See =caws/= directory for complete examples with =Cawfile= format.
+
+Run any example:
+
+#+begin_src bash
+ocawe up caws/01-simple-codex
+ocawe up -d caws/02-multi-agent  # background mode
+#+end_src
+
+Each example demonstrates a specific feature:
+- *01-simple-codex* — minimal single agent setup
+- *02-multi-agent* — sequential agent pipeline
+- *03-control-flow* — =unless=, =if/else=, =parallel=, =while=, =until=
+- *04-rag-assistant* — RAG with vector store
+- *05-voice-pipeline* — voice transcription and synthesis
+- *06-full-coding-suite* — all features combined
+- *07-unified-resources* — shared resources with =@[Model]= and =@[Resources]=
+- *08-model-override* — per-agent model configuration
+- *09-custom-agent* — writing custom agents with external binaries
+
+* Cawfile Configuration
+
+Framework configuration uses =Cawfile= (RCL format) in the workflow root.
+
+Example =Cawfile=:
+
+#+begin_src rcl
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+import = [
+  "./agents/*.md",
+  "./skills/*.md"
+]
+
+# Federation is enabled by including Api::Federation types
+struct Input
+  include Api::Federation::Inbox
+end
+
+struct Output
+  include Api::Federation::Outbox
+end
+
+@[Model("cliproxy")]
+@[Validate(Input, Output)]
+workflow "solver-codex" do
+  follow ["@coder@example.com"]
+  agent "codex-agent"
+end
+#+end_src
+
+*Key directives:*
+- =settings do ... end= — runtime config (port, data adapter, federation)
+- =import = [...]= — glob patterns for agents/skills
+- =@[Model("provider")]= — default model for the workflow
+- =@[Packages(["pkg1"])]= — Nix packages for container
+- =@[Validate(Input, Output)]= — input/output type validation
+
+*API types:*
+- ="federation"= — ForgeFed-only mode (enabled when =Api::Federation::Inbox= or =Api::Federation::Outbox= is included)
+- ="classic"= — default runtime APIs (=/v1/*=)
+
+* Writing Custom Agents
+
+Agents are defined via markdown files with frontmatter:
+
+#+begin_src yaml
+---
+name: "My Coder"
+description: "Custom coding agent"
+model: "cliproxyapi/qwen3-coder-plus"
+---
+
+You are a coding assistant.
+#+end_src
+
+See =caws/09-custom-agent= for a complete example.
+
+*Installing external coding agents:*
+- Codex: =npm install -g @openai/codex=
+- OpenCode: =npm install -g @anthropic/opencode=
+- Claude Code: =npm install -g @anthropic-ai/claude-code=
+- Qwen Code: =pip install qwen-code=
+
+* Development
+
+** Run Playground
+
+#+begin_src bash
+cd packages/playground
+bun install
+bun run dev
+#+end_src
+
+** Run Docs
+
+#+begin_src bash
+cd packages/docs
+bun install
+bun run dev
+#+end_src
+
+** Development Tasks (mise)
+
+#+begin_src bash
+mise run cli-build
+mise run up
+mise run playground-build
+mise run docs-build
+#+end_src
+
+** Testing
+
+#+begin_src bash
+crystal spec
+cd packages/playground && bun run lint
+cd packages/docs && bun run build
+#+end_src
+
+

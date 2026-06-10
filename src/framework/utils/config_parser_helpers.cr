@@ -92,6 +92,21 @@ module OcaweCore
         tree["node_kinds"] = bundle.config_node_kinds unless bundle.config_node_kinds.empty?
         tree["functions"] = bundle.config_functions unless bundle.config_functions.empty?
         tree["mcp"] = bundle.config_mcp unless bundle.config_mcp.empty?
+
+        # Auto-enable federation API when Api::Federation types are used in Cawfile
+        if bundle.enable_federation
+          api_value = tree["api"]?
+          if api_value.is_a?(Hash(String, RCL::Value))
+            # Already has api config - merge federation in
+            existing = api_value
+            unless existing.has_key?("federation")
+              existing["enabled"] = ["federation"] of RCL::Value
+            end
+          else
+            tree["api"] = {"enabled" => ["federation"] of RCL::Value} of String => RCL::Value
+          end
+        end
+
         apply_raw_settings(base, tree)
       end
 

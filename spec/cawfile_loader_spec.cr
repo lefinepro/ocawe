@@ -181,6 +181,48 @@ RCL
         FileUtils.rm_rf(dir)
       end
     end
+
+    it "detects federation from Api::Federation::Inbox usage" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+struct Input
+  include Api::Federation::Inbox
+end
+
+workflow "fed-test" do
+  agent_codex
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "fed-test")
+        bundle.should_not be_nil
+        bundle.not_nil!.enable_federation.should be_true
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "detects federation from Api::Federation::Outbox usage" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+struct Output
+  include Api::Federation::Outbox
+end
+
+workflow "fed-test" do
+  agent_codex
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "fed-test")
+        bundle.should_not be_nil
+        bundle.not_nil!.enable_federation.should be_true
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
   end
 
   describe ".load_root" do

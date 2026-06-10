@@ -168,21 +168,6 @@ module Ocawe
     end
 
     private def register_default_node_kinds! : Nil
-      node_kind("agent_codex") do |ctx, _parameters|
-        call_function("agent_codex", ctx)
-      end
-      node_kind("agent_cliproxy") do |ctx, _parameters|
-        call_function("agent_cliproxy", ctx)
-      end
-      node_kind("agent_opencode") do |ctx, _parameters|
-        call_function("agent_opencode", ctx)
-      end
-      node_kind("agent_claude_code") do |ctx, _parameters|
-        call_function("agent_claude_code", ctx)
-      end
-      node_kind("agent_qwen") do |ctx, _parameters|
-        call_function("agent_qwen", ctx)
-      end
       node_kind("forgefed_subscribe") do |ctx, parameters|
         run_forgefed_subscribe_node(ctx, parameters)
       end

@@ -1,0 +1,100 @@
+** 09 - Custom Agent (Binary)
+
+*** Description
+
+Demonstrates how to write a custom coding agent that calls an external binary. This is the recommended way to add coding agents — as executable commands with their own model configuration.
+
+*** How It Works
+
+1. Define the agent in a markdown file with =model:= frontmatter
+2. The agent calls an external binary (e.g., =codex=, =opencode=, =claude=)
+3. Pass the task through stdin/stdout
+4. Handle API keys via environment variables
+
+*** Installing Coding Agents
+
+**** Codex (OpenAI)
+#+begin_src bash
+# Install via npm
+npm install -g @openai/codex
+
+# Or via pip
+pip install codex
+#+end_src
+
+**** OpenCode
+#+begin_src bash
+# Install via npm
+npm install -g @anthropic/opencode
+
+# Or clone and build
+git clone https://github.com/nicepkg/opencode
+cd opencode && go build
+#+end_src
+
+**** Claude Code (Anthropic)
+#+begin_src bash
+# Install via npm
+npm install -g @anthropic-ai/claude-code
+#+end_src
+
+**** Qwen Code
+#+begin_src bash
+# Install via pip
+pip install qwen-code
+#+end_src
+
+*** Example: Writing Your Own Agent
+
+Create an agent markdown file (=agents/my-coder.md=):
+
+#+begin_src yaml
+---
+name: "My Coder"
+description: "Custom coding agent"
+model: "cliproxyapi/qwen3-coder-plus"
+---
+
+You are a coding assistant.
+#+end_src
+
+Create a binary wrapper (=bin/call-coder.sh=):
+
+#+begin_src bash
+#!/usr/bin/env bash
+set -euo pipefail
+MODEL="${MODEL:-cliproxyapi/qwen3-coder-plus}"
+API_KEY="${CLIPROXY_API_KEY}"
+TASK="$1"
+
+# Call external binary with task
+response=$(codex --model "$MODEL" --key "$API_KEY" "$TASK")
+echo "$response"
+#+end_src
+
+*** Running Locally
+
+#+begin_src bash
+ocawe up caws/09-custom-agent
+#+end_src
+
+*** Testing
+
+#+begin_src bash
+curl -X POST http://localhost:4111/v1/workflows/09-custom-agent/runs \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"task": "Write a hello world in Python"}}'
+#+end_src
+
+*** Key Points
+
+- Agent definitions go in =agents/*.md=
+- Model is specified in frontmatter (=model: "provider/model"=)
+- External binaries are called by the agent framework
+- API keys are passed via environment variables
+- Use =@[Model("cliproxy")]= in Cawfile to set the default model
+
+*** Next Steps
+
+- See [[../02-multi-agent/][02-multi-agent]] for multi-agent pipelines
+- Explore [[../06-full-coding-suite/][06-full-coding-suite]] for complete feature set

@@ -1,0 +1,33 @@
+# 02 - Multi-Agent Workflow
+#
+# Demonstrates multiple coding agents (codex, opencode, cliproxy)
+# working together in a sequential pipeline.
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+import = [
+  "./agents/*.md"
+]
+
+struct WorkflowInput
+  include JSON::Serializable
+  getter task : String
+end
+
+@[Model("cliproxy")]
+@[Validate(WorkflowInput, JSON::Any)]
+workflow "02-multi-agent" do
+  input_type WorkflowInput
+
+  input_validate Schema::Types.object({
+    "task" => Schema::Types.of(String),
+  })
+
+  # Sequential agent pipeline
+  agent "workflow-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
+  agent "opencode-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+  agent "codex-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+end

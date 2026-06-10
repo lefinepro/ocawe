@@ -1,0 +1,6 @@
+---
+name: "Full Skill"
+description: "Multi-purpose skill for full coding suite"
+---
+
+Return a compact result and preserve task context. Use available tools when needed.

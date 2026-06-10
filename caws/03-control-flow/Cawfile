@@ -1,0 +1,39 @@
+# 03 - Control Flow Example
+#
+# Demonstrates Crystal-native control flow: if/elsif/else, unless, parallel, while, until.
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+import = [
+  "./agents/*.md"
+]
+
+@[Model("openai/gpt-4.1")]
+workflow "03-control-flow" do
+  # Execute agent unless condition is true
+  unless input.skip_preprocessing
+    agent "preprocessor"
+  end
+
+  # Sequential agent
+  agent "analyzer"
+
+  # Conditional with if/else
+  if input.needs_translation
+    agent "translator"
+  else
+    agent "passthrough"
+  end
+
+  # Parallel execution
+  parallel do
+    agent "validator"
+    agent "formatter"
+  end
+
+  # Final agent
+  agent "finalizer"
+end
