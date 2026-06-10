@@ -2,8 +2,6 @@
 #+AUTHOR: Konrad Geletey
 #+DATE: 2026-06-10
 
-* Ocawe
-
 Ocawe is a Crystal-first runtime for workflow bundles, agents, tools, and skills.
 
 *Licenses:* [[https://spdx.org/licenses/0BSD.html][0BSD]] (=LICENSE=).
