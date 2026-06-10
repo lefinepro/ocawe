@@ -127,7 +127,7 @@ describe "E2E: Workflow Lifecycle" do
 
   describe "e2e-test example workflow" do
     it "creates workflow with agent, approval, rag, and voice nodes" do
-      # Simulates e2e-test workflow from shards/examples/e2e-test
+      # E2E test workflow with multiple node types
       workflow = Ocawe::Workflow.create_workflow("e2e-test", "E2E test workflow")
       workflow
         .agent("e2e-processor",
