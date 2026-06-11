@@ -566,6 +566,5 @@ curl -X POST http://localhost:4111/v1/agents/assistant/generate \
 
 - **[Workflows Guide](/guides/workflows)** - Orchestrate multiple agents
 - **[Tools Guide](/guides/tools)** - Extend agent capabilities
-- **[Memory Guide](/guides/memory)** - Add persistent memory
 - **[Voice Guide](/guides/voice)** - Enable voice interactions
 - **[API Reference](/api/reference)** - Complete API documentation

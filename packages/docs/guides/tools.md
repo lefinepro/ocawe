@@ -758,6 +758,5 @@ end
 
 - **[Agents Guide](/guides/agents)** - Build intelligent agents
 - **[Workflows Guide](/guides/workflows)** - Orchestrate tools and agents
-- **[MCP Documentation](/guides/mcp)** - Deep dive into MCP
 - **[Registry API](/guides/registry)** - Register custom NodeKinds
 - **[API Reference](/api/reference)** - Complete API docs
