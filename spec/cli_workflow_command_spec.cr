@@ -19,10 +19,9 @@ describe OcaweCore::CLI::Main do
     output.includes?("Unknown command").should eq(true)
   end
 
-  it "shows container configuration in help" do
+  it "mentions container build in help" do
     output = `#{File.expand_path("bin/ocawe")} --help`
+    output.includes?("container").should eq(true)
     output.includes?("@[Container]").should eq(true)
-    output.includes?("static").should eq(true)
-    output.includes?("nixos").should eq(true)
   end
 end

@@ -27,6 +27,15 @@ module Ocawe
         end
         status.success?
       end
+
+      protected def copy_binary(src : String, dst : String) : Nil
+        File.open(src, "r") do |input|
+          File.open(dst, "w") do |output|
+            IO.copy(input, output)
+          end
+        end
+        File.chmod(dst, 0o755)
+      end
     end
   end
 end

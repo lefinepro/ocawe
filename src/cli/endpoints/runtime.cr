@@ -9,32 +9,47 @@ module OcaweCore
         release = true
         static = false
         output = RUNTIME_BIN
-        container = false
-        container_base = "static"
-        container_runtime = "docker"
-        container_tag = "ocawecore:latest"
 
         OptionParser.parse(args) do |parser|
           parser.on("--release", "Build release binary (default)") { release = true }
           parser.on("--debug", "Build non-release binary") { release = false }
           parser.on("--static", "Build static binary") { static = true }
           parser.on("--output PATH", "Output binary path") { |v| output = v }
-          parser.on("--container", "Build container image after binary") { container = true }
-          parser.on("--container-base BASE", "Container base: static, nixos (default: static)") { |v| container_base = v }
-          parser.on("--container-runtime RUNTIME", "Container runtime: docker, podman, nerdctl (default: docker)") { |v| container_runtime = v }
-          parser.on("--container-tag TAG", "Container image tag (default: ocawecore:latest)") { |v| container_tag = v }
         end
 
         abort_unless_success(build_runtime(release: release, static: static, output: output))
 
-        if container
-          abort_unless_success(build_container(
-            binary_path: output,
-            base: container_base,
-            runtime: container_runtime,
-            tag: container_tag
-          ))
+        # Detect container configuration from Cawfile in current directory
+        cawfile = ACD::Discovery::CawfileLoader.find_cawfile(Dir.current)
+        if cawfile
+          cawfile_bundle = ACD::Discovery::CawfileLoader.load(Dir.current, "root")
+          if cawfile_bundle && cawfile_bundle.container
+            container_config = cawfile_bundle.container.not_nil!
+            container_tag = "ocawecore:latest"
+            base = case container_config.mode
+                   when ACD::Discovery::ContainerMode::Static then "static"
+                   when ACD::Discovery::ContainerMode::Nix then "nixos"
+                   else "static"
+                   end
+
+            abort_unless_success(build_container(
+              binary_path: output,
+              base: base,
+              runtime: detect_runtime,
+              tag: container_tag
+            ))
+          end
         end
+      end
+
+      private def detect_runtime : String
+        ["docker", "podman", "nerdctl"].each do |rt|
+          if Process.run("sh", args: ["-c", "command -v #{rt} > /dev/null 2>&1"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
+            return rt
+          end
+        end
+        STDERR.puts "Error: no container runtime found (docker, podman, nerdctl)"
+        exit(1)
       end
 
       private def build_container(binary_path : String, base : String, runtime : String, tag : String) : Bool
@@ -92,11 +107,11 @@ module OcaweCore
                  end
 
           abort_unless_success(build_container(
-            binary_path: RUNTIME_BIN,
-            base: base,
-            runtime: "docker",
-            tag: container_tag
-          ))
+              binary_path: RUNTIME_BIN,
+              base: base,
+              runtime: detect_runtime,
+              tag: container_tag
+            ))
         end
 
         command = String.build do |io|

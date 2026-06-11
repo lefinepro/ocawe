@@ -18,11 +18,15 @@ module Ocawe
         Dir.mkdir_p(context)
         File.write(File.join(context, "Dockerfile"), dockerfile)
 
+        # Copy binary into build context
+        copy_binary(binary_path, File.join(context, "ocawecore"))
+
         image_arg = tag.empty? ? "ocawecore:latest" : tag
         run_build_command(runtime, context, image_arg)
       end
 
       private def generate_dockerfile : String
+        # FROM scratch — минимальный образ, бинарник должен быть полностью статичным
         lines = [
           "FROM scratch",
           "COPY ocawecore /app/ocawecore",

@@ -36,15 +36,10 @@ module OcaweCore
 
           Commands:
             build [--release] [--static] [--output PATH]
-                  [--container] [--container-base BASE]
-                  [--container-runtime RUNTIME] [--container-tag TAG]
                 Build runtime binary.
-                --container: build container image after binary
-                --container-base: static or nixos
-                --container-runtime: docker, podman, or nerdctl
+                Auto-builds container from @[Container] in Cawfile if present.
             up [PATH] [-d] [--port N] [--log-level LEVEL]
                 Auto-build release runtime binary and start server.
-                Detects @[Container] in Cawfile and builds container.
                 PATH: optional workflow directory (default: current directory)
                 -d/--detach: run in background
                 --log-level: debug, warning, or critical (default: warning)
