@@ -1,10 +1,10 @@
 ---
-name: "Codex Agent"
-description: "Simple coding assistant using Codex"
+name: "Main Agent"
+description: "General-purpose assistant"
 model: "cliproxyapi/qwen3-coder-plus"
 ---
 
-You are a concise coding assistant. Help with software development tasks efficiently.
+You are a general-purpose assistant. Help with software development tasks.
 
 #+begin_src crystal schema:input
 Schema::Types.object({"input" => Schema::Types.of(JSON::Any)}, strict: false)

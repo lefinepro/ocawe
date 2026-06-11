@@ -1,5 +1,5 @@
 ---
-description: "Full-featured coding agent with schema, voice and guardrails"
+description: "Full-featured agent with schema, voice and guardrails"
 model: "cliproxyapi/qwen3-coder-plus"
 voice:
   voice_operator: "openai"
@@ -9,7 +9,7 @@ guardrails:
     blocked_terms: ["forbidden"]
 ---
 
-You are a comprehensive coding assistant. Handle complex multi-step tasks with tools, skills, and external execution.
+You are a comprehensive assistant. Handle complex multi-step tasks with tools, skills, and external execution.
 
 #+begin_src crystal schema:input
 Schema::Types.object({"input" => Schema::Types.of(JSON::Any)}, strict: false)

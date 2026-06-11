@@ -2,25 +2,16 @@
 
 *** Description
 
-Demonstrates how to write a custom coding agent that calls an external binary. This is the recommended way to add coding agents — as executable commands with their own model configuration.
+Demonstrates how to write a custom agent that calls an external binary. This is the recommended way to add agents — as executable commands with their own model configuration.
 
 *** How It Works
 
 1. Define the agent in a markdown file with =model:= frontmatter
-2. The agent calls an external binary (e.g., =codex=, =opencode=, =claude=)
+2. The agent calls an external binary (e.g., =opencode=, =claude=)
 3. Pass the task through stdin/stdout
 4. Handle API keys via environment variables
 
-*** Installing Coding Agents
-
-**** Codex (OpenAI)
-#+begin_src bash
-# Install via npm
-npm install -g @openai/codex
-
-# Or via pip
-pip install codex
-#+end_src
+*** Installing Agent Binaries
 
 **** OpenCode
 #+begin_src bash
@@ -51,11 +42,11 @@ Create an agent markdown file (=agents/my-coder.md=):
 #+begin_src yaml
 ---
 name: "My Coder"
-description: "Custom coding agent"
+description: "Custom agent"
 model: "cliproxyapi/qwen3-coder-plus"
 ---
 
-You are a coding assistant.
+You are a helpful assistant.
 #+end_src
 
 Create a binary wrapper (=bin/call-coder.sh=):
@@ -68,7 +59,7 @@ API_KEY="${CLIPROXY_API_KEY}"
 TASK="$1"
 
 # Call external binary with task
-response=$(codex --model "$MODEL" --key "$API_KEY" "$TASK")
+response=$(opencode --model "$MODEL" --key "$API_KEY" "$TASK")
 echo "$response"
 #+end_src
 
@@ -97,4 +88,4 @@ curl -X POST http://localhost:4111/v1/workflows/09-custom-agent/runs \
 *** Next Steps
 
 - See [[../02-multi-agent/][02-multi-agent]] for multi-agent pipelines
-- Explore [[../06-full-coding-suite/][06-full-coding-suite]] for complete feature set
+- Explore [[../06-full-suite/][06-full-suite]] for complete feature set

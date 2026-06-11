@@ -1,0 +1,14 @@
+# 01 - Simple Agent
+#
+# Demonstrates the simplest possible agent setup.
+# Runs agent with default model.
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+@[Model("cliproxy")]
+workflow "01-simple" do
+  agent "assistant"
+end

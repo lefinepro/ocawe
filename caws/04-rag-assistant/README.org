@@ -2,7 +2,7 @@
 
 *** Description
 
-Retrieval-Augmented Generation (RAG) assistant for coding agents. Ingests code documentation into a vector store, then queries it to provide context-aware answers.
+Retrieval-Augmented Generation (RAG) assistant for agents. Ingests code documentation into a vector store, then queries it to provide context-aware answers.
 
 *** Features
 
@@ -56,4 +56,4 @@ curl -X POST http://localhost:4111/v1/workflows/04-rag-assistant/runs \
 *** Next Steps
 
 - See [[../05-voice-pipeline/][05-voice-pipeline]] for voice integration
-- Explore [[../06-full-coding-suite/][06-full-coding-suite]] for complete feature set
+- Explore [[../06-full-suite/][06-full-suite]] for complete feature set

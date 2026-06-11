@@ -1,6 +1,6 @@
 # 05 - Voice Pipeline
 #
-# Demonstrates voice transcription and synthesis in a coding workflow.
+# Demonstrates voice transcription and synthesis in a workflow.
 # Converts audio input to text, processes with agent, synthesizes response.
 
 settings do

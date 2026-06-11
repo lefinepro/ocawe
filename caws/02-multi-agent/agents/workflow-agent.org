@@ -1,12 +1,12 @@
 ---
 name: "Workflow Agent"
-description: "Orchestrates multi-agent coding workflow"
+description: "Orchestrates multi-agent workflow"
 model: "openai/gpt-4.1-mini"
 voice:
   voice_operator: "openai"
 ---
 
-Summarize the coding task and prepare it for the agent pipeline.
+Summarize the task and prepare it for the agent pipeline.
 
 #+begin_src crystal schema:input
 Schema::Types.object({"input" => Schema::Types.of(JSON::Any)})

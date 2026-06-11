@@ -1,10 +1,10 @@
 ---
 name: "OpenCode Agent"
-description: "OpenCode coding assistant"
+description: "OpenCode assistant"
 model: "openai/gpt-4.1"
 ---
 
-You are an OpenCode coding assistant. Help with code generation and refactoring.
+You are an OpenCode assistant. Help with code generation and refactoring.
 
 #+begin_src crystal schema:input
 Schema::Types.object({"input" => Schema::Types.of(JSON::Any)}, strict: false)

@@ -51,8 +51,8 @@ The port is configured in =Cawfile= via =settings { port = 4111 }=.
 ocawe build --release
 ocawe dev --port 4111
 ocawe up                           # reads port from Cawfile
-ocawe up caws/01-simple-codex     # run specific workflow
-ocawe up -d caws/01-simple-codex  # background mode
+ocawe up caws/01-simple     # run specific workflow
+ocawe up -d caws/01-simple  # background mode
 #+end_src
 
 ** Workflow Triggers
@@ -124,12 +124,12 @@ packages/
   playground/              # Svelte playground (Vite + Bun)
   docs/                    # VitePress docs and static playground route
 caws/                      # workflow bundle examples
-  01-simple-codex/         # minimal single agent
+  01-simple/               # minimal single agent
   02-multi-agent/          # sequential agent pipeline
   03-control-flow/         # if/else, parallel, while, until
   04-rag-assistant/        # retrieval-augmented generation
   05-voice-pipeline/       # voice transcription + synthesis
-  06-full-coding-suite/    # all features combined
+  06-full-suite/           # all features combined
   07-unified-resources/    # resource management patterns
   08-model-override/       # per-agent model override
   09-custom-agent/         # how to write custom agents
@@ -143,17 +143,17 @@ See =caws/= directory for complete examples with =Cawfile= format.
 Run any example:
 
 #+begin_src bash
-ocawe up caws/01-simple-codex
+ocawe up caws/01-simple
 ocawe up -d caws/02-multi-agent  # background mode
 #+end_src
 
 Each example demonstrates a specific feature:
-- *01-simple-codex* — minimal single agent setup
+- *01-simple* — minimal single agent setup
 - *02-multi-agent* — sequential agent pipeline
 - *03-control-flow* — =unless=, =if/else=, =parallel=, =while=, =until=
 - *04-rag-assistant* — RAG with vector store
 - *05-voice-pipeline* — voice transcription and synthesis
-- *06-full-coding-suite* — all features combined
+- *06-full-suite* — all features combined
 - *07-unified-resources* — shared resources with =@[Model]= and =@[Resources]=
 - *08-model-override* — per-agent model configuration
 - *09-custom-agent* — writing custom agents with external binaries
@@ -204,17 +204,16 @@ Agents are defined via markdown files with frontmatter:
 #+begin_src yaml
 ---
 name: "My Coder"
-description: "Custom coding agent"
+description: "Custom agent"
 model: "cliproxyapi/qwen3-coder-plus"
 ---
 
-You are a coding assistant.
+You are a helpful assistant.
 #+end_src
 
 See =caws/09-custom-agent= for a complete example.
 
-*Installing external coding agents:*
-- Codex: =npm install -g @openai/codex=
+*Installing external agents:*
 - OpenCode: =npm install -g @anthropic/opencode=
 - Claude Code: =npm install -g @anthropic-ai/claude-code=
 - Qwen Code: =pip install qwen-code=

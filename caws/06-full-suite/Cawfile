@@ -1,4 +1,4 @@
-# 06 - Full Coding Suite
+# 06 - Full Suite
 #
 # Complete feature demonstration: multiple agents, skills, tools, voice,
 # RAG, external execution, and suspend for human-in-the-loop approval.
@@ -9,7 +9,7 @@ settings do
 end
 
 @[Container(packages: ["git", "curl", "jq"])]
-workflow "06-full-coding-suite" do
+workflow "06-full-suite" do
   # Skills and tools configured via @[Model] above
   @[Resources(skill: ["full-skill"], tool: ["echo-json"])]
 
@@ -19,9 +19,9 @@ workflow "06-full-coding-suite" do
   # Skill execution tied to agent
   skill "full-skill", agent: "full-agent"
 
-  # Custom coding agents with various configurations
+  # Custom agents with various configurations
   agent "opencode-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
-  agent "codex-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+  agent "main-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
 
   # External script execution with runtime metadata
   exec "tools/echo-json.sh", runtime: {shell: "bash"}

@@ -60,4 +60,4 @@ curl -X POST http://localhost:4111/v1/workflows/03-control-flow/runs \
 *** Next Steps
 
 - Explore [[../04-rag-assistant/][04-rag-assistant]] for RAG integration
-- See [[../06-full-coding-suite/][06-full-coding-suite]] for all features combined
+- See [[../06-full-suite/][06-full-suite]] for all features combined

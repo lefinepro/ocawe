@@ -1,7 +1,7 @@
 # 09 - Custom Agent (Binary)
 #
-# Demonstrates how to write a custom coding agent that calls an external binary.
-# This is the recommended way to add coding agents — as executable commands
+# Demonstrates how to write a custom agent that calls an external binary.
+# This is the recommended way to add agents — as executable commands
 # with their own model configuration.
 
 settings do

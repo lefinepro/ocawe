@@ -1,7 +1,6 @@
 # 02 - Multi-Agent Workflow
 #
-# Demonstrates multiple coding agents (codex, opencode, cliproxy)
-# working together in a sequential pipeline.
+# Demonstrates multiple agents working together in a sequential pipeline.
 
 settings do
   data.adapter = "memory"
@@ -25,5 +24,5 @@ workflow "02-multi-agent" do
   # Sequential agent pipeline
   agent "workflow-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
   agent "opencode-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
-  agent "codex-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
+  agent "main-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()
 end

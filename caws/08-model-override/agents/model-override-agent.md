@@ -1,10 +1,10 @@
 ---
-name: "Codex Agent"
-description: "Codex coding assistant"
-model: "cliproxyapi/qwen3-coder-plus"
+name: "Model Override Agent"
+description: "Agent with model override"
+model: "openai/gpt-5"
 ---
 
-You are a Codex coding assistant. Help with software development tasks.
+You are a helpful assistant using GPT-5.
 
 #+begin_src crystal schema:input
 Schema::Types.object({"input" => Schema::Types.of(JSON::Any)}, strict: false)

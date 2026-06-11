@@ -2,12 +2,12 @@
 
 *** Description
 
-Demonstrates multiple coding agents working together in a sequential pipeline. Shows how to combine different agent types (workflow orchestrator, opencode, codex, cliproxy) for complex tasks.
+Demonstrates multiple agents working together in a sequential pipeline. Shows how to combine different agent types (workflow orchestrator, opencode, main, cliproxy) for complex tasks.
 
 *** Features
 
 - Sequential agent pipeline
-- Multiple custom agents: =agent "workflow-agent"=, =agent "opencode-agent"=, =agent "codex-agent"=
+- Multiple custom agents: =agent "workflow-agent"=, =agent "opencode-agent"=, =agent "main-agent"=
 - Input/output schema validation with =schema_ref=
 - Type-safe input with =WorkflowInput= struct
 
@@ -46,4 +46,4 @@ curl -X POST http://localhost:4111/v1/workflows/02-multi-agent/runs \
 *** Next Steps
 
 - See [[../03-control-flow/][03-control-flow]] for conditional execution
-- Explore [[../06-full-coding-suite/][06-full-coding-suite]] for the complete feature set
+- Explore [[../06-full-suite/][06-full-suite]] for the complete feature set

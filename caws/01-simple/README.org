@@ -1,52 +1,52 @@
-** 01 - Simple Codex Agent
+** 01 - Simple Agent
 
 *** Description
 
-Minimal example demonstrating a single Codex coding agent. This is the starting point for understanding the Ocawe framework.
+Minimal example demonstrating a single agent. This is the starting point for understanding the Ocawe framework.
 
 *** Features
 
-- Single =agent "codex-agent"= node
+- Single =agent "assistant"= node
 - Default model configuration with =@[Model("cliproxy")]=
 - Memory-based data adapter
 - Basic input/output schema validation
 
 *** Structure
 
-#+begin_src 
-01-simple-codex/
+#+begin_src
+01-simple/
 ├── Cawfile              # Root configuration
 ├── agents/
-│   └── codex-agent.md   # Agent definition with schema
+│   └── assistant.md     # Agent definition with schema
 └── README.md
 #+end_src
 
 *** Running Locally
 
 #+begin_src bash
-# From the caws/01-simple-codex directory
+# From the caws/01-simple directory
 ocawe up
 
 # Or specify explicit path from project root
-ocawe up caws/01-simple-codex
+ocawe up caws/01-simple
 
 # Run in background (detached)
-ocawe up -d caws/01-simple-codex
+ocawe up -d caws/01-simple
 
 # Override port
-ocawe up --port 8080 caws/01-simple-codex
+ocawe up --port 8080 caws/01-simple
 #+end_src
 
 *** Testing
 
 #+begin_src bash
 # Execute workflow
-curl -X POST http://localhost:4111/v1/workflows/01-simple-codex/runs \
+curl -X POST http://localhost:4111/v1/workflows/01-simple/runs \
   -H "Content-Type: application/json" \
   -d '{"input": {"task": "Write a hello world in Python"}}'
 #+end_src
 
 *** Next Steps
 
-- Try [[../02-multi-agent/][02-multi-agent]] to see multiple coding agents working together
+- Try [[../02-multi-agent/][02-multi-agent]] to see multiple agents working together
 - Learn about control flow in [[../03-control-flow/][03-control-flow]]

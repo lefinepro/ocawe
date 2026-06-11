@@ -2,7 +2,7 @@
 
 *** Description
 
-Voice-enabled coding assistant pipeline. Converts audio input to text, processes with a coding agent, and synthesizes the response back to audio.
+Voice-enabled assistant pipeline. Converts audio input to text, processes with an agent, and synthesizes the response back to audio.
 
 *** Features
 
@@ -55,5 +55,5 @@ curl -X POST http://localhost:4111/v1/workflows/05-voice-pipeline/runs \
 
 *** Next Steps
 
-- See [[../06-full-coding-suite/][06-full-coding-suite]] for all features combined
+- See [[../06-full-suite/][06-full-suite]] for all features combined
 - Learn about [[../07-unified-resources/][07-unified-resources]] for resource management

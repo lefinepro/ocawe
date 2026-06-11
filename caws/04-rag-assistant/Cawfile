@@ -1,6 +1,6 @@
 # 04 - RAG Assistant
 #
-# Demonstrates Retrieval-Augmented Generation with coding agents.
+# Demonstrates Retrieval-Augmented Generation with agents.
 # Ingests code documentation, queries it for context-aware answers.
 
 settings do
