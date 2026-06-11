@@ -10,8 +10,13 @@ module ACD
     struct CawfileContainer
       getter mode : ContainerMode
       getter packages : Array(String)
+      getter image : String?
 
-      def initialize(@mode : ContainerMode = ContainerMode::Static, @packages : Array(String) = [] of String)
+      def initialize(
+        @mode : ContainerMode = ContainerMode::Static,
+        @packages : Array(String) = [] of String,
+        @image : String? = nil
+      )
       end
     end
 
@@ -473,22 +478,27 @@ module ACD
       private def self.extract_container_from_raw(lines : Array(String)) : CawfileContainer?
         lines.each do |line|
           stripped = line.strip
-          # Match @[Container(packages: ["pkg1", "pkg2", ...])]
+          # Match @[Container] or @[Container(packages: ["pkg1", "pkg2", ...])]
           if container_match = stripped.match(/\@\[Container(?:\((.*?)\))?\]/)
             inner = container_match[1]?
             if inner
-              # Check for explicit mode
-              mode = ContainerMode::Nix
+              # Check for packages: @[Container(packages: ["git", "curl"])]
+              packages = [] of String
+              if pkg_match = inner.match(/packages:\s*\[(.*?)\]/)
+                content = pkg_match[1]
+                packages = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
+              end
+              # Check for explicit mode: @[Container(mode: "nix")] or @[Container(mode: "static")]
+              mode = ContainerMode::Static
               if inner.includes?("mode:")
                 if md = inner.match(/mode:\s*"(\w+)"/)
                   mode = ContainerMode.parse(md[1])
                 end
+              elsif !packages.empty?
+                # Packages without explicit mode defaults to Nix
+                mode = ContainerMode::Nix
               end
-              if pkg_match = inner.match(/packages:\s*\[(.*?)\]/)
-                content = pkg_match[1]
-                packages = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
-                return CawfileContainer.new(mode: mode, packages: packages)
-              end
+              return CawfileContainer.new(mode: mode, packages: packages)
             end
             return CawfileContainer.new(mode: ContainerMode::Static)
           end

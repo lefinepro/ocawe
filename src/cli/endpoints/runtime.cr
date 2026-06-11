@@ -1,5 +1,6 @@
 require "option_parser"
 require "../../framework/discovery/cawfile_loader"
+require "../../framework/builder"
 
 module OcaweCore
   module CLI
@@ -8,15 +9,40 @@ module OcaweCore
         release = true
         static = false
         output = RUNTIME_BIN
+        container = false
+        container_base = "static"
+        container_runtime = "docker"
+        container_tag = "ocawecore:latest"
 
         OptionParser.parse(args) do |parser|
           parser.on("--release", "Build release binary (default)") { release = true }
           parser.on("--debug", "Build non-release binary") { release = false }
           parser.on("--static", "Build static binary") { static = true }
           parser.on("--output PATH", "Output binary path") { |v| output = v }
+          parser.on("--container", "Build container image after binary") { container = true }
+          parser.on("--container-base BASE", "Container base: static, nixos (default: static)") { |v| container_base = v }
+          parser.on("--container-runtime RUNTIME", "Container runtime: docker, podman, nerdctl (default: docker)") { |v| container_runtime = v }
+          parser.on("--container-tag TAG", "Container image tag (default: ocawecore:latest)") { |v| container_tag = v }
         end
 
         abort_unless_success(build_runtime(release: release, static: static, output: output))
+
+        if container
+          abort_unless_success(build_container(
+            binary_path: output,
+            base: container_base,
+            runtime: container_runtime,
+            tag: container_tag
+          ))
+        end
+      end
+
+      private def build_container(binary_path : String, base : String, runtime : String, tag : String) : Bool
+        builder = Ocawe::Builder.builder_registry.resolve(base)
+        builder.build(binary_path, tag: tag, context_dir: Dir.current, runtime: runtime)
+      rescue ex
+        STDERR.puts "Error: #{ex.message}"
+        false
       end
 
       private def up(args : Array(String)) : Nil
@@ -46,7 +72,32 @@ module OcaweCore
 
         port ||= read_port_from_cawfile(workflows_root)
 
+        # Detect container configuration from Cawfile
+        cawfile = ACD::Discovery::CawfileLoader.find_cawfile(workflows_root)
+        container_config = nil
+        if cawfile
+          cawfile_bundle = ACD::Discovery::CawfileLoader.load(workflows_root, "root")
+          container_config = cawfile_bundle.container if cawfile_bundle
+        end
+
         abort_unless_success(build_runtime(release: true, output: RUNTIME_BIN))
+
+        # Build container if container mode is specified
+        if container_config
+          container_tag = "ocawecore:latest"
+          base = case container_config.mode
+                 when ACD::Discovery::ContainerMode::Static then "static"
+                 when ACD::Discovery::ContainerMode::Nix then "nixos"
+                 else "static"
+                 end
+
+          abort_unless_success(build_container(
+            binary_path: RUNTIME_BIN,
+            base: base,
+            runtime: "docker",
+            tag: container_tag
+          ))
+        end
 
         command = String.build do |io|
           io << RUNTIME_BIN

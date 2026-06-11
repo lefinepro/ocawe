@@ -1,0 +1,5 @@
+require "./builder/builder"
+require "./builder/registry"
+require "./builder/runtime"
+require "./builder/static_builder"
+require "./builder/nixos_builder"
