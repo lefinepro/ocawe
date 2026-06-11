@@ -7,7 +7,9 @@ Minimal example demonstrating a single agent. This is the starting point for und
 *** Features
 
 - Single =agent "assistant"= node
-- Default model configuration with =@[Model("cliproxy")]=
+- Default model configuration with =@[Model(Kimi)]= (class-based, resolved via =@.meta/models.json=)
+- @[Validate(InputSimple, OutputSimple)] is enforced
+- API format markers: =Api::OpenResponses=, =Api::MastraAPI=, =Api::ChatCompletionAPI=
 - Memory-based data adapter
 - Basic input/output schema validation
 

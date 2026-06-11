@@ -1,0 +1,14 @@
+{
+  "models": {
+    "Kimi": {
+      "provider": "gonka",
+      "version": "2.6",
+      "model": "kimi"
+    },
+    "GPT4": {
+      "provider": "openai",
+      "version": "4.1",
+      "model": "gpt-4.1"
+    }
+  }
+}

@@ -8,7 +8,21 @@ settings do
   port = 4111
 end
 
-@[Model("cliproxy")]
+struct InputSimple
+  include Api::OpenResponses::Request
+  include Api::MastraAPI::Request
+  include Api::ChatCompletionAPI::Request
+end
+
+struct OutputSimple
+  include Api::OpenResponses::Response
+  include Api::MastraAPI::Response
+  include Api::ChatCompletionAPI::Response
+end
+
+
+@[Validate(InputSimple, OutputSimple)]
+@[Model(Kimi)]
 workflow "01-simple" do
   agent "assistant"
 end
