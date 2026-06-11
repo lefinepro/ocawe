@@ -172,6 +172,53 @@ module Ocawe
             raise "unsupported node kind result for #{kind_name}"
           end
         end
+
+      when "follow"
+        resolved_config = config || ({} of String => JSON::Any)
+        actors = resolved_config["actors"]?.try(&.as_a?) || [] of JSON::Any
+        actor_strings = actors.compact_map { |a| a.as_s? }
+        
+        return WorkflowNode.new(id, NodeKind::Federation, metadata: {
+          "dsl_kind" => JSON.parse("follow".to_json),
+          "actors"   => JSON.parse(actor_strings.to_json),
+        } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          # Generate workflow actor DID and send Follow activities
+          workflow_id = ctx.workflow_id
+          run_id = ctx.run_id
+          
+          # Get base_url from request_context or use default
+          base_url = ctx.request_context.try { |rc| rc["base_url"]?.try(&.as_s?) } || "http://localhost:4111"
+          
+          # Create local workflow actor ID (DID-like format)
+          local_actor_id = "workflow:#{workflow_id}:#{run_id}"
+          local_actor_url = "#{base_url}/actors/#{local_actor_id}"
+          
+          # Store follow configuration for federation system
+          follow_records = [] of Hash(String, JSON::Any)
+          
+          actor_strings.each do |remote_actor|
+            follow_record = {
+              "local_actor" => JSON.parse(local_actor_url.to_json),
+              "local_actor_id" => JSON.parse(local_actor_id.to_json),
+              "remote_actor" => JSON.parse(remote_actor.to_json),
+              "status" => JSON.parse("pending".to_json),
+              "created_at" => JSON.parse(Time.utc.to_rfc3339.to_json),
+            } of String => JSON::Any
+            
+            follow_records << follow_record
+          end
+          
+          result = {
+            "follow_actors" => JSON.parse(actor_strings.to_json),
+            "follow_records" => JSON.parse(follow_records.to_json),
+            "follow_status" => JSON.parse("registered".to_json),
+            "local_actor_id" => JSON.parse(local_actor_id.to_json),
+            "local_actor_url" => JSON.parse(local_actor_url.to_json),
+          } of String => JSON::Any
+          
+          WorkflowNodeResult.continue(result)
+        end
+
       else
         raise "unknown registry node type: #{type}"
       end

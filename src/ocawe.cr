@@ -1,6 +1,7 @@
 require "option_parser"
 require "./framework/utils/config_parser"
-require "./framework/ocawecore/version"
+require "./framework/api/public_types"
+require "./framework/version"
 require "./framework/workflows/dsl/types"
 require "./framework/workflows/dsl/crystal_dsl"
 require "./framework/workflows/declarative/run"

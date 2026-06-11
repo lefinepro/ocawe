@@ -10,9 +10,6 @@ end
 
 @[Container(packages: ["git", "curl", "jq"])]
 workflow "06-full-suite" do
-  # Skills and tools configured via @[Model] above
-  @[Resources(skill: ["full-skill"], tool: ["echo-json"])]
-
   # Primary agent with schema validation
   agent "full-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
 

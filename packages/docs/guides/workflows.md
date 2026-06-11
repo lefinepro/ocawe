@@ -611,6 +611,55 @@ workflow "mcp-resources" do
 end
 ```
 
+## ActivityPub Federation
+
+### Follow Remote Actors
+
+Subscribe to remote ActivityPub actors for federation:
+
+```crystal
+workflow "federated-agent" do
+  # Follow one or more remote actors
+  follow ["@agent@example.com", "@bot@social.domain"]
+  
+  agent "processor"
+end
+```
+
+The `follow` method:
+- Registers ActivityPub subscriptions with remote actors
+- Polls their outboxes for new activities
+- Integrates with the framework's federation system
+- Supports both `@handle@domain` format and full actor URLs
+
+**Multiple subscriptions**:
+
+```crystal
+workflow "multi-feed" do
+  follow [
+    "@news@feeds.com",
+    "@alerts@monitoring.io",
+    "https://custom.domain/actors/special-bot"
+  ]
+  
+  # Process incoming federation activities
+  agent "activity-handler",
+    prompt: "Handle incoming ActivityPub activities"
+end
+```
+
+**Use cases**:
+- Subscribe to remote AI agents for collaborative workflows
+- Monitor ActivityPub feeds for events
+- Integrate with ForgeFed repositories for CI/CD
+- Build federated multi-agent systems
+
+The federation system automatically:
+- Resolves actor documents via WebFinger
+- Establishes outbox polling subscriptions
+- Delivers responses back via ActivityPub inbox
+- Handles HTTP signatures and authentication
+
 ## Custom Node Kinds
 
 Register and use custom Crystal functions:

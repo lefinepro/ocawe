@@ -248,6 +248,25 @@ module Ocawe
           result.action == NodeAction::Continue.to_s.downcase ? WorkflowNodeResult.continue(merged) : result
         end)
       end
+
+      # Follow remote actors for ActivityPub federation
+      def follow(
+        actors : Array(String),
+        id : String = "follow",
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+      ) : self
+        append_node(Ocawe::RegistryApi.build_node(
+          self,
+          "follow",
+          id,
+          config: {
+            "actors" => JSON.parse(actors.to_json),
+          } of String => JSON::Any,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
+      end
     end
   end
 end

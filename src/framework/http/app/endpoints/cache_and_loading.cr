@@ -129,6 +129,13 @@ module ACD
         cawfile : Discovery::CawfileBundle,
         agent_index : Hash(String, Agents::LoadedAgent)
       )
+        # Apply @[Model(...)] and @[Validate(...)] from CawfileLoader
+        workflow.model(cawfile.model)
+        workflow.validate_types(cawfile.input_type, cawfile.output_type)
+
+        # Validate is required
+        raise "#{bundle.workflow_file}: @[Validate(InputType, OutputType)] is required" unless cawfile.input_type && cawfile.output_type
+
         # Cawfile workflow body is always .acd.cr-style DSL
         dsl_lines = cawfile.dsl_source
         raise "#{bundle.workflow_file}: Cawfile workflow has no DSL body" unless dsl_lines

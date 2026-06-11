@@ -8,3 +8,5 @@ lib/
 bin/
 .meta/
 .codex/
+crater-openai/
+rcl.cr/

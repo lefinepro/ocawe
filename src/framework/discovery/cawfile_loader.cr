@@ -34,6 +34,11 @@ module ACD
       getter container : CawfileContainer?
       # Whether federation API should be enabled (detected from Api::Federation usage)
       getter enable_federation : Bool
+      # Workflow input/output type names extracted from @[Validate(...)]
+      getter input_type : String?
+      getter output_type : String?
+      # Default model extracted from @[Model(...)]
+      getter model : String?
 
       def initialize(
         @id : String,
@@ -48,7 +53,10 @@ module ACD
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
         @container : CawfileContainer? = nil,
-        @enable_federation : Bool = false
+        @enable_federation : Bool = false,
+        @input_type : String? = nil,
+        @output_type : String? = nil,
+        @model : String? = nil
       )
       end
     end
@@ -84,6 +92,7 @@ module ACD
             dsl_lines = extract_workflow_body_lines(raw_lines)
 
             enable_federation = detect_federation_from_raw(raw_lines)
+            model, input_type, output_type = extract_model_and_validate(raw_lines, dir, dir)
 
             return CawfileBundle.new(
               id: workflow_id,
@@ -98,7 +107,10 @@ module ACD
               start_settings: root_config.start_settings,
               follow: follow,
               container: container,
-              enable_federation: enable_federation
+              enable_federation: enable_federation,
+              input_type: input_type,
+              output_type: output_type,
+              model: model
             )
           end
 
@@ -174,6 +186,8 @@ module ACD
             workflow_id = wf_block_line.match(/^\s*workflow\s+"([^"]+)"/).try { |m| m[1] } || "root"
           end
 
+          model, input_type, output_type = extract_model_and_validate(raw_lines, path, dir)
+
           CawfileBundle.new(
             id: workflow_id,
             dsl_source: dsl_lines,
@@ -187,7 +201,10 @@ module ACD
             start_settings: start,
             follow: follow,
             container: container,
-            enable_federation: enable_federation
+            enable_federation: enable_federation,
+            input_type: input_type,
+            output_type: output_type,
+            model: model
           )
         end
       end
@@ -294,6 +311,8 @@ module ACD
             workflow_id = wf_block_line.match(/^\s*workflow\s+"([^"]+)"/).try { |m| m[1] } || "root"
           end
 
+          model, input_type, output_type = extract_model_and_validate(raw_lines, path, dir)
+
           CawfileBundle.new(
             id: workflow_id,
             dsl_source: dsl_lines,
@@ -306,7 +325,10 @@ module ACD
             config_log: {} of String => RCL::Value,
             start_settings: start,
             follow: follow,
-            container: container
+            container: container,
+            input_type: input_type,
+            output_type: output_type,
+            model: model
           )
         end
       end
@@ -476,6 +498,98 @@ module ACD
 
       private def self.detect_federation_from_raw(lines : Array(String)) : Bool
         lines.any? { |line| line.includes?("Api::Federation::Inbox") || line.includes?("Api::Federation::Outbox") }
+      end
+
+      private def self.extract_model_and_validate(
+        lines : Array(String),
+        workflow_file : String,
+        workflow_root : String
+      ) : {String?, String?, String?}
+        model = nil.as(String?)
+        input_type = nil.as(String?)
+        output_type = nil.as(String?)
+
+        lines.each do |line|
+          stripped = line.strip
+
+          if model_match = stripped.match(/^\s*@\[Model\(([^)]+)\)\]\s*$/)
+            model = resolve_model_annotation(model_match[1].strip, workflow_root)
+          end
+
+          if stripped.match(/^\s*@\[Validate\]\s*$/)
+            stripped.match(/^\s*@\[Validate\]\s*$/)
+          end
+
+          if validate_match = stripped.match(/^\s*@\[Validate\(([^)]+)\)\]\s*$/)
+            content = validate_match[1].strip
+            parts = content.split(',').map(&.strip)
+            input_type = parts[0]? if parts.size >= 1 && !parts[0].empty?
+            output_type = parts[1]? if parts.size >= 2 && !parts[1].empty?
+          end
+        end
+
+        {model, input_type, output_type}
+      end
+
+      private def self.resolve_model_annotation(raw : String, workflow_root : String) : String?
+        # Direct string model ref: @[Model("openai/gpt-4")]
+        if raw.starts_with?('"') && raw.ends_with?('"')
+          return raw[1, raw.size - 2]
+        end
+
+        # Class-based model ref: @[Model(Kimi.new(version: "2.6", provider: "gonka"))]
+        # or @[Model(GPT4)] — shorthand without .new
+        class_name = extract_class_name_from_model_arg(raw)
+        return nil unless class_name
+
+        # Resolve class against @.meta/models.json
+        models_path = File.join(workflow_root, ".meta", "models.json")
+        unless File.file?(models_path)
+          models_path = File.join(Dir.current, ".meta", "models.json")
+        end
+
+        return raw unless File.file?(models_path)
+
+        begin
+          json = JSON.parse(File.read(models_path))
+          models = json["models"]? || json
+          model_def = models[class_name]?
+          return raw unless model_def
+
+          provider = model_def["provider"]?.try(&.as_s?) || begin
+            # Try to extract provider from .new call if not in json
+            extract_provider_from_new_call(raw)
+          end
+          version = model_def["version"]?.try(&.as_s?)
+          model_name = model_def["model"]?.try(&.as_s?) || class_name.downcase
+
+          if provider
+            if version && !model_name.includes?(version)
+              return "#{provider}/#{model_name}-#{version}"
+            else
+              return "#{provider}/#{model_name}"
+            end
+          end
+        rescue
+        end
+
+        raw
+      end
+
+      private def self.extract_class_name_from_model_arg(raw : String) : String?
+        return nil if raw.empty?
+        return raw if raw.match(/^[A-Z][A-Za-z0-9_]*$/)
+        if match = raw.match(/^([A-Z][A-Za-z0-9_]*)\.new\(/)
+          return match[1]
+        end
+        nil
+      end
+
+      private def self.extract_provider_from_new_call(raw : String) : String?
+        if match = raw.match(/provider:\s*"([^"]+)"/)
+          return match[1]
+        end
+        nil
       end
 
       private def self.parse_value(raw : String) : RCL::Value

@@ -27,6 +27,7 @@ module Ocawe
       Rag
       Control
       Custom
+      Federation
     end
 
     struct AgentResult

@@ -1,5 +1,6 @@
 require "http/client"
 require "json"
+require "./provider"
 
 module OcaweCore
   module AI
@@ -57,7 +58,7 @@ module OcaweCore
       private def extract_text(payload : JSON::Any) : String
         choices = payload["choices"]?.try(&.as_a?)
         message = choices.try(&.first?)
-        content = message.try(&.["message"]?).try(&.as_h?)
+        content = message.try(&.["message"]? ).try(&.as_h?)
 
         value = content.try(&.["content"]?)
         if text = value.try(&.as_s?)
@@ -66,7 +67,7 @@ module OcaweCore
 
         if parts = value.try(&.as_a?)
           rendered = parts.compact_map do |part|
-            part.as_h?.try(&.["text"]?).try(&.as_s?)
+            part.as_h?.try(&.["text"]? ).try(&.as_s?)
           end
           return rendered.join("\n") unless rendered.empty?
         end

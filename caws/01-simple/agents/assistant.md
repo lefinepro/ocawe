@@ -1,7 +1,6 @@
 ---
 name: "Assistant"
 description: "Simple assistant"
-model: "cliproxyapi/qwen3-coder-plus"
 ---
 
 You are a concise assistant. Help with software development tasks efficiently.

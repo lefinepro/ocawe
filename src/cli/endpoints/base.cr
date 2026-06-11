@@ -13,11 +13,10 @@ module OcaweCore
 
       private DEFAULT_PORT             = 4111
       private DEFAULT_TRIGGER_BASE_URL = "http://127.0.0.1:4111"
-      private PROJECT_ROOT             = File.expand_path("../..", __DIR__)
+      private PROJECT_ROOT             = File.expand_path("../../..", __DIR__)
       private RUNTIME_ENTRY            = "#{PROJECT_ROOT}/src/ocawe.cr"
       private RUNTIME_BIN              = "#{PROJECT_ROOT}/build/ocawecore"
       private WORKFLOWS_PATH           = "#{PROJECT_ROOT}/src/workflows"
-      private BOOTSTRAP_CRYSTAL        = "#{PROJECT_ROOT}/scripts/bootstrap-crystal.sh"
       private TRIGGER_COMMANDS         = Set{"workflow", "agent", "skill", "function", "tool", "support"}
       private CORE_COMMANDS            = Set{"build", "up", "workflow", "agent", "skill", "function", "tool", "support", "-v", "--version", "-h", "--help"}
 

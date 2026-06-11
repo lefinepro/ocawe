@@ -1,5 +1,6 @@
 require "http/client"
 require "json"
+require "./provider"
 
 module OcaweCore
   module AI
@@ -77,7 +78,7 @@ module OcaweCore
         parts = message["content"]?.try(&.as_a?)
         return nil unless parts
 
-        joined = parts.compact_map { |part| part.as_h?.try(&.["text"]?).try(&.as_s?) }.join("\n")
+        joined = parts.compact_map { |part| part.as_h?.try(&.["text"]? ).try(&.as_s?) }.join("\n")
         joined.empty? ? nil : joined
       rescue
         nil

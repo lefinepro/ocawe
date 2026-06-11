@@ -102,12 +102,27 @@ module OcaweCore
       end
 
       private def build_runtime(release : Bool, static : Bool = false, output : String = RUNTIME_BIN) : Bool
+        # Check if crystal is available
+        unless system("command -v crystal > /dev/null 2>&1")
+          STDERR.puts "Error: crystal compiler not found in PATH"
+          STDERR.puts "Please install Crystal: https://crystal-lang.org/install/"
+          return false
+        end
+        
         flags = [] of String
         flags << "--release" if release
         flags << "--static" if static
         flags << "--no-debug" if release
         flag_str = flags.empty? ? "" : flags.join(" ") + " "
-        run_cmd("mkdir -p #{PROJECT_ROOT}/build && bash #{BOOTSTRAP_CRYSTAL} && crystal build #{RUNTIME_ENTRY} -D ocawe_runtime_main #{flag_str}-o #{output}")
+        
+        # Build from project root to ensure shard dependencies are found
+        Dir.cd(PROJECT_ROOT) do
+          run_cmd("mkdir -p build && crystal build #{RUNTIME_ENTRY} -D ocawe_runtime_main #{flag_str}-o #{output}")
+        end
+      end
+      
+      private def system(command : String) : Bool
+        Process.run("sh", args: ["-c", command], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
       end
 
       private def spawn_cmd(command : String) : Process

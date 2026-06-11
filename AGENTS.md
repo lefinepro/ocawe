@@ -16,6 +16,7 @@ Develop and evolve Ocawe framework internals safely and consistently.
 3. Preserve error envelope consistency for HTTP APIs.
 4. Keep NodeKind execution explicit and testable.
 5. Add/update specs with every behavior change.
+6. Don't use any
 
 ## Architecture Focus
 - Declarative runtime: `src/framework/workflows/declarative`
@@ -32,10 +33,6 @@ Develop and evolve Ocawe framework internals safely and consistently.
 
 ## API Direction
 - Use `Workflow#step(type, id, ...)` as the unified node entry for built-in and external nodes.
-- External agent nodes must be created through unified step types:
-  - `agent_cliproxy`
-  - `agent_codex`
-  - `agent_opencode`
 - For NodeKind steps use `Workflow#step(Ocawe::NodeKind.new(...), id: ...)`.
 - Register node kinds only via `Ocawe::RegistryApi.node_kind`.
 - Register resource handlers only via `Ocawe::RegistryApi.resource`.

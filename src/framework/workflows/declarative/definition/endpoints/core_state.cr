@@ -9,6 +9,9 @@ module Ocawe
       getter node_loggers : Hash(String, AnyHash)
       getter default_workspace : AnyHash?
       getter node_workspaces : Hash(String, AnyHash)
+      # Type names declared in @[Validate(InputType, OutputType)]
+      getter input_type : String?
+      getter output_type : String?
 
       def initialize(@id : String, @description : String? = nil)
          @nodes = [] of WorkflowNode
@@ -19,6 +22,8 @@ module Ocawe
          @default_workspace = nil.as(AnyHash?)
          @node_workspaces = {} of String => AnyHash
          @pending_node_workspace = nil.as(AnyHash?)
+         @input_type = nil.as(String?)
+         @output_type = nil.as(String?)
          @next_node_id = 0
        end
 
@@ -72,6 +77,19 @@ module Ocawe
         raise "workspace config cannot be empty" if resolved.empty?
         node.metadata["workspace"] = JSON.parse(resolved.to_json)
         @node_workspaces[node.id] = resolved
+        self
+      end
+
+      def model(model_ref : String?) : self
+        ensure_not_committed!
+        @default_model = model_ref
+        self
+      end
+
+      def validate_types(input : String?, output : String?) : self
+        ensure_not_committed!
+        @input_type = input
+        @output_type = output
         self
       end
 

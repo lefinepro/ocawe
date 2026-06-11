@@ -270,6 +270,82 @@ RCL
         FileUtils.rm_rf(dir)
       end
     end
+
+    it "extracts @[Validate(...)] annotations" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+struct InputSimple
+  include Api::OpenResponses::Request
+end
+
+struct OutputSimple
+  include Api::OpenResponses::Response
+end
+
+@[Validate(InputSimple, OutputSimple)]
+workflow "validate-test" do
+  agent "analyzer"
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "validate-test")
+        bundle.should_not be_nil
+        bundle.not_nil!.input_type.should eq("InputSimple")
+        bundle.not_nil!.output_type.should eq("OutputSimple")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "extracts @[Model(...)] string annotation" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+@[Model("openai/gpt-4.1")]
+workflow "model-test" do
+  agent "analyzer"
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "model-test")
+        bundle.should_not be_nil
+        bundle.not_nil!.model.should eq("openai/gpt-4.1")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "resolves @[Model(...)] class annotation against @.meta/models.json" do
+      dir = File.tempname("cawfile_test")
+      meta_dir = File.join(dir, ".meta")
+      Dir.mkdir_p(meta_dir)
+      begin
+        File.write(File.join(meta_dir, "models.json"), <<-JSON)
+{
+  "models": {
+    "GPT4": {
+      "provider": "openai",
+      "version": "4.1",
+      "model": "gpt-4.1"
+    }
+  }
+}
+JSON
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+@[Validate(Input, Output)]
+@[Model(GPT4)]
+workflow "model-json-test" do
+  agent "analyzer"
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "model-json-test")
+        bundle.should_not be_nil
+        bundle.not_nil!.model.should eq("openai/gpt-4.1")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
   end
 
   describe ".load_root" do

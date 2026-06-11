@@ -58,9 +58,12 @@ module ACD
           )
         end
 
-        # Fallback: .acd.cr
+        # Fallback: .acd.cr or .cr
         workflow_file = File.join(dir, "#{id}.acd.cr")
-        raise "#{dir}: missing executable workflow file #{workflow_file}" unless File.file?(workflow_file)
+        if !File.file?(workflow_file)
+          workflow_file = File.join(dir, "#{id}.cr")
+        end
+        raise "#{dir}: missing executable workflow file (#{id}.acd.cr or #{id}.cr)" unless File.file?(workflow_file)
 
         WorkflowBundle.new(
           id: id,
