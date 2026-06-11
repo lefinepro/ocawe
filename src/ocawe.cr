@@ -1,5 +1,4 @@
 require "option_parser"
-require "../shards/agent-functions/src/ocawe-agent-functions"
 require "./framework/utils/config_parser"
 require "./framework/ocawecore/version"
 require "./framework/workflows/dsl/types"
