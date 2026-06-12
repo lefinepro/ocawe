@@ -1,0 +1,174 @@
+#+TITLE: ACP Agent Protocol Example
+#+AUTHOR: Ocawe Team
+#+DATE: 2026-06-12
+
+* Overview
+
+This example demonstrates how to use external agents via the Agent Client Protocol (ACP).
+ACP agents communicate via JSON-RPC 2.0 over stdio transport.
+
+* What is ACP?
+
+The Agent Client Protocol is a standardized protocol for communication between code editors (Clients)
+and AI agents. It enables:
+
+- *JSON-RPC 2.0* messages over stdio
+- *Session management* (create, load, resume)
+- *Prompt/response* interaction with streaming updates
+- *Tool calling* with permission requests
+- *Cancellation* support
+
+See: https://agentclientprotocol.com/protocol/v1/overview
+
+* Usage
+
+** Basic Syntax
+
+#+begin_src crystal
+exec "codex", runtime: {"acp"}
+#+end_src
+
+This runs the =codex= binary (expected in PATH or container) and communicates with it via ACP protocol.
+
+** With Container
+
+#+begin_src crystal
+@[Container(packages: ["codex-acp"])]
+workflow "acp-example" do
+  exec "codex", runtime: {"acp"}
+end
+#+end_src
+
+The =@[Container]= annotation ensures the =codex-acp= package is available in the NixOS container.
+
+** Exposing Workflow as ACP Agent
+
+To make your workflow itself act as an ACP agent server:
+
+#+begin_src crystal
+struct Input
+  include Api::ACP::Agent
+end
+
+struct Output
+  include Api::ACP::Agent
+end
+
+workflow "acp-server" do
+  # ... workflow logic
+end
+#+end_src
+
+This enables external ACP clients to connect to your workflow.
+
+* How It Works
+
+1. *Initialization*: Ocawe starts the =codex= binary and sends an =initialize= request
+2. *Session Setup*: Creates a new session with =session/new=
+3. *Prompt*: Sends user input via =session/prompt=
+4. *Updates*: Receives =session/update= notifications (agent messages, tool calls, plans)
+5. *Completion*: Agent responds with a =stopReason= (=end_turn=, =max_tokens=, etc.)
+
+* Input Format
+
+The workflow input is sent as JSON to the ACP agent. For example:
+
+#+begin_src json
+{
+  "task": "Write a function to calculate fibonacci",
+  "model": "qwen3-coder-plus"
+}
+#+end_src
+
+* Output Format
+
+The ACP executor returns:
+
+#+begin_src crystal
+{
+  "session_id" => "sess_abc123",
+  "stop_reason" => "end_turn",
+  "content" => "Agent's response text",
+  "message" => "Agent's response text",
+  "metadata" => {}
+}
+#+end_src
+
+* Example Agents
+
+- *codex*: Anthropic's code agent (via =@[Container]=)
+- *claude*: Claude Code agent (via =@[Container]=)
+- *qwen-code*: Qwen Code agent (via =@[Container]=)
+- *custom*: Any binary implementing ACP stdio transport
+
+* Container Installation
+
+Packages are installed automatically via the =@[Container]= annotation:
+
+#+begin_src crystal
+@[Container(packages: ["codex-acp"])]
+workflow "acp-example" do
+  exec "codex", runtime: {"acp"}
+end
+#+end_src
+
+No manual installation needed — the container handles it.
+
+* Running
+
+#+begin_src bash
+ocawe up caws/10-acp-agent
+#+end_src
+
+Or trigger via API:
+
+#+begin_src bash
+curl -X POST http://localhost:4111/v1/workflows/10-acp-agent/runs \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Implement a binary search function"}'
+#+end_src
+
+* Federation Mode
+
+This example also demonstrates federation support:
+
+#+begin_src crystal
+struct Input
+  include Api::Federation::Inbox
+  include Api::ACP::Agent
+end
+
+struct Output
+  include Api::Federation::Outbox
+  include Api::ACP::Agent
+end
+#+end_src
+
+This allows the workflow to:
+- Accept ActivityPub/ForgeFed activities (=Input=)
+- Send ACP requests to external agents (=exec "codex"=)
+- Publish results as federation activities (=Output=)
+
+* Protocol Details
+
+See: https://agentclientprotocol.com/protocol/v1/
+
+** Key Endpoints (Agent)
+
+- =initialize= - Negotiate protocol version and capabilities
+- =session/new= - Create a new conversation session
+- =session/prompt= - Send user message
+- =session/cancel= - Cancel ongoing operation
+
+** Key Notifications (Client)
+
+- =session/update= - Agent sends content, tool calls, plans
+
+* Testing
+
+Run tests:
+
+#+begin_src bash
+crystal spec spec/acp_client_spec.cr
+crystal spec spec/e2e/acp_protocol_spec.cr
+#+end_src

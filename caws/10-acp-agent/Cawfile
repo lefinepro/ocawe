@@ -1,0 +1,31 @@
+# 10 - ACP Agent Protocol
+#
+# Demonstrates how to use an external agent via the Agent Client Protocol (ACP).
+# ACP agents communicate via JSON-RPC over stdio.
+#
+# Usage:
+#   exec "codex", runtime: {"acp"}  # runs 'codex' binary with ACP protocol
+#   exec "claude", runtime: {"acp"} # runs 'claude' binary with ACP protocol
+#
+# This workflow also exposes itself as an ACP agent via Api::ACP::Agent
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+struct Input
+  include Api::Federation::Inbox
+  include Api::ACP::Agent
+end
+
+struct Output
+  include Api::Federation::Outbox
+  include Api::ACP::Agent
+end
+
+@[Container(packages: ["codex-acp"])]
+@[Validate(Input, Output)]
+workflow "10-acp-agent" do
+  exec "codex", runtime: {"acp"}
+end

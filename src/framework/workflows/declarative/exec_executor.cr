@@ -1,4 +1,5 @@
 require "../../mcp/manager"
+require "./acp_executor"
 
 module Ocawe
   module Workflow
@@ -9,7 +10,27 @@ module Ocawe
         end
 
         raise "exec requires runtime for non-mcp refs: #{ref}" unless runtime
+        
+        # Check for ACP runtime
+        if acp_config = runtime["acp"]?
+          return exec_acp(ref, ctx, acp_config, env, workflow_root)
+        end
+        
         exec_external(ref, ctx, runtime, env, workflow_root)
+      end
+
+      private def exec_acp(ref : String, ctx : NodeContext, acp_config : JSON::Any, env : AnyHash?, workflow_root : String?) : AnyHash
+        config = acp_config.as_h? || {} of String => JSON::Any
+        input = ctx.input_data.to_json
+        
+        # Build environment
+        exec_env = build_exec_env(env) || {} of String => String
+        
+        # Resolve working directory
+        cwd = workflow_root || Dir.current
+        
+        executor = ACPExecutor.new(ref, cwd, exec_env)
+        executor.run(ref, input, config)
       end
 
       private def exec_mcp_tool(ref : String, ctx : NodeContext) : AnyHash

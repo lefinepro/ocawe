@@ -14,6 +14,7 @@
 #     include Api::ChatCompletionAPI::Response
 #   end
 require "json"
+require "./acp"
 
 module Api
   # Shared base fields present in most request types.
