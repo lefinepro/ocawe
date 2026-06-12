@@ -46,11 +46,15 @@ See the [quickstart guide](/guides/quickstart) for a full walkthrough.
 - **Declarative workflow DSL** - Crystal-native syntax for building complex agent pipelines
 - **Type-safe execution** - Crystal's type system catches errors at compile time
 - **Control flow primitives** - Parallel, conditional, loops, suspend/resume
+- **Agent Client Protocol (ACP)** - Integrate external AI agents (Codex, Claude) via standardized protocol
+- **Workflow-as-Model** - Execute workflows through OpenAI-compatible `/v1/chat/completions` API
 - **MCP integration** - Connect external tools and resources via Model Context Protocol
 - **HTTP APIs** - Trigger and manage workflows via REST endpoints
+- **Dynamic model discovery** - `/v1/models` endpoint exposes workflows, agents, skills, and tools
 - **Interactive playground** - Visual workflow builder and testing environment
 - **Schema validation** - Type-safe input/output validation
 - **Voice & RAG support** - Built-in voice and retrieval-augmented generation
+- **ActivityPub federation** - Connect with remote agents and federated systems
 
 ## Getting Started
 

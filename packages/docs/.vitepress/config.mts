@@ -53,6 +53,12 @@ export default defineConfig({
           { text: "Trigger API", link: "/api/trigger-api-spec" },
         ],
       },
+      {
+        text: "Changelog",
+        items: [
+          { text: "Changelog", link: "/changelog" },
+        ],
+      },
     ],
     search: {
       provider: "local",

@@ -591,7 +591,7 @@ workflow "mcp-tools" do
     attributes: {
       path: "/path/to/file.txt"
     }
-  
+
   agent "analyzer",
     prompt: "Analyze the file content"
 end
@@ -606,8 +606,193 @@ workflow "mcp-resources" do
     attributes: {
       query: "SELECT * FROM users"
     }
-  
+
   agent "data-processor"
+end
+```
+
+## Agent Client Protocol (ACP)
+
+Execute external AI agents via the Agent Client Protocol (ACP). ACP enables integration with third-party agents (Codex, Claude, etc.) through a standardized JSON-RPC 2.0 protocol.
+
+### Basic ACP Execution
+
+```crystal
+workflow "acp-agent" do
+  exec "codex",
+    runtime: {
+      "acp" => {
+        "command" => "codex",
+        "args" => ["--server"]
+      }
+    }
+end
+```
+
+### ACP with Environment Variables
+
+```crystal
+workflow "acp-with-env" do
+  exec "claude",
+    runtime: {
+      "acp" => {
+        "command" => "claude",
+        "args" => ["--server"],
+        "env" => {
+          "API_KEY" => "your-key"
+        }
+      }
+    }
+end
+```
+
+### ACP with Custom Working Directory
+
+```crystal
+workflow "acp-custom-cwd" do
+  exec "codex",
+    runtime: {
+      "acp" => {
+        "command" => "codex",
+        "cwd" => "/project/workspace"
+      }
+    }
+end
+```
+
+### ACP in Multi-Step Workflows
+
+```crystal
+workflow "acp-pipeline" do
+  # Step 1: Research with external agent
+  exec "researcher",
+    runtime: {
+      "acp" => {
+        "command" => "codex",
+        "args" => ["--server"]
+      }
+    }
+
+  # Step 2: Analyze with local agent
+  agent "analyzer",
+    prompt: "Analyze the research findings"
+
+  # Step 3: Generate report with external agent
+  exec "reporter",
+    runtime: {
+      "acp" => {
+        "command" => "claude"
+      }
+    }
+end
+```
+
+### ACP Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `command` | String | The command to start the ACP agent |
+| `args` | Array(String) | Arguments to pass to the command |
+| `cwd` | String | Working directory for the agent process |
+| `env` | Hash(String, String) | Environment variables for the agent |
+| `metadata` | Hash | Additional metadata passed to the agent |
+
+### ACP Protocol Flow
+
+1. **Initialize**: Ocawe sends `initialize` request to discover agent capabilities
+2. **Session Creation**: Creates a new session with `session/new`
+3. **Prompt**: Sends user input via `session/prompt` with content blocks
+4. **Updates**: Receives streaming `session/update` notifications
+5. **Completion**: Receives final `session/prompt` response with stop reason
+6. **Cleanup**: Closes connection and terminates agent process
+
+### ACP Output Format
+
+ACP execution produces a structured output:
+
+```json
+{
+  "session_id": "sess_abc123",
+  "stop_reason": "end_turn",
+  "content": "Generated response text",
+  "message": "Generated response text",
+  "metadata": {}
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `session_id` | Unique session identifier |
+| `stop_reason` | Why the agent stopped (end_turn, max_tokens, etc.) |
+| `content` | The generated text content |
+| `message` | Human-readable message |
+| `metadata` | Any metadata from the ACP configuration |
+
+### Building ACP-Compatible Agents
+
+Your agent must implement the JSON-RPC 2.0 protocol:
+
+```ruby
+# Example ACP agent (Ruby)
+loop do
+  line = STDIN.gets
+  break unless line
+
+  req = JSON.parse(line)
+
+  case req["method"]
+  when "initialize"
+    # Return capabilities
+    puts({
+      jsonrpc: "2.0",
+      id: req["id"],
+      result: {
+        protocolVersion: 1,
+        agentInfo: {
+          name: "my-agent",
+          version: "1.0.0"
+        }
+      }
+    }.to_json)
+
+  when "session/new"
+    # Create session
+    puts({
+      jsonrpc: "2.0",
+      id: req["id"],
+      result: { sessionId: "sess_123" }
+    }.to_json)
+
+  when "session/prompt"
+    # Process prompt and stream updates
+    session_id = req["params"]["sessionId"]
+    prompt = req["params"]["prompt"]
+
+    # Send content update
+    puts({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        sessionId: session_id,
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: {
+            type: "text",
+            text: "Response content"
+          }
+        }
+      }
+    }.to_json)
+
+    # Send final response
+    puts({
+      jsonrpc: "2.0",
+      id: req["id"],
+      result: { stopReason: "end_turn" }
+    }.to_json)
+  end
+
+  STDOUT.flush
 end
 ```
 
@@ -670,7 +855,7 @@ Register and use custom Crystal functions:
 Ocawe::RegistryApi.node_kind("custom_validator") do |ctx, attributes|
   input = attributes["input"]?
   valid = validate_data(input)
-  
+
   {
     "valid" => JSON.parse(valid.to_json),
     "errors" => JSON.parse(errors.to_json)
@@ -683,7 +868,7 @@ end
 ```crystal
 workflow "custom-node-workflow" do
   custom_validator input: input.data
-  
+
   if state.custom_validator_valid
     agent "processor"
   else
@@ -691,6 +876,80 @@ workflow "custom-node-workflow" do
   end
 end
 ```
+
+## Workflow as Model
+
+Execute workflows through the OpenAI-compatible `/v1/chat/completions` API by referencing them as models.
+
+### Using Workflows as Chat Models
+
+Any registered workflow can be used as a model in chat completions:
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "workflow/my-workflow",
+    "messages": [
+      {"role": "user", "content": "Hello, process this request"}
+    ]
+  }'
+```
+
+### Workflow Model Format
+
+Prefix any workflow ID with `workflow/` to use it as a model:
+
+```json
+{
+  "model": "workflow/customer-support",
+  "messages": [...]
+}
+```
+
+### Input Mapping
+
+The workflow receives the chat input as structured data:
+
+```json
+{
+  "prompt": "User message content",
+  "messages": [
+    {"role": "user", "content": "Hello"}
+  ],
+  "system": "Optional system message"
+}
+```
+
+### Output Format
+
+The workflow output is returned as a chat completion response:
+
+```json
+{
+  "id": "chatcmpl_abc123",
+  "object": "chat.completion",
+  "created": 1716234567,
+  "model": "workflow/my-workflow",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Workflow output text"
+      },
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
+### Use Cases
+
+- **Customer Support**: Deploy a support workflow as a chat model
+- **Content Generation**: Use content workflows via standard chat APIs
+- **Data Processing**: Chain workflows through existing chat clients
+- **Multi-Agent Systems**: Combine multiple workflow models in a single chat
 
 ## Best Practices
 
