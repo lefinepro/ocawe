@@ -124,7 +124,7 @@ module Ocawe
         end
 
         @status = RunStatus::Success
-        @output = @state.dup
+        @output = build_output_from_state
         runtime_logger.run_completed(@definition.default_logger)
         current_result(output_options)
       end

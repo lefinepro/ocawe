@@ -1,33 +1,30 @@
-# Orator - OpenAI API to ActivityPub Gateway
-# Full replacement for crater-openai using Ocawe framework
+#+name: orator
+require "translator"
+require "translator/registry"
 
 settings do
   data.adapter = "memory"
   port = 8080
 end
 
-# Input accepts both OpenResponses and ChatCompletion formats
 struct InputSchema
   include Api::OpenResponses::Request
   include Api::ChatCompletionAPI::Request
 end
 
-# Output provides both OpenResponses and ChatCompletion formats
 struct OutputSchema
   include Api::OpenResponses::Response
   include Api::ChatCompletionAPI::Response
 end
 
-# Main workflow that bridges OpenAI APIs with ActivityPub
+@[Container(static)]
+@[Load(".env")]
 @[Validate(InputSchema, OutputSchema)]
 workflow "orator" do
-  # Follow remote actors for ActivityPub federation
   follow ["@actra@lefine.pro"]
-  
-  # Convert incoming OpenAI request to ActivityPub and send to inbox
-  # send_to_inbox
-  
-  # Receive ActivityPub responses from outbox and convert back to OpenAI format
-  # recevie_from_outbox
+
+  send_to_inbox
+
+  recevie_from_outbox
 end
 

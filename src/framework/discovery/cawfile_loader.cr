@@ -20,6 +20,19 @@ module ACD
       end
     end
 
+    struct CrystalLoader
+      getter code : Array(String)
+      getter requires : Array(String)
+      property registry_files : Array(String)
+
+      def initialize(
+        @code : Array(String) = [] of String,
+        @requires : Array(String) = [] of String,
+        @registry_files : Array(String) = [] of String
+      )
+      end
+    end
+
     struct CawfileBundle
       getter id : String
       # Embedded config (mirrors ocawe.config.rcl fields)
@@ -44,6 +57,10 @@ module ACD
       getter output_type : String?
       # Default model extracted from @[Model(...)]
       getter model : String?
+      # Default name extracted from #+name: header
+      getter name : String?
+      # Crystal code extracted from Cawfile (requires, structs, etc.)
+      getter crystal_loader : CrystalLoader?
 
       def initialize(
         @id : String,
@@ -61,7 +78,9 @@ module ACD
         @enable_federation : Bool = false,
         @input_type : String? = nil,
         @output_type : String? = nil,
-        @model : String? = nil
+        @model : String? = nil,
+        @crystal_loader : CrystalLoader? = nil,
+        @name : String? = nil
       )
       end
     end
@@ -98,6 +117,10 @@ module ACD
 
             enable_federation = detect_federation_from_raw(raw_lines)
             model, input_type, output_type = extract_model_and_validate(raw_lines, dir, dir)
+            name = extract_name_from_raw(raw_lines)
+
+            crystal = extract_crystal_code(raw_lines)
+            crystal.registry_files = discover_registry_files(crystal.requires, dir)
 
             return CawfileBundle.new(
               id: workflow_id,
@@ -115,7 +138,9 @@ module ACD
               enable_federation: enable_federation,
               input_type: input_type,
               output_type: output_type,
-              model: model
+              model: model,
+              crystal_loader: crystal,
+              name: name
             )
           end
 
@@ -192,6 +217,10 @@ module ACD
           end
 
           model, input_type, output_type = extract_model_and_validate(raw_lines, path, dir)
+          name = extract_name_from_raw(raw_lines)
+
+          crystal = extract_crystal_code(raw_lines)
+          crystal.registry_files = discover_registry_files(crystal.requires, dir)
 
           CawfileBundle.new(
             id: workflow_id,
@@ -209,7 +238,9 @@ module ACD
             enable_federation: enable_federation,
             input_type: input_type,
             output_type: output_type,
-            model: model
+            model: model,
+            crystal_loader: crystal,
+            name: name
           )
         end
       end
@@ -230,6 +261,10 @@ module ACD
             dsl_lines = extract_workflow_body_lines(raw_lines)
             follow = extract_follow(workflow_block)
             container = extract_container_from_raw(raw_lines)
+            name = extract_name_from_raw(raw_lines)
+
+            crystal = extract_crystal_code(raw_lines)
+            crystal.registry_files = discover_registry_files(crystal.requires, dir)
 
             CawfileBundle.new(
               id: workflow_block.argument || "root",
@@ -244,7 +279,9 @@ module ACD
               start_settings: root_config.start_settings,
               follow: follow,
               container: container,
-              enable_federation: detect_federation_from_raw(raw_lines)
+              enable_federation: detect_federation_from_raw(raw_lines),
+              crystal_loader: crystal,
+              name: name
             )
           else
             parse_settings_block(doc)
@@ -317,6 +354,10 @@ module ACD
           end
 
           model, input_type, output_type = extract_model_and_validate(raw_lines, path, dir)
+          name = extract_name_from_raw(raw_lines)
+
+          crystal = extract_crystal_code(raw_lines)
+          crystal.registry_files = discover_registry_files(crystal.requires, dir)
 
           CawfileBundle.new(
             id: workflow_id,
@@ -333,7 +374,9 @@ module ACD
             container: container,
             input_type: input_type,
             output_type: output_type,
-            model: model
+            model: model,
+            crystal_loader: crystal,
+            name: name
           )
         end
       end
@@ -602,6 +645,16 @@ module ACD
         nil
       end
 
+      private def self.extract_name_from_raw(lines : Array(String)) : String?
+        lines.each do |line|
+          stripped = line.strip
+          if name_match = stripped.match(/^#\+name:\s*(.+)$/)
+            return name_match[1].strip
+          end
+        end
+        nil
+      end
+
       private def self.parse_value(raw : String) : RCL::Value
         raw = raw.strip
         if raw.starts_with?('"') && raw.ends_with?('"')
@@ -654,6 +707,120 @@ module ACD
         else
           ""
         end
+      end
+
+      # Extracts Crystal code (requires, structs, etc.) from Cawfile lines
+      # that are outside the workflow block and settings block.
+      # This is the code that needs to be compiled alongside the Cawfile.
+      private def self.extract_crystal_code(lines : Array(String)) : CrystalLoader
+        code_lines = [] of String
+        requires = [] of String
+        registry_files = [] of String
+
+        in_settings = false
+        settings_depth = 0
+        in_workflow = false
+        workflow_depth = 0
+
+        lines.each do |line|
+          stripped = line.strip
+
+          # Track settings block
+          if stripped.match(/^\s*settings\s+do/)
+            in_settings = true
+            settings_depth = 1
+            next
+          end
+          if in_settings
+            if stripped.match(/^do/)
+              settings_depth += 1
+              next
+            end
+            if stripped.match(/^end/)
+              settings_depth -= 1
+              if settings_depth <= 0
+                in_settings = false
+              end
+              next
+            end
+            next
+          end
+
+          # Track workflow block
+          if stripped.match(/^\s*workflow\s+"[^"]+"\s+do/)
+            in_workflow = true
+            workflow_depth = 1
+            next
+          end
+          if in_workflow
+            if stripped.match(/^\s*\bdo\b/)
+              workflow_depth += 1
+            elsif stripped.match(/^\s*\bend\b/)
+              workflow_depth -= 1
+              if workflow_depth == 0
+                in_workflow = false
+              end
+            end
+            next
+          end
+
+          # Skip empty lines and comments
+          next if stripped.empty? || stripped.starts_with?("#")
+
+          # Extract require statements
+          if req_match = stripped.match(/^require\s+"([^"]+)"/)
+            module_name = req_match[1]
+            requires << module_name
+            code_lines << line
+            next
+          end
+
+          # Collect other Crystal code (structs, modules, etc.)
+          code_lines << line
+        end
+
+        CrystalLoader.new(
+          code: code_lines,
+          requires: requires,
+          registry_files: registry_files
+        )
+      end
+
+      # Discovers registry.cr files for each required module.
+      # For a module "foo", looks for "foo/registry.cr" relative to the Cawfile directory.
+      # For a module "foo/bar", looks for "foo/bar/registry.cr".
+      private def self.discover_registry_files(
+        requires : Array(String),
+        cawfile_dir : String
+      ) : Array(String)
+        registry_files = [] of String
+
+        requires.each do |mod|
+          # Try direct path: module_name/registry.cr
+          registry_path = File.join(cawfile_dir, mod, "registry.cr")
+          if File.file?(registry_path)
+            registry_files << registry_path
+            next
+          end
+
+          # Try with .cr extension: module_name.cr/registry.cr (for single-file modules)
+          registry_path = File.join(cawfile_dir, "#{mod}.cr", "registry.cr")
+          if File.file?(registry_path)
+            registry_files << registry_path
+            next
+          end
+
+          # Try parent directory (for nested modules)
+          parts = mod.split('/')
+          if parts.size > 1
+            registry_path = parts.unshift(cawfile_dir).push("registry.cr").join("/")
+            if File.file?(registry_path)
+              registry_files << registry_path
+            end
+          end
+        end
+
+        registry_files
       end
     end
   end

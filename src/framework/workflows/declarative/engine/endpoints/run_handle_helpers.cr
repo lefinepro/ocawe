@@ -41,6 +41,88 @@ module Ocawe
         @state
       end
 
+      private def build_output_from_state : AnyHash
+        output = @state.dup
+        
+        # If workflow has output_type, format output accordingly
+        if output_type = @definition.output_type
+          case output_type
+          when "Api::Federation::Outbox"
+            # Format as ActivityPub Outbox response
+            activities = extract_federation_activities_from_state
+            output = {
+              "@context" => JSON.parse("https://www.w3.org/ns/activitystreams".to_json),
+              "type" => JSON.parse("OrderedCollection".to_json),
+              "totalItems" => JSON.parse(activities.size.to_json),
+              "orderedItems" => JSON.parse(activities.to_json),
+            } of String => JSON::Any
+          when "Api::Federation::Inbox"
+            # Format as ActivityPub Inbox response
+            activities = extract_federation_activities_from_state
+            output = {
+              "@context" => JSON.parse("https://www.w3.org/ns/activitystreams".to_json),
+              "type" => JSON.parse("OrderedCollection".to_json),
+              "totalItems" => JSON.parse(activities.size.to_json),
+              "orderedItems" => JSON.parse(activities.to_json),
+            } of String => JSON::Any
+          when "Api::OpenResponses::Response"
+            # Format as OpenResponses
+            output = format_openresponses_output(output)
+          when "Api::ChatCompletionAPI::Response"
+            # Format as ChatCompletion
+            output = format_chatcompletion_output(output)
+          end
+        end
+        
+        output
+      end
+      
+      private def extract_federation_activities_from_state : Array(Hash(String, JSON::Any))
+        # Extract activities from state (e.g., from follow node results)
+        activities = [] of Hash(String, JSON::Any)
+        
+        # Check for follow_records in state
+        if follow_records = @state["follow_records"]?.try(&.as_a?)
+          follow_records.each do |record|
+            if hash = record.as_h?
+              activities << hash
+            end
+          end
+        end
+        
+        # Check for messages from outbox polling
+        if messages = @state["messages"]?.try(&.as_a?)
+          messages.each do |msg|
+            if hash = msg.as_h?
+              activities << hash
+            end
+          end
+        end
+        
+        activities
+      end
+      
+      private def format_openresponses_output(state : AnyHash) : AnyHash
+        {
+          "id" => JSON.parse(@run_id.to_json),
+          "object" => JSON.parse("response".to_json),
+          "created_at" => JSON.parse(Time.utc.to_unix.to_json),
+          "status" => JSON.parse("completed".to_json),
+          "model" => JSON.parse((state["model"]?.try(&.as_s?) || "unknown").to_json),
+          "output" => JSON.parse((state["output"]?.try(&.as_a?) || [] of Hash(String, JSON::Any)).to_json),
+        } of String => JSON::Any
+      end
+      
+      private def format_chatcompletion_output(state : AnyHash) : AnyHash
+        {
+          "id" => JSON.parse(@run_id.to_json),
+          "object" => JSON.parse("chat.completion".to_json),
+          "created" => JSON.parse(Time.utc.to_unix.to_json),
+          "model" => JSON.parse((state["model"]?.try(&.as_s?) || "unknown").to_json),
+          "choices" => JSON.parse((state["choices"]?.try(&.as_a?) || [] of Hash(String, JSON::Any)).to_json),
+        } of String => JSON::Any
+      end
+
       private def current_result(output_options : WorkflowOutputOptions = WorkflowOutputOptions.new)
         WorkflowRunResult.new(
           run_id: @run_id,

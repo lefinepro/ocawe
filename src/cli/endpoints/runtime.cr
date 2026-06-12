@@ -25,7 +25,8 @@ module OcaweCore
           cawfile_bundle = ACD::Discovery::CawfileLoader.load(Dir.current, "root")
           if cawfile_bundle && cawfile_bundle.container
             container_config = cawfile_bundle.container.not_nil!
-            container_tag = "ocawecore:latest"
+            container_name = cawfile_bundle.name || cawfile_bundle.id
+            container_tag = "#{container_name}:latest"
             base = case container_config.mode
                    when ACD::Discovery::ContainerMode::Static then "static"
                    when ACD::Discovery::ContainerMode::Nix then "nixos"
@@ -89,6 +90,7 @@ module OcaweCore
 
         # Detect container configuration from Cawfile
         cawfile = ACD::Discovery::CawfileLoader.find_cawfile(workflows_root)
+        cawfile_bundle = nil
         container_config = nil
         if cawfile
           cawfile_bundle = ACD::Discovery::CawfileLoader.load(workflows_root, "root")
@@ -99,7 +101,8 @@ module OcaweCore
 
         # Build container if container mode is specified
         if container_config
-          container_tag = "ocawecore:latest"
+          container_name = cawfile_bundle.not_nil!.name || cawfile_bundle.not_nil!.id
+          container_tag = "#{container_name}:latest"
           base = case container_config.mode
                  when ACD::Discovery::ContainerMode::Static then "static"
                  when ACD::Discovery::ContainerMode::Nix then "nixos"

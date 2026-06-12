@@ -83,13 +83,27 @@ Then send requests to:
 ## Cawfile
 
 ```crystal
-require "./.cr/translators"
+#+name: orator
+require "translator"
+require "translator/registry"
 
 settings do
   data.adapter = "memory"
   port = 8080
 end
 
+struct InputSchema
+  include Api::OpenResponses::Request
+  include Api::ChatCompletionAPI::Request
+end
+
+struct OutputSchema
+  include Api::OpenResponses::Response
+  include Api::ChatCompletionAPI::Response
+end
+
+@[Container(static)]
+@[Load(".env")]
 @[Validate(InputSchema, OutputSchema)]
 workflow "orator" do
   follow ["@actra@lefine.pro"]
