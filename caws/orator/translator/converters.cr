@@ -108,10 +108,10 @@ module Orator
       # Generate IDs (these will be replaced by actual actor URLs in workflow context)
       actor_url = @actor_url || "temp:actor"
       local_domain = @local_domain || "temp:domain"
-      
+
       activity_id = "#{local_domain}/activities/create-#{Random::Secure.hex(8)}"
       ticket_id = "#{local_domain}/tickets/#{Random::Secure.hex(8)}"
-      
+
       # Use Aptok.forgefed_ticket helper to build proper ForgeFed Ticket
       ticket = Aptok.forgefed_ticket(
         ticket_id,
@@ -124,9 +124,9 @@ module Orator
       # Use Aptok.create helper to build proper Create activity
       to = [Aptok::PUBLIC_COLLECTION]
       target = req.metadata["target"]?.try(&.as_s?)
-      
+
       activity = Aptok.create(activity_id, actor_url, ticket, to, target)
-      
+
       activity
     end
   end
@@ -206,10 +206,10 @@ module Orator
       # Generate IDs
       actor_url = @actor_url || "temp:actor"
       local_domain = @local_domain || "temp:domain"
-      
+
       activity_id = "#{local_domain}/activities/create-#{Random::Secure.hex(8)}"
       ticket_id = "#{local_domain}/tickets/#{Random::Secure.hex(8)}"
-      
+
       # Use Aptok.forgefed_ticket helper to build proper ForgeFed Ticket
       ticket = Aptok.forgefed_ticket(
         ticket_id,
@@ -222,9 +222,9 @@ module Orator
       # Use Aptok.create helper to build proper Create activity
       to = [Aptok::PUBLIC_COLLECTION]
       target = req.metadata["target"]?.try(&.as_s?)
-      
+
       activity = Aptok.create(activity_id, actor_url, ticket, to, target)
-      
+
       activity
     end
   end
@@ -259,7 +259,7 @@ module Orator
       content = obj_hash["content"]?.try(&.as_s?).to_s
 
       output_items = [] of Hash(String, JSON::Any)
-      
+
       unless content.empty?
         output_items << {
           "type" => JSON.parse("text".to_json),
@@ -286,9 +286,9 @@ module Orator
     ) : Hash(String, JSON::Any)
       activity_id = activity["id"]?.try(&.as_s?).to_s
       published = activity["published"]?.try(&.as_s?).to_s
-      
+
       created_at = parse_time(published)
-      
+
       {
         "id" => JSON.parse(activity_id.to_json),
         "object" => JSON.parse("response".to_json),
@@ -328,11 +328,11 @@ module Orator
     def convert(activity : Hash(String, JSON::Any), original_model : String = "unknown") : Hash(String, JSON::Any)
       obj = activity["object"]?
       obj_hash = obj.try(&.as_h?) || {} of String => JSON::Any
-      
+
       content = obj_hash["content"]?.try(&.as_s?).to_s
       activity_id = activity["id"]?.try(&.as_s?).to_s
       published = activity["published"]?.try(&.as_s?).to_s
-      
+
       created = parse_time(published).to_unix
 
       message = {

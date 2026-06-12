@@ -76,6 +76,10 @@ Lint/UselessAssign:
 Metrics/CyclomaticComplexity:
   Enabled: false
 
+# Limit files to 300 lines to keep modules focused and readable.
+Metrics/LineCount:
+  Max: 300
+
 # Naming
 # =========================
 # All disabled. There are many violations and some of the rules are questionable.

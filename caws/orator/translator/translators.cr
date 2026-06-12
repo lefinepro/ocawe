@@ -14,10 +14,10 @@ module Orator
       ) : Hash(String, JSON::Any)
         # Detect input format based on structure
         format = detect_format(input)
-        
+
         actor_url = context["actor_url"]?.try(&.as_s?) || context["workflow_actor"]?.try(&.as_s?)
         local_domain = context["local_domain"]?.try(&.as_s?) || context["base_url"]?.try(&.as_s?)
-        
+
         # Convert to ActivityPub based on detected format
         activity = case format
         when :openresponses
@@ -29,7 +29,7 @@ module Orator
         else
           raise ArgumentError.new("Unsupported input format")
         end
-        
+
         # Store activity for outbox delivery
         {
           "activity" => JSON.parse(activity.to_json),
@@ -37,23 +37,23 @@ module Orator
           "original_input" => JSON.parse(input.to_json),
         } of String => JSON::Any
       end
-      
+
       private def self.detect_format(input : Hash(String, JSON::Any)) : Symbol
         # OpenResponses has "input" field
         if input.has_key?("input")
           return :openresponses
         end
-        
+
         # ChatCompletion has "messages" array
         if input.has_key?("messages")
           return :chat_completion
         end
-        
+
         # Default to openresponses
         :openresponses
       end
     end
-    
+
     # Translator that receives ActivityPub activities from outbox
     # and converts them back to OpenResponses/ChatCompletion format
     class ReceiveFromOutbox
@@ -64,11 +64,11 @@ module Orator
         # Extract activity from input
         activity = input["activity"]?.try(&.as_h?)
         raise ArgumentError.new("No activity found in input") unless activity
-        
+
         # Get original format if available
         format = input["format"]?.try(&.as_s?).try(&.to_sym) || :openresponses
         original_model = input["model"]?.try(&.as_s?) || context["model"]?.try(&.as_s?) || "unknown"
-        
+
         # Convert from ActivityPub based on target format
         response = case format
         when :openresponses
@@ -81,7 +81,7 @@ module Orator
           converter = Orator::ActivityPubToOpenResponses.new
           converter.convert(activity, original_model)
         end
-        
+
         response
       end
     end
@@ -109,7 +109,7 @@ module Ocawe
           output_schema: output_schema,
         )
       end
-      
+
       # Receive activities from outbox and convert back to API format
       def recevie_from_outbox(
         id : String = "recevie_from_outbox",
