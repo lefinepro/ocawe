@@ -21,6 +21,8 @@ Excluded:
   - "**/*.acd.cr"
   # BUG: Workaround for https://github.com/crystal-ameba/ameba/issues/782, https://github.com/crystal-ameba/ameba/issues/786, and https://github.com/crystal-ameba/ameba/issues/781
   - spec/support/factories.cr
+  # rcl.cr is a submodule directory, not a Crystal file
+  - rcl.cr/**/*
 
 # Documentation
 # =========================
@@ -114,6 +116,9 @@ Naming/TypeNames:
   Enabled: false
 
 Naming/VariableNames:
+  Enabled: false
+
+Style/VariableNames:
   Enabled: false
 
 # Style

@@ -8,7 +8,7 @@ module OcaweCore
       DEFAULT_BASE_URL = CLIProxyChatHelper::DEFAULT_BASE_URL
 
       def initialize(
-        @api_key : String? = ENV["CLIPROXY_API_KEY"]?, 
+        @api_key : String? = ENV["CLIPROXY_API_KEY"]?,
         @base_url : String = ENV["CLIPROXY_API_BASE"]? || ENV["CLIPROXY_API_URL"]? || DEFAULT_BASE_URL
       )
       end

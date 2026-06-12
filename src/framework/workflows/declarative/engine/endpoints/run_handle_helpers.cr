@@ -43,7 +43,7 @@ module Ocawe
 
       private def build_output_from_state : AnyHash
         output = @state.dup
-        
+
         # If workflow has output_type, format output accordingly
         if output_type = @definition.output_type
           case output_type
@@ -73,14 +73,14 @@ module Ocawe
             output = format_chatcompletion_output(output)
           end
         end
-        
+
         output
       end
-      
+
       private def extract_federation_activities_from_state : Array(Hash(String, JSON::Any))
         # Extract activities from state (e.g., from follow node results)
         activities = [] of Hash(String, JSON::Any)
-        
+
         # Check for follow_records in state
         if follow_records = @state["follow_records"]?.try(&.as_a?)
           follow_records.each do |record|
@@ -89,7 +89,7 @@ module Ocawe
             end
           end
         end
-        
+
         # Check for messages from outbox polling
         if messages = @state["messages"]?.try(&.as_a?)
           messages.each do |msg|
@@ -98,10 +98,10 @@ module Ocawe
             end
           end
         end
-        
+
         activities
       end
-      
+
       private def format_openresponses_output(state : AnyHash) : AnyHash
         {
           "id" => JSON.parse(@run_id.to_json),
@@ -112,7 +112,7 @@ module Ocawe
           "output" => JSON.parse((state["output"]?.try(&.as_a?) || [] of Hash(String, JSON::Any)).to_json),
         } of String => JSON::Any
       end
-      
+
       private def format_chatcompletion_output(state : AnyHash) : AnyHash
         {
           "id" => JSON.parse(@run_id.to_json),

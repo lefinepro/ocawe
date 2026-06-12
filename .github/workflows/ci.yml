@@ -47,6 +47,11 @@ jobs:
       - name: Run Crystal syntax smoke-check
         run: crystal build src/ocawe.cr --no-codegen
 
+      - name: Build CLI binary for specs
+        run: |
+          mkdir -p bin
+          crystal build src/cli/main.cr -o bin/ocawe
+
       - name: Run unit specs (mock mode)
         run: crystal spec --error-trace
         env:

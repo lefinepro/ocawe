@@ -177,19 +177,19 @@ module OcaweCore
           STDERR.puts "Please install Crystal: https://crystal-lang.org/install/"
           return false
         end
-        
+
         flags = [] of String
         flags << "--release" if release
         flags << "--static" if static
         flags << "--no-debug" if release
         flag_str = flags.empty? ? "" : flags.join(" ") + " "
-        
+
         # Build from project root to ensure shard dependencies are found
         Dir.cd(PROJECT_ROOT) do
           run_cmd("mkdir -p build && crystal build #{RUNTIME_ENTRY} -D ocawe_runtime_main #{flag_str}-o #{output}")
         end
       end
-      
+
       private def system(command : String) : Bool
         Process.run("sh", args: ["-c", command], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
       end
