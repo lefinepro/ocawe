@@ -35,7 +35,7 @@ describe "E2E: Workflow as Model in Chat Completions" do
     it "returns 404 for non-existent workflow model" do
       # Simulate the check from compat.cr
       workflow_id = "non-existent-workflow"
-      
+
       # In real app, this would check @workflow_index[workflow_id]?
       # and return 404 if not found
       workflow_exists = false

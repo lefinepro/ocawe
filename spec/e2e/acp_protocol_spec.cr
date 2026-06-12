@@ -102,6 +102,6 @@ describe "E2E: ACP Protocol Support" do
 end
 
 # Helper method for creating JSON::Any hash
-private def json_h(hash : Hash(String, String | Array(String) | Hash(String, String)))
+private def json_h(hash : Hash(String, String | Array(String) | Hash(String, String) | JSON::Any))
   JSON.parse(hash.to_json)
 end

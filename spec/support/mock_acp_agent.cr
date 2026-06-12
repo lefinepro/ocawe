@@ -1,15 +1,15 @@
 # Mock ACP agent - responds to initialize, session/new, session/prompt
 # Usage: ruby mock_acp_agent.cr
 
-$stdout.sync = true
-$stdin.sync = true
+STDOUT.sync = true
+STDIN.sync = true
 
 message_id = 0
 
 def handle_request(req)
   id = req["id"]
   method = req["method"]
-  params = req["params"] || {}
+  params = req["params"] || {} of String => JSON::Any
 
   case method
   when "initialize"
@@ -31,7 +31,7 @@ def handle_request(req)
           "title" => "Mock ACP Agent",
           "version" => "1.0.0"
         },
-        "authMethods" => []
+        "authMethods" => [] of String
       }
     }
   when "session/new"
@@ -82,7 +82,7 @@ def handle_request(req)
     {
       "jsonrpc" => "2.0",
       "method" => "session/cancel",
-      "params" => {}
+      "params" => {} of String => JSON::Any
     }
   else
     {
@@ -97,7 +97,7 @@ def handle_request(req)
 end
 
 loop do
-  line = $stdin.gets
+  line = STDIN.gets
   break unless line
   line = line.chomp
   next if line.empty?
@@ -106,7 +106,7 @@ loop do
     req = JSON.parse(line)
     resp = handle_request(req)
     puts resp.to_json
-    $stdout.flush
+    STDOUT.flush
   rescue ex
     puts({
       "jsonrpc" => "2.0",
@@ -116,6 +116,6 @@ loop do
         "message" => ex.message
       }
     }.to_json)
-    $stdout.flush
+    STDOUT.flush
   end
 end

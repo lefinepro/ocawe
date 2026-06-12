@@ -17,7 +17,7 @@ module Ocawe
 
       def run(ref : String, input : String, config : Hash(String, JSON::Any)) : Hash(String, JSON::Any)
         command = resolve_command(ref, config)
-        command_args = config["args"]?.try(&.as_a?(&.as_s?)) || [] of String
+        command_args = config["args"]?.try(&.as_a?).try(&.compact_map { |v| v.as_s? }) || [] of String
         cwd = config["cwd"]?.try(&.as_s?) || @cwd
         agent_env = merge_env(config["env"]?)
 
@@ -76,16 +76,16 @@ module Ocawe
         content_parts = [] of String
         updates.each do |update|
           next unless update.update.content
-          content_parts << update.update.content.text || ""
+          content_parts << (update.update.content.try(&.text) || "")
         end
 
         output["session_id"] = JSON.parse(session_id.to_json)
-        output["stop_reason"] = JSON.parse(result.stop_reason.to_json)
+        output["stop_reason"] = JSON.parse(result.stopReason.to_json)
         output["content"] = JSON.parse(content_parts.join(" ").to_json)
-        output["message"] = content_parts.join(" ")
+        output["message"] = JSON.parse(content_parts.join(" ").to_json)
 
         # Include metadata from config
-        output["metadata"] = config["metadata"]?.try(&.as_h?) || {} of String => JSON::Any
+        output["metadata"] = JSON.parse((config["metadata"]?.try(&.as_h?) || {} of String => JSON::Any).to_json)
 
         output
       end

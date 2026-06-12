@@ -15,7 +15,7 @@ module ACD
           if model.starts_with?("workflow/")
             workflow_id = model.sub("workflow/", "")
             workflow = workflow_by_id(workflow_id)
-            
+
             unless workflow
               env.response.status_code = 404
               env.response.content_type = "application/json"
@@ -33,7 +33,7 @@ module ACD
               result_or_error = with_workflow_errors(env) do
                 @workflow_service.start_run(workflow_id, input_data: input_data)
               end
-              
+
               if result_or_error.is_a?(String)
                 env.response.status_code = 422
                 env.response.content_type = "application/json"
@@ -42,7 +42,7 @@ module ACD
 
               run_result = result_or_error.as(Ocawe::Workflow::WorkflowRunResult)
               snapshot = @workflow_service.load_snapshot(workflow_id, run_result.run_id)
-              
+
               # Extract text from workflow output
               output_text = if snap = snapshot
                               if text = snap["text"]?.try(&.as_s?)

@@ -54,11 +54,11 @@ module OcaweCore
         choices = payload["choices"]?.try(&.as_a?)
         return "" unless choices
 
-        first = choices.first?
-        return "" unless first
+      first = choices.first?
+      return "" unless first
 
-        message = first.as_h?["message"]?.try(&.as_h?)
-        return "" unless message
+      message = first.as_h?.try(&.["message"]?).try(&.as_h?)
+      return "" unless message
 
         content = message["content"]?.try(&.as_s?)
         raise "Gonka response is missing generated text" unless content
