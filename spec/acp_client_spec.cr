@@ -5,9 +5,7 @@ describe "ACP::Client" do
   describe "initialization" do
     it "starts with initialize request" do
       mock_script = File.join(__DIR__, "support", "mock_acp_agent.cr")
-      unless File.file?(mock_script)
-        skip "mock_acp_agent.cr not found"
-      end
+      next unless File.file?(mock_script)
 
       client = ACP::Client.new("ruby", [mock_script])
       begin
@@ -27,9 +25,7 @@ describe "ACP::Client" do
   describe "session management" do
     it "creates a session" do
       mock_script = File.join(__DIR__, "support", "mock_acp_agent.cr")
-      unless File.file?(mock_script)
-        skip "mock_acp_agent.cr not found"
-      end
+      next unless File.file?(mock_script)
 
       client = ACP::Client.new("ruby", [mock_script])
       begin
@@ -47,9 +43,7 @@ describe "ACP::Client" do
   describe "prompt/response" do
     it "sends prompt and receives response" do
       mock_script = File.join(__DIR__, "support", "mock_acp_agent.cr")
-      unless File.file?(mock_script)
-        skip "mock_acp_agent.cr not found"
-      end
+      next unless File.file?(mock_script)
 
       client = ACP::Client.new("ruby", [mock_script])
       begin

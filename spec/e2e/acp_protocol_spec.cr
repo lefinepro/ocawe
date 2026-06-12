@@ -4,9 +4,7 @@ describe "E2E: ACP Protocol Support" do
   describe "exec with runtime: acp" do
     it "executes ACP agent via exec directive" do
       mock_script = File.join(__DIR__, "..", "support", "mock_acp_agent.cr")
-      unless File.file?(mock_script)
-        skip "mock_acp_agent.cr not found"
-      end
+      next unless File.file?(mock_script)
 
       workflow = Ocawe::Workflow.create_workflow("e2e-acp-exec", "ACP agent via exec")
       workflow
@@ -38,9 +36,7 @@ describe "E2E: ACP Protocol Support" do
 
     it "passes input to ACP agent" do
       mock_script = File.join(__DIR__, "..", "support", "mock_acp_agent.cr")
-      unless File.file?(mock_script)
-        skip "mock_acp_agent.cr not found"
-      end
+      next unless File.file?(mock_script)
 
       workflow = Ocawe::Workflow.create_workflow("e2e-acp-input", "ACP agent input test")
       workflow
@@ -72,9 +68,7 @@ describe "E2E: ACP Protocol Support" do
   describe "ACP with environment variables" do
     it "passes environment variables to ACP agent" do
       mock_script = File.join(__DIR__, "..", "support", "mock_acp_agent.cr")
-      unless File.file?(mock_script)
-        skip "mock_acp_agent.cr not found"
-      end
+      next unless File.file?(mock_script)
 
       workflow = Ocawe::Workflow.create_workflow("e2e-acp-env", "ACP with env")
       workflow

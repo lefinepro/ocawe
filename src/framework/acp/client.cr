@@ -46,21 +46,23 @@ module ACP
       end
       
       # Send initialize request
-      params = InitializeParams.new(
-        protocolVersion: 1,
-        clientCapabilities: ClientCapabilities.new(
-          fs: FsCapabilities.new(
-            readTextFile: true,
-            writeTextFile: true
-          ),
-          terminal: true
-        ),
-        clientInfo: ClientInfo.new(
-          name: "ocawe",
-          title: "Ocawe Runtime",
-          version: "0.0.1"
-        )
-      )
+      params_json = {
+        "protocolVersion" => 1,
+        "clientCapabilities" => {
+          "fs" => {
+            "readTextFile" => true,
+            "writeTextFile" => true
+          },
+          "terminal" => true
+        },
+        "clientInfo" => {
+          "name" => "ocawe",
+          "title" => "Ocawe Runtime",
+          "version" => "0.0.1"
+        }
+      }
+      
+      params = InitializeParams.from_json(params_json.to_json)
       
       result = request("initialize", params)
       init_result = InitializeResult.from_json(result.to_json)
@@ -73,11 +75,13 @@ module ACP
     
     # Create a new session
     def create_session(cwd : String, mcp_servers : Array(JSON::Any) = [] of JSON::Any) : String
-      params = SessionNewParams.new(
-        cwd: cwd,
-        mcpServers: mcp_servers.empty? ? nil : mcp_servers,
-        additionalDirectories: nil
-      )
+      params_json = {
+        "cwd" => cwd,
+        "mcpServers" => mcp_servers.empty? ? nil : mcp_servers,
+        "additionalDirectories" => nil
+      }.compact
+      
+      params = SessionNewParams.from_json(params_json.to_json)
       
       result = request("session/new", params)
       session_result = SessionNewResult.from_json(result.to_json)
@@ -89,10 +93,15 @@ module ACP
     def prompt(prompt_text : String, session_id : String? = nil) : SessionPromptResult
       sid = session_id || @session_id || raise "No active session"
       
-      params = SessionPromptParams.new(
-        sessionId: sid,
-        prompt: [ContentBlock.text(prompt_text)]
-      )
+      params_json = {
+        "sessionId" => sid,
+        "prompt" => [{
+          "type" => "text",
+          "text" => prompt_text
+        }]
+      }
+      
+      params = SessionPromptParams.from_json(params_json.to_json)
       
       result = request("session/prompt", params)
       SessionPromptResult.from_json(result.to_json)
@@ -102,10 +111,12 @@ module ACP
     def prompt_with_content(content : Array(ContentBlock), session_id : String? = nil) : SessionPromptResult
       sid = session_id || @session_id || raise "No active session"
       
-      params = SessionPromptParams.new(
-        sessionId: sid,
-        prompt: content
-      )
+      params_json = {
+        "sessionId" => sid,
+        "prompt" => content.map(&.to_json)
+      }
+      
+      params = SessionPromptParams.from_json(params_json.to_json)
       
       result = request("session/prompt", params)
       SessionPromptResult.from_json(result.to_json)
@@ -115,7 +126,8 @@ module ACP
     def cancel(session_id : String? = nil)
       sid = session_id || @session_id || raise "No active session"
       
-      params = SessionCancelParams.new(sessionId: sid)
+      params_json = {"sessionId" => sid}
+      params = SessionCancelParams.from_json(params_json.to_json)
       send_notification("session/cancel", params)
     end
     
@@ -167,16 +179,17 @@ module ACP
       raise "Client closed" if @closed
       
       id = @request_id += 1
-      req = JsonRpcRequest.new(
-        id: id,
-        method: method,
-        params: JSON.parse(params.to_json)
-      )
+      req_json = {
+        "jsonrpc" => "2.0",
+        "id" => id,
+        "method" => method,
+        "params" => JSON.parse(params.to_json)
+      }
       
       response_channel = Channel(JsonRpcResponse).new(1)
       @pending_responses[id] = response_channel
       
-      send_message(req)
+      send_message_json(req_json)
       
       response = response_channel.receive
       @pending_responses.delete(id)
@@ -192,12 +205,20 @@ module ACP
       raise "Client not started" unless @process
       raise "Client closed" if @closed
       
-      notif = JsonRpcNotification.new(
-        method: method,
-        params: JSON.parse(params.to_json)
-      )
+      notif_json = {
+        "jsonrpc" => "2.0",
+        "method" => method,
+        "params" => JSON.parse(params.to_json)
+      }
       
-      send_message(notif)
+      send_message_json(notif_json)
+    end
+    
+    private def send_message_json(message : Hash)
+      proc = @process || raise "Client not started"
+      line = message.to_json + "\n"
+      proc.input << line
+      proc.input.flush
     end
     
     private def send_message(message : JSON::Serializable)
