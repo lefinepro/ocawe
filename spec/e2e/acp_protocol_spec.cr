@@ -65,7 +65,7 @@ describe "E2E: ACP Protocol Support" do
       result.status.should eq("success")
       output = result.output.not_nil!
       content = output["content"]?.try(&.as_s?) || ""
-      content.should include("Mock ACP agent received")
+      content.includes?("Mock ACP agent received").should eq(true)
     end
   end
 
@@ -108,6 +108,6 @@ describe "E2E: ACP Protocol Support" do
 end
 
 # Helper method for creating JSON::Any hash
-private def json_h(hash : Hash(String, String | Hash(String, String)))
+private def json_h(hash : Hash(String, String | Array(String) | Hash(String, String)))
   JSON.parse(hash.to_json)
 end

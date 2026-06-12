@@ -221,6 +221,22 @@ module ACD
         @cache_lock.synchronize { @workflow_index[workflow_id]? }
       end
 
+      private def workflows : Array(NamedTuple(id: String, name: String, description: String, default_model: String?, agents: Array(String), skills: Array(String), tools: Array(String)))
+        @cache_lock.synchronize do
+          @workflow_index.map do |id, w|
+            {
+              id:            id,
+              name:          id,
+              description:   w[:source_root_type],
+              default_model: w[:default_model],
+              agents:        w[:agents],
+              skills:        w[:skills],
+              tools:         w[:tools],
+            }
+          end
+        end
+      end
+
       private def tools : Array(NamedTuple(id: String, workflow_id: String))
         @cache_lock.synchronize { @tools_index.dup }
       end

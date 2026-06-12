@@ -10,6 +10,7 @@ require "./framework/registry/api"
 require "./framework/config/settings"
 require "./framework/trigger/public_api"
 require "./framework/http/app"
+require "./framework/acp"
 
 module OcaweCore
   DEFAULT_PORT = 4111

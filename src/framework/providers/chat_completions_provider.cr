@@ -4,20 +4,25 @@ require "./provider"
 
 module OcaweCore
   module AI
-    abstract class ChatCompletionsProvider
+    class ChatCompletionProvider
       include Provider
 
-      def initialize(@provider_name : String, @api_key : String?, @base_url : String)
+      DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+      def initialize(
+        @api_key : String? = ENV["OPENAI_API_KEY"]?,
+        @base_url : String = ENV["OPENAI_BASE_URL"]? || DEFAULT_BASE_URL
+      )
       end
 
       def generate_text(request : TextGenerationRequest) : TextGenerationResponse
         if ENV["COGNICORE_MOCK_LLM"]? == "1"
-          text = "[mock #{@provider_name}] #{request.prompt}"
-          return TextGenerationResponse.new(provider: @provider_name, model: request.model, text: text)
+          text = "[mock chat_completion] #{request.prompt}"
+          return TextGenerationResponse.new(provider: "chat_completion", model: request.model, text: text)
         end
 
         key = @api_key
-        raise "#{@provider_name.upcase}_API_KEY is required" unless key
+        raise "API_KEY is required for ChatCompletion provider" unless key
 
         payload = {
           "model" => any(request.model),
@@ -34,11 +39,11 @@ module OcaweCore
         )
 
         unless response.success?
-          raise "#{@provider_name} request failed (#{response.status_code}): #{response.body}"
+          raise "ChatCompletion request failed (#{response.status_code}): #{response.body}"
         end
 
         body = JSON.parse(response.body)
-        TextGenerationResponse.new(provider: @provider_name, model: request.model, text: extract_text(body))
+        TextGenerationResponse.new(provider: "chat_completion", model: request.model, text: extract_text(body))
       end
 
       private def build_messages(request : TextGenerationRequest) : Array(Hash(String, JSON::Any))
@@ -72,7 +77,7 @@ module OcaweCore
           return rendered.join("\n") unless rendered.empty?
         end
 
-        raise "#{@provider_name} response is missing generated text"
+        raise "ChatCompletion response is missing generated text"
       end
 
       private def any(value) : JSON::Any

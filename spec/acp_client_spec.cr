@@ -1,4 +1,4 @@
-require "../spec_helper"
+require "./spec_helper"
 require "json"
 
 describe "ACP::Client" do
@@ -36,7 +36,7 @@ describe "ACP::Client" do
         client.start
         session_id = client.create_session(Dir.current)
         session_id.should be_a(String)
-        session_id.should include("sess_mock")
+        session_id.includes?("sess_mock").should eq(true)
         client.session_id.should eq(session_id)
       ensure
         client.close

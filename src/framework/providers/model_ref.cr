@@ -19,7 +19,7 @@ module OcaweCore
           return new(provider, model)
         end
 
-        new("openai", raw)
+        new("chat_completion", raw)
       end
 
       def to_s : String

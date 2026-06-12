@@ -1,9 +1,9 @@
 require "json"
 require "./model_ref"
 require "./provider"
-require "./custom_provider_macro"
+require "./chat_completions_provider"
 require "./openai_provider"
-require "./cliproxyapi_provider"
+require "./gonka_provider"
 
 module OcaweCore
   module AI
@@ -25,10 +25,12 @@ module OcaweCore
         end
 
         case name
-        when "openai"
-          OpenAIProvider.new
-        when "cliproxyapi"
-          CliproxyAPIProvider.new
+        when "chat_completion"
+          ChatCompletionProvider.new
+        when "open_responses"
+          OpenResponsesProvider.new
+        when "gonka"
+          GonkaProvider.new
         else
           raise "unsupported model provider: #{name}"
         end
