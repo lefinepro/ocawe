@@ -126,4 +126,14 @@ module Api
       property usage : Usage?
     end
   end
+
+  # Models API opt-in marker.
+  # Including this in a Cawfile struct enables GET /v1/models endpoint.
+  # Usage in Cawfile:
+  #   struct InputSimple
+  #     include Api::Models
+  #   end
+  module Models
+    # Marker module - no fields needed, just triggers endpoint registration
+  end
 end

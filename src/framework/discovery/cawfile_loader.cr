@@ -52,6 +52,8 @@ module ACD
       getter container : CawfileContainer?
       # Whether federation API should be enabled (detected from Api::Federation usage)
       getter enable_federation : Bool
+      # Whether models API should be enabled (detected from Api::Models usage)
+      getter enable_models : Bool
       # Workflow input/output type names extracted from @[Validate(...)]
       getter input_type : String?
       getter output_type : String?
@@ -76,6 +78,7 @@ module ACD
         @follow : Array(String) = [] of String,
         @container : CawfileContainer? = nil,
         @enable_federation : Bool = false,
+        @enable_models : Bool = false,
         @input_type : String? = nil,
         @output_type : String? = nil,
         @model : String? = nil,
@@ -116,6 +119,7 @@ module ACD
             dsl_lines = extract_workflow_body_lines(raw_lines)
 
             enable_federation = detect_federation_from_raw(raw_lines)
+            enable_models = detect_models_from_raw(raw_lines)
             model, input_type, output_type = extract_model_and_validate(raw_lines, dir, dir)
             name = extract_name_from_raw(raw_lines)
 
@@ -136,6 +140,7 @@ module ACD
               follow: follow,
               container: container,
               enable_federation: enable_federation,
+              enable_models: enable_models,
               input_type: input_type,
               output_type: output_type,
               model: model,
@@ -151,6 +156,7 @@ module ACD
           follow = extract_follow_from_raw(raw_lines)
           container = extract_container_from_raw(raw_lines)
           enable_federation = detect_federation_from_raw(raw_lines)
+          enable_models = detect_models_from_raw(raw_lines)
           dsl_lines = extract_workflow_body_lines(raw_lines)
 
           # Extract settings from raw lines
@@ -236,6 +242,7 @@ module ACD
             follow: follow,
             container: container,
             enable_federation: enable_federation,
+            enable_models: enable_models,
             input_type: input_type,
             output_type: output_type,
             model: model,
@@ -280,6 +287,7 @@ module ACD
               follow: follow,
               container: container,
               enable_federation: detect_federation_from_raw(raw_lines),
+              enable_models: detect_models_from_raw(raw_lines),
               crystal_loader: crystal,
               name: name
             )
@@ -372,6 +380,8 @@ module ACD
             start_settings: start,
             follow: follow,
             container: container,
+            enable_federation: detect_federation_from_raw(raw_lines),
+            enable_models: detect_models_from_raw(raw_lines),
             input_type: input_type,
             output_type: output_type,
             model: model,
@@ -551,6 +561,10 @@ module ACD
 
       private def self.detect_federation_from_raw(lines : Array(String)) : Bool
         lines.any? { |line| line.includes?("Api::Federation::Inbox") || line.includes?("Api::Federation::Outbox") }
+      end
+
+      private def self.detect_models_from_raw(lines : Array(String)) : Bool
+        lines.any? { |line| line.includes?("Api::Models") }
       end
 
       private def self.extract_model_and_validate(
