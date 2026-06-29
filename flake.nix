@@ -23,9 +23,11 @@
             src = self;
 
             nativeBuildInputs = [
+              pkgs.cacert
               pkgs.crystal
               pkgs.git
               pkgs.pkg-config
+              pkgs.shards
             ];
 
             buildInputs = [
@@ -41,6 +43,8 @@
 
             buildPhase = ''
               runHook preBuild
+              export SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+              export GIT_SSL_CAINFO="$SSL_CERT_FILE"
               shards install --production --ignore-crystal-version
               export CRYSTAL_PATH="$PWD/lib:$(crystal env CRYSTAL_PATH)"
               crystal build src/cli/main.cr --release --no-debug -o ocawe
