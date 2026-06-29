@@ -80,11 +80,18 @@ module ACD
           mount_mcp_server_endpoint
           mount_keys_endpoints
         end
-        mount_federation_endpoints if @settings.api.enable?("federation")
-        bootstrap_federation_subscriptions if @settings.api.enable?("federation")
-        start_federation_poller if @settings.api.enable?("federation")
+        if federation_api_enabled?
+          mount_federation_endpoints
+          bootstrap_federation_subscriptions
+          start_federation_poller
+        end
 
         ::Kemal.run(trap_signal: false)
+      end
+
+      private def federation_api_enabled? : Bool
+        @settings.api.enable?("federation") ||
+          Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
       end
 
       private def start_reload_watcher

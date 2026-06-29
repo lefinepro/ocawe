@@ -97,7 +97,6 @@ module OcaweCore
       # Applies settings from a root Cawfile bundle (no workflow context).
       def self.apply_cawfile_settings(base : Ocawe::Config::Settings, bundle : ACD::Discovery::CawfileBundle) : Ocawe::Config::Settings
         tree = {} of String => RCL::Value
-        tree["api"] = bundle.config_workflows unless bundle.config_workflows.empty?
         tree["federation"] = bundle.config_federation unless bundle.config_federation.empty?
         tree["datasets"] = bundle.config_datasets unless bundle.config_datasets.empty?
         tree["workflows"] = bundle.config_workflows unless bundle.config_workflows.empty?
@@ -113,10 +112,10 @@ module OcaweCore
             # Already has api config - merge federation in
             existing = api_value
             unless existing.has_key?("federation")
-              existing["enabled"] = ["federation"] of RCL::Value
+              existing["enabled"] = ["classic", "federation"] of RCL::Value
             end
           else
-            tree["api"] = {"enabled" => ["federation"] of RCL::Value} of String => RCL::Value
+            tree["api"] = {"enabled" => ["classic", "federation"] of RCL::Value} of String => RCL::Value
           end
         end
 
@@ -264,7 +263,7 @@ module OcaweCore
         when Array
           value.compact_map { |entry| entry.is_a?(String) ? entry : nil }
         when Hash(String, RCL::Value)
-          nested = value["value"]?
+          nested = value["enabled"]? || value["value"]?
           return [] of String unless nested
           parse_api_value(nested)
         else

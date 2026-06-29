@@ -17,6 +17,9 @@ module ACD
           write_aptok_response(federation, env)
         end
         post "/actors/:identifier/inbox" do |env|
+          if response = unsigned_registered_inbox_response(env)
+            next response
+          end
           write_aptok_response(federation, env)
         end
 
@@ -28,6 +31,9 @@ module ACD
         end
 
         post "/inbox" do |env|
+          if response = unsigned_registered_inbox_response(env)
+            next response
+          end
           write_aptok_response(federation, env)
         end
 
@@ -62,6 +68,23 @@ module ACD
         response = federation.fetch(aptok_request_from_kemal(env), aptok_fetch_options)
         write_aptok_kemal_response(response, env)
         ""
+      end
+
+      private def unsigned_registered_inbox_response(env) : String?
+        return nil if inbox_signature_verification_required?
+        return nil unless Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
+
+        raw = env.request.body.try(&.gets_to_end).to_s
+        activity = JSON.parse(raw).as_h
+        handled = process_registered_aptok_inbox_activity(activity)
+
+        env.response.status_code = handled ? 202 : 204
+        env.response.content_type = "application/json"
+        {"handled" => handled}.to_json
+      rescue ex
+        env.response.status_code = 400
+        env.response.content_type = "application/json"
+        {"error" => {"type" => "bad_request", "message" => ex.message.to_s}}.to_json
       end
 
       private def aptok_request_from_kemal(env) : Aptok::Request
@@ -137,7 +160,7 @@ module ACD
           resolve_aptok_signature_key(key_id)
         end
 
-        federation.inbox_signature_verification if @settings.federation.signatures_required
+        federation.inbox_signature_verification if inbox_signature_verification_required?
 
         federation.inbox "/actors/{identifier}/inbox", "/inbox" do |routes|
           routes.with_idempotency(Time::Span.new(hours: 24), "per-inbox")
@@ -165,6 +188,12 @@ module ACD
         end
         @aptok_federation = federation
         federation
+      end
+
+      private def inbox_signature_verification_required? : Bool
+        override = ENV["OCAWE_FEDERATION_SIGNATURES_REQUIRED"]?
+        return false if override && ["false", "0", "no"].includes?(override.strip.downcase)
+        @settings.federation.signatures_required
       end
 
       private def local_domain_from_actor_url(actor : String) : String

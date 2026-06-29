@@ -183,11 +183,30 @@ module OcaweCore
         flags << "--static" if static
         flags << "--no-debug" if release
         flag_str = flags.empty? ? "" : flags.join(" ") + " "
+        entrypoint = build_runtime_entrypoint
+        main_flag = entrypoint == RUNTIME_ENTRY ? "-D ocawe_runtime_main " : ""
 
         # Build from project root to ensure shard dependencies are found
         Dir.cd(PROJECT_ROOT) do
-          run_cmd("mkdir -p build && crystal build #{RUNTIME_ENTRY} -D ocawe_runtime_main #{flag_str}-o #{output}")
+          run_cmd("mkdir -p build && crystal build #{entrypoint} #{main_flag}#{flag_str}-o #{output}")
         end
+      end
+
+      private def build_runtime_entrypoint : String
+        cawfile_bundle = ACD::Discovery::CawfileLoader.load_root(Dir.current)
+        registry_files = cawfile_bundle.try(&.crystal_loader).try(&.registry_files) || [] of String
+        return RUNTIME_ENTRY if registry_files.empty?
+
+        entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
+        Dir.mkdir_p(File.dirname(entrypoint))
+        File.write(entrypoint, String.build do |io|
+          io << "require " << RUNTIME_ENTRY.to_json << "\n"
+          registry_files.each do |registry_file|
+            io << "require " << registry_file.to_json << "\n"
+          end
+          io << "\nOcaweCore.run\n"
+        end)
+        entrypoint
       end
 
       private def system(command : String) : Bool

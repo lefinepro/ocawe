@@ -45,23 +45,13 @@ module ACD
 
               # Extract text from workflow output
               output_text = if snap = snapshot
-                              if text = snap["text"]?.try(&.as_s?)
-                                text
-                              elsif content = snap["content"]?.try(&.as_s?)
-                                content
-                              elsif output = snap["output"]?
-                                output.to_json
-                              else
-                                snap.to_json
-                              end
+                              workflow_chat_output(snap)
                             else
                               run_result.to_json
                             end
 
               now = Time.utc.to_unix
-              env.response.status_code = 201
-              env.response.content_type = "application/json"
-              next({
+              completion = {
                 "id" => "chatcmpl_#{Random::Secure.hex(12)}",
                 "object" => "chat.completion",
                 "created" => now,
@@ -81,7 +71,8 @@ module ACD
                   "completion_tokens" => 0,
                   "total_tokens" => 0,
                 },
-              }.to_json)
+              }
+              next write_chat_completion_response(env, completion, stream_requested?(body))
             rescue ex
               env.response.status_code = 422
               env.response.content_type = "application/json"
@@ -104,8 +95,7 @@ module ACD
           end
 
           now = Time.utc.to_unix
-          env.response.content_type = "application/json"
-          {
+          completion = {
             "id" => "chatcmpl_#{Random::Secure.hex(12)}",
             "object" => "chat.completion",
             "created" => now,
@@ -125,8 +115,91 @@ module ACD
               "completion_tokens" => 0,
               "total_tokens" => 0,
             },
-          }.to_json
+          }
+          write_chat_completion_response(env, completion, stream_requested?(body))
         end
+      end
+
+      private def stream_requested?(body : Hash(String, JSON::Any)) : Bool
+        body["stream"]?.try(&.as_bool?) || false
+      end
+
+      private def write_chat_completion_response(env, completion, stream : Bool) : String
+        unless stream
+          env.response.status_code = 200
+          env.response.content_type = "application/json"
+          return completion.to_json
+        end
+
+        env.response.status_code = 200
+        env.response.content_type = "text/event-stream"
+        env.response.headers["Cache-Control"] = "no-cache"
+        env.response.headers["Connection"] = "keep-alive"
+
+        parsed_completion = JSON.parse(completion.to_json)
+        completion_hash = parsed_completion.as_h
+        id = completion_hash["id"]
+        created = completion_hash["created"]
+        model = completion_hash["model"]
+        content = completion_hash["choices"].as_a[0]["message"]["content"].as_s
+
+        chunk = {
+          "id" => id,
+          "object" => "chat.completion.chunk",
+          "created" => created,
+          "model" => model,
+          "choices" => [
+            {
+              "index" => 0,
+              "delta" => {
+                "role" => "assistant",
+                "content" => content,
+              },
+              "finish_reason" => nil,
+            },
+          ],
+        }
+        final_chunk = {
+          "id" => id,
+          "object" => "chat.completion.chunk",
+          "created" => created,
+          "model" => model,
+          "choices" => [
+            {
+              "index" => 0,
+              "delta" => {} of String => String,
+              "finish_reason" => "stop",
+            },
+          ],
+        }
+
+        env.response.print "data: #{chunk.to_json}\n\n"
+        env.response.print "data: #{final_chunk.to_json}\n\n"
+        env.response.print "data: [DONE]\n\n"
+        ""
+      end
+
+      private def workflow_chat_output(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : String
+        if state = snapshot.state
+          if text = state["text"]?.try(&.as_s?)
+            return text
+          end
+          if content = state["content"]?.try(&.as_s?)
+            return content
+          end
+        end
+
+        if output = snapshot.output
+          if text = output["text"]?.try(&.as_s?)
+            return text
+          end
+          if content = output["content"]?.try(&.as_s?)
+            return content
+          end
+          return output.to_json
+        end
+
+        snapshot.to_json
       end
     end
   end

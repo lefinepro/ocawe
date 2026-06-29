@@ -2,6 +2,8 @@ module ACD
   module Kemal
     class App
       private def process_aptok_inbox_activity(activity : Aptok::JsonMap) : Nil
+        return if process_registered_aptok_inbox_activity(activity)
+
         remote_actor = activity["actor"]?.try(&.as_s?).to_s
         follow = if remote_actor.empty?
                    Aptok::JsonMap.new
@@ -9,6 +11,34 @@ module ACD
                    @federation_kv.get("ocawe:federation:follow:#{remote_actor}").try { |raw| JSON.parse(raw).as_h } || Aptok::JsonMap.new
                  end
         process_polled_activity(follow, activity)
+      end
+
+      private def process_registered_aptok_inbox_activity(activity : Aptok::JsonMap) : Bool
+        return false unless Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
+
+        workflow_id = activity["workflow_id"]?.try(&.as_s?).to_s
+        if workflow_id.empty?
+          ids = workflow_ids
+          workflow_id = ids.first if ids.size == 1
+        end
+        workflow_id = "server" if workflow_id.empty?
+
+        input_data = {
+          "activity" => JSON.parse(activity.to_json),
+          "api"      => JSON.parse("federation".to_json),
+        } of String => JSON::Any
+        ctx = Ocawe::Workflow::NodeContext.new(
+          workflow_id: workflow_id,
+          run_id: "aptok-inbox-#{Random::Secure.hex(12)}",
+          node_id: "ocawe_handle_aptok_inbox_activity",
+          input_data: input_data,
+          state: input_data,
+        )
+        result = Ocawe::Workflow.function_registry.call("ocawe_handle_aptok_inbox_activity", ctx)
+        result["handled"]?.try(&.as_bool?) || false
+      rescue ex
+        STDERR.puts "[ocawecore] registered inbox handler failed: #{ex.message}"
+        false
       end
 
       private def process_polled_activity(follow : Hash(String, JSON::Any), activity : Hash(String, JSON::Any)) : Bool
