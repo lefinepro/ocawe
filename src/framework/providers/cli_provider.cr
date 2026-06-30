@@ -46,8 +46,7 @@ module OcaweCore
         buf = Bytes.new(4096)
         String.build do |sb|
           loop do
-            readers = [entry[:stdout_reader].as(IO::Selectable)]
-            ready = IO.select(readers, nil, nil, QUIET_PERIOD)
+            ready = IO.select([entry[:stdout_reader]], nil, nil, QUIET_PERIOD)
             break unless ready
             count = entry[:stdout_reader].read(buf)
             break if count == 0
