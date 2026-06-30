@@ -43,17 +43,17 @@ module OcaweCore
         entry[:stdin_writer].puts(prompt)
         entry[:stdin_writer].flush
 
-        response = String.build do |sb|
+        buf = Bytes.new(4096)
+        String.build do |sb|
           loop do
-            ready = IO.select([entry[:stdout_reader]], nil, nil, QUIET_PERIOD)
+            readers = [entry[:stdout_reader].as(IO::Selectable)]
+            ready = IO.select(readers, nil, nil, QUIET_PERIOD)
             break unless ready
-            chunk = entry[:stdout_reader].read_utf8(4096)
-            break if chunk.empty?
-            sb << chunk
+            count = entry[:stdout_reader].read(buf)
+            break if count == 0
+            sb << String.new(buf[0, count])
           end
         end
-
-        response
       end
 
       private def get_or_launch(binary : String)
@@ -90,7 +90,6 @@ module OcaweCore
             "OCAWE_INTERNAL_KEY"   => @internal_key,
           }
         )
-
         stdin_reader.close
 
         entry = {
