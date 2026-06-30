@@ -21,7 +21,7 @@ module OcaweCore
       @@processes = {} of String => NamedTuple(
         process: Process,
         stdin_writer: IO,
-        stdout_reader: IO,
+        stdout_reader: IO::FileDescriptor,
         started_at: Time,
       )
 
@@ -32,6 +32,11 @@ module OcaweCore
       end
 
       def generate_text(request : TextGenerationRequest) : TextGenerationResponse
+        if ENV["COGNICORE_MOCK_LLM"]? == "1"
+          text = "[mock cli] #{request.prompt}"
+          return TextGenerationResponse.new(provider: "cli", model: request.model, text: text)
+        end
+
         binary = CLI_BINARIES[request.model]? || request.model
         text = send_prompt(binary, request.prompt)
         TextGenerationResponse.new(provider: "cli", model: request.model, text: text)
@@ -43,12 +48,17 @@ module OcaweCore
         entry[:stdin_writer].puts(prompt)
         entry[:stdin_writer].flush
 
+        reader = entry[:stdout_reader]
+        reader.read_timeout = QUIET_PERIOD.seconds
+
         buf = Bytes.new(4096)
         parts = [] of String
         loop do
-          ready = IO.select([entry[:stdout_reader]], nil, nil, QUIET_PERIOD)
-          break unless ready
-          count = entry[:stdout_reader].read(buf)
+          begin
+            count = reader.read(buf)
+          rescue IO::TimeoutError
+            break
+          end
           break if count == 0
           parts << String.new(buf[0, count])
         end
@@ -66,7 +76,9 @@ module OcaweCore
         end
 
         stdin_reader, stdin_writer = IO.pipe
-        stdout_reader, stdout_writer = IO.pipe
+        _stdout_read, _stdout_write = IO.pipe
+        stdout_reader = _stdout_read.as(IO::FileDescriptor)
+        stdout_writer = _stdout_write
 
         ocawe_base = "http://localhost:#{@ocawe_port}"
 
