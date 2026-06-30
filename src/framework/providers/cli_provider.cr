@@ -44,15 +44,15 @@ module OcaweCore
         entry[:stdin_writer].flush
 
         buf = Bytes.new(4096)
-        String.build do |sb|
-          loop do
-            ready = IO.select([entry[:stdout_reader]], nil, nil, QUIET_PERIOD)
-            break unless ready
-            count = entry[:stdout_reader].read(buf)
-            break if count == 0
-            sb << String.new(buf[0, count])
-          end
+        parts = [] of String
+        loop do
+          ready = IO.select([entry[:stdout_reader]], nil, nil, QUIET_PERIOD)
+          break unless ready
+          count = entry[:stdout_reader].read(buf)
+          break if count == 0
+          parts << String.new(buf[0, count])
         end
+        parts.join
       end
 
       private def get_or_launch(binary : String)
