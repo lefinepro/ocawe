@@ -6,3 +6,4 @@ packages/**/dist
 build
 .tools
 .cogni
+lib
