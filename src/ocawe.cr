@@ -46,6 +46,8 @@ module OcaweCore
     # Use default config values if not overridden by command line
     workflows_root ||= settings.workflows.preferred_workflows_root
 
+    ENV["OCAWE_PORT"] = port.to_s
+
     ACD::Kemal::App.new(
       port,
       workflows_root: workflows_root,

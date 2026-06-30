@@ -4,6 +4,7 @@ require "./provider"
 require "./chat_completions_provider"
 require "./openai_provider"
 require "./gonka_provider"
+require "./cli_provider"
 
 module OcaweCore
   module AI
@@ -31,6 +32,8 @@ module OcaweCore
           OpenResponsesProvider.new
         when "gonka"
           GonkaProvider.new
+        when "cli"
+          CliProvider.new
         else
           raise "unsupported model provider: #{name}"
         end
