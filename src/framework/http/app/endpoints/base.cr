@@ -74,8 +74,9 @@ module ACD
           mount_run_endpoints
           mount_hitl_endpoints
           mount_compat_endpoints
-          mount_models_endpoints
-          mount_trigger_endpoints
+		  mount_models_endpoints
+		  mount_environments_endpoints
+		  mount_trigger_endpoints
           mount_mcp_endpoints
           mount_mcp_server_endpoint
           mount_keys_endpoints
