@@ -1,3 +1,5 @@
+require "set"
+
 module ACD
   module Kemal
     class App
@@ -22,6 +24,8 @@ module ACD
         @federation_kv = Aptok::MemoryKvStore.new
         @mcp_manager = Ocawe::MCP.manager
         @workflow_ids = [] of String
+        @service_workflow_ids = [] of String
+        @started_service_workflows = Set(String).new
         @workflow_index = {} of String => NamedTuple(
           source_root_type: String,
           workflow_file: String,
@@ -60,6 +64,7 @@ module ACD
         @mcp_manager.configure(@settings.mcp)
         register_configured_functions!
         reload_cache!
+        start_service_workflows
         start_reload_watcher
 
         ::Kemal.config.port = @port
@@ -104,6 +109,7 @@ module ACD
 
             begin
               reload_cache!
+              start_service_workflows
               fingerprint = current
               puts "[ocawecore] workflow cache reloaded"
             rescue ex
@@ -149,6 +155,7 @@ module ACD
           id: String,
           workflow_id: String,
         )
+        service_workflow_ids = [] of String
         global_agents = @agent_loader.load_dir("./agents")
 
         bundles.each do |bundle|
@@ -156,6 +163,7 @@ module ACD
           loaded_skills = @skill_loader.load_dir(bundle.skills_dir)
 
           ids << bundle.id
+          service_workflow_ids << bundle.id if bundle.service
           definition = load_workflow_definition(bundle, loaded_agents)
           rebuilt_engine.register(definition)
           tool_ids = [] of String
@@ -211,12 +219,45 @@ module ACD
 
         @cache_lock.synchronize do
           @workflow_ids = ids
+          @service_workflow_ids = service_workflow_ids
           @workflow_index = index
           @skills_index = skills_index
           @agents_index = agents_index
           @tools_index = tools_index
           @workflow_engine = rebuilt_engine
           @workflow_service = Ocawe::Workflow::Service.new(@workflow_engine)
+        end
+      end
+
+      private def start_service_workflows : Nil
+        workflow_ids = @cache_lock.synchronize { @service_workflow_ids.dup }
+
+        workflow_ids.each do |workflow_id|
+          already_started = @cache_lock.synchronize do
+            if @started_service_workflows.includes?(workflow_id)
+              true
+            else
+              @started_service_workflows << workflow_id
+              false
+            end
+          end
+          next if already_started
+
+          spawn do
+            run_id = "service-#{workflow_id}"
+            input_data = {
+              "service" => JSON.parse(true.to_json),
+              "workflow_id" => JSON.parse(workflow_id.to_json),
+            } of String => JSON::Any
+
+            begin
+              @workflow_service.start_run(workflow_id, run_id: run_id, input_data: input_data)
+              STDERR.puts "[ocawecore] service workflow exited: #{workflow_id}"
+            rescue ex
+              @cache_lock.synchronize { @started_service_workflows.delete(workflow_id) }
+              STDERR.puts "[ocawecore] service workflow failed: #{workflow_id}: #{ex.message || ex.class.name}"
+            end
+          end
         end
       end
 
