@@ -10,6 +10,8 @@ module ACD
           prompt = chat_prompt_from_messages(messages, body)
           system_message = chat_system_message(messages, body)
           metadata = body["metadata"]?.try(&.as_h?) || {} of String => JSON::Any
+          api_key = body["api_key"]?.try(&.as_s?)
+          base_url = body["base_url"]?.try(&.as_s?)
 
           # Check if model is a workflow reference (e.g. "workflow/orator")
           if model.starts_with?("workflow/")
@@ -87,6 +89,8 @@ module ACD
               prompt: prompt,
               system: system_message,
               metadata: metadata,
+              api_key: api_key,
+              base_url: base_url,
             )
           rescue ex
             env.response.status_code = 422

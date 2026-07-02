@@ -16,12 +16,12 @@ module OcaweCore
       end
 
       def generate_text(request : TextGenerationRequest) : TextGenerationResponse
-        if ENV["COGNICORE_MOCK_LLM"]? == "1"
+        if ENV["COGNICORE_MOCK_LLM"]? == "1" && request.api_key.nil?
           text = "[mock chat_completion] #{request.prompt}"
           return TextGenerationResponse.new(provider: "chat_completion", model: request.model, text: text)
         end
 
-        key = @api_key
+        key = request.api_key || @api_key
         raise "API_KEY is required for ChatCompletion provider" unless key
 
         payload = {
@@ -29,8 +29,9 @@ module OcaweCore
           "messages" => any(build_messages(request)),
         } of String => JSON::Any
 
+        effective_base = request.base_url || @base_url
         response = HTTP::Client.post(
-          "#{normalized_base_url}/chat/completions",
+          "#{normalized_base_url(effective_base)}/chat/completions",
           headers: HTTP::Headers{
             "Authorization" => "Bearer #{key}",
             "Content-Type"  => "application/json",
@@ -55,8 +56,8 @@ module OcaweCore
         messages
       end
 
-      private def normalized_base_url : String
-        base = @base_url.ends_with?("/") ? @base_url[0..-2] : @base_url
+      private def normalized_base_url(base : String) : String
+        base = base.ends_with?("/") ? base[0..-2] : base
         base.ends_with?("/v1") ? base : "#{base}/v1"
       end
 

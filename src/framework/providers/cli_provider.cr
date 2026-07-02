@@ -32,7 +32,7 @@ module OcaweCore
       end
 
       def generate_text(request : TextGenerationRequest) : TextGenerationResponse
-        if ENV["COGNICORE_MOCK_LLM"]? == "1"
+        if ENV["COGNICORE_MOCK_LLM"]? == "1" && request.api_key.nil?
           text = "[mock cli] #{request.prompt}"
           return TextGenerationResponse.new(provider: "cli", model: request.model, text: text)
         end

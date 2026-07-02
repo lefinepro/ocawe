@@ -17,5 +17,4 @@ fi
 echo "[entrypoint] starting ocawecore on port ${PORT} with workflows root ${WORKFLOWS_ROOT}..."
 exec ./bin/ocawecore \
   --port="${PORT}" \
-  --workflows-root="${WORKFLOWS_ROOT}" \
-  --fallback-workflows-root="${WORKFLOWS_ROOT}"${CONFIG_RCL_ARG}
+  --workflows-root="${WORKFLOWS_ROOT}"${CONFIG_RCL_ARG}

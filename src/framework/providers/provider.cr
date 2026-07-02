@@ -8,8 +8,10 @@ module OcaweCore
       getter system : String?
       getter prompt : String
       getter metadata : AnyHash
+      getter api_key : String?
+      getter base_url : String?
 
-      def initialize(@model : String, @prompt : String, @system : String? = nil, @metadata : AnyHash = {} of String => JSON::Any)
+      def initialize(@model : String, @prompt : String, @system : String? = nil, @metadata : AnyHash = {} of String => JSON::Any, @api_key : String? = nil, @base_url : String? = nil)
       end
     end
 
