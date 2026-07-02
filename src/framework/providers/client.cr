@@ -35,7 +35,7 @@ module OcaweCore
         when "cli"
           CliProvider.new
         else
-          raise "unsupported model provider: #{name}"
+          ChatCompletionProvider.new
         end
       end
     end
