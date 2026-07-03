@@ -81,7 +81,7 @@ module OcaweCore
         stdout_writer = _stdout_write
 
         unless Process.find_executable(binary)
-          system("nix profile install nixpkgs##{binary} 2>/dev/null")
+          system("nix --extra-experimental-features 'nix-command flakes' profile install nixpkgs##{binary} 2>&1")
           unless Process.find_executable(binary)
             raise "CLI '#{binary}' not found in PATH and could not be installed from nixpkgs"
           end
