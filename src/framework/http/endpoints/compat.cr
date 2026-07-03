@@ -1,10 +1,66 @@
 module ACD
   module Kemal
     class App
+      CHAT_COMPLETION_TASKS_DATASET = "chat_completion_tasks"
+
       private def mount_compat_endpoints
         post "/v1/responses" { |env| not_implemented(env, "responses endpoint pending Kemal integration") }
         post "/v1/chat/completions" do |env|
           body = json_body(env)
+          begin
+            completion = build_chat_completion(body)
+            write_chat_completion_response(env, completion, stream_requested?(body))
+          rescue ex
+            env.response.status_code = completion_error_status(ex)
+            env.response.content_type = "application/json"
+            {error: {type: "completion_error", message: ex.message || "chat completion failed"}}.to_json
+          end
+        end
+
+        post "/v1/chat/completions/tasks" do |env|
+          body = json_body(env)
+          task_id = body["task_id"]?.try(&.as_s?) || "chatcmpltask_#{Random::Secure.hex(12)}"
+          ensure_chat_completion_tasks_dataset
+          queued_payload = chat_completion_task_payload(
+            task_id: task_id,
+            status: "queued",
+            request: body,
+          )
+          queued_payload["id"] = JSON.parse(task_id.to_json)
+          @dataset_service.add_items(CHAT_COMPLETION_TASKS_DATASET, [queued_payload])
+
+          spawn do
+            run_chat_completion_task(task_id, body)
+          end
+
+          env.response.status_code = 202
+          env.response.content_type = "application/json"
+          {
+            "task_id" => task_id,
+            "status" => "queued",
+            "status_url" => "/v1/chat/completions/tasks/#{task_id}",
+          }.to_json
+        rescue ex
+          env.response.status_code = 422
+          env.response.content_type = "application/json"
+          {error: {type: "task_enqueue_error", message: ex.message || "failed to enqueue completion task"}}.to_json
+        end
+
+        get "/v1/chat/completions/tasks/:taskId" do |env|
+          task_id = env.params.url["taskId"]
+          task = find_chat_completion_task(task_id)
+          unless task
+            env.response.status_code = 404
+            env.response.content_type = "application/json"
+            next({error: {type: "not_found", message: "completion task not found: #{task_id}"}}.to_json)
+          end
+
+          env.response.content_type = "application/json"
+          task.payload.to_json
+        end
+      end
+
+      private def build_chat_completion(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
           model = body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL
           messages = extract_chat_messages(body)
           prompt = chat_prompt_from_messages(messages, body)
@@ -17,9 +73,7 @@ module ACD
             workflow = workflow_by_id(workflow_id)
 
             unless workflow
-              env.response.status_code = 404
-              env.response.content_type = "application/json"
-              next({error: {type: "not_found", message: "workflow not found: #{workflow_id}"}}.to_json)
+              raise "workflow not found: #{workflow_id}"
             end
 
             # Execute workflow with chat input
@@ -29,18 +83,7 @@ module ACD
             } of String => JSON::Any
             input_data["system"] = JSON.parse(system_message.to_json) if system_message
 
-            begin
-              result_or_error = with_workflow_errors(env) do
-                @workflow_service.start_run(workflow_id, input_data: input_data)
-              end
-
-              if result_or_error.is_a?(String)
-                env.response.status_code = 422
-                env.response.content_type = "application/json"
-                next(result_or_error)
-              end
-
-              run_result = result_or_error.as(Ocawe::Workflow::WorkflowRunResult)
+              run_result = @workflow_service.start_run(workflow_id, input_data: input_data)
               snapshot = @workflow_service.load_snapshot(workflow_id, run_result.run_id)
 
               # Extract text from workflow output
@@ -51,7 +94,7 @@ module ACD
                             end
 
               now = Time.utc.to_unix
-              completion = {
+              return JSON.parse({
                 "id" => "chatcmpl_#{Random::Secure.hex(12)}",
                 "object" => "chat.completion",
                 "created" => now,
@@ -71,31 +114,19 @@ module ACD
                   "completion_tokens" => 0,
                   "total_tokens" => 0,
                 },
-              }
-              next write_chat_completion_response(env, completion, stream_requested?(body))
-            rescue ex
-              env.response.status_code = 422
-              env.response.content_type = "application/json"
-              next({error: {type: "workflow_error", message: ex.message || "workflow execution failed"}}.to_json)
-            end
+              }.to_json).as_h
           end
 
           # Standard AI model execution
-          begin
             response = OcaweCore::AI::Client.new.generate_text(
               model_spec: model,
               prompt: prompt,
               system: system_message,
               metadata: metadata,
             )
-          rescue ex
-            env.response.status_code = 422
-            env.response.content_type = "application/json"
-            next({error: {type: "generation_error", message: ex.message || "chat completion failed"}}.to_json)
-          end
 
           now = Time.utc.to_unix
-          completion = {
+          JSON.parse({
             "id" => "chatcmpl_#{Random::Secure.hex(12)}",
             "object" => "chat.completion",
             "created" => now,
@@ -115,9 +146,84 @@ module ACD
               "completion_tokens" => 0,
               "total_tokens" => 0,
             },
-          }
-          write_chat_completion_response(env, completion, stream_requested?(body))
-        end
+          }.to_json).as_h
+      end
+
+      private def completion_error_status(ex : Exception) : Int32
+        message = ex.message || ""
+        return 404 if message.includes?("not found") || message.includes?("unknown workflow")
+        422
+      end
+
+      private def ensure_chat_completion_tasks_dataset : Nil
+        return if @dataset_service.get_dataset(CHAT_COMPLETION_TASKS_DATASET)
+
+        @dataset_service.create_dataset(
+          CHAT_COMPLETION_TASKS_DATASET,
+          description: "OpenAI-compatible chat completion task queue",
+        )
+      rescue ex
+        raise ex unless (ex.message || "").includes?("already exists")
+      end
+
+      private def find_chat_completion_task(task_id : String) : Ocawe::Dataset::ItemRecord?
+        ensure_chat_completion_tasks_dataset
+        @dataset_service.list_items(CHAT_COMPLETION_TASKS_DATASET).find { |item| item.id == task_id }
+      end
+
+      private def run_chat_completion_task(task_id : String, request : Ocawe::Workflow::AnyHash) : Nil
+        update_chat_completion_task(
+          task_id,
+          chat_completion_task_payload(
+            task_id: task_id,
+            status: "running",
+            request: request,
+          ),
+        )
+
+        result = build_chat_completion(request)
+        update_chat_completion_task(
+          task_id,
+          chat_completion_task_payload(
+            task_id: task_id,
+            status: "completed",
+            request: request,
+            result: result,
+          ),
+        )
+      rescue ex
+        update_chat_completion_task(
+          task_id,
+          chat_completion_task_payload(
+            task_id: task_id,
+            status: "failed",
+            request: request,
+            error: ex.message || "completion task failed",
+          ),
+        )
+      end
+
+      private def update_chat_completion_task(task_id : String, payload : Ocawe::Workflow::AnyHash) : Nil
+        ensure_chat_completion_tasks_dataset
+        @dataset_service.update_item(CHAT_COMPLETION_TASKS_DATASET, task_id, payload)
+      end
+
+      private def chat_completion_task_payload(
+        task_id : String,
+        status : String,
+        request : Ocawe::Workflow::AnyHash,
+        result : Ocawe::Workflow::AnyHash? = nil,
+        error : String? = nil
+      ) : Ocawe::Workflow::AnyHash
+        now = Time.utc.to_s
+        JSON.parse({
+          "task_id" => task_id,
+          "status" => status,
+          "request" => request,
+          "result" => result,
+          "error" => error,
+          "updated_at" => now,
+        }.to_json).as_h
       end
 
       private def stream_requested?(body : Hash(String, JSON::Any)) : Bool

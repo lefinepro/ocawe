@@ -290,6 +290,8 @@ module ACD
           Ocawe::Dataset::Store::InMemory.new
         when "file"
           Ocawe::Dataset::Store::File.new(config.file_root)
+        when "sqlite", "sqlite3"
+          Ocawe::Dataset::Store::SQLite.new(config.file_root)
         else
           raise "unsupported dataset adapter: #{config.adapter}"
         end

@@ -1,10 +1,10 @@
 require "./builder"
+require "file_utils"
 
 module Ocawe
   module Builder
-    # Unified NixBuilder — всегда собирает через nix multi-stage Dockerfile.
-    # Финальный образ: scratch по умолчанию, либо указанный image.
-    # Пакеты ставятся через pkgsStatic и копируются через nix store closure.
+    # Unified NixBuilder — always builds through a nix multi-stage Dockerfile.
+    # The final image is scratch by default, with a copied Nix store closure.
     class NixBuilder < Builder
       NIX_IMAGE = "nixos/nix:2.24.9"
 
@@ -28,6 +28,7 @@ module Ocawe
 
         dockerfile = generate_dockerfile(image: image, packages: packages, files: files)
         context = File.join(context_dir, "build")
+        FileUtils.rm_rf(context)
         Dir.mkdir_p(context)
         File.write(File.join(context, "Dockerfile"), dockerfile)
 
@@ -57,6 +58,7 @@ module Ocawe
                 File.open(dst, "w") do |output|
                   IO.copy(input, output)
                 end
+                File.chmod(dst, File.info(src).permissions.value)
               end
             end
           else
@@ -73,46 +75,61 @@ module Ocawe
         packages : Array(String) = [] of String,
         files : Array(String) = [] of String
       ) : String
-        final_image = image || "scratch"
+        final_image = image || "nix-build"
 
         lines = [
           "# Stage 1: nix build environment",
           "FROM #{NIX_IMAGE} AS nix-build",
-          "RUN nix-channel --update",
+          "RUN nix-channel --add https://nixos.org/channels/nixos-26.05 nixpkgs && nix-channel --update",
         ]
 
-        # Генерируем nix expression для установки пакетов через pkgsStatic
-        if !packages.empty?
-          nix_expr = String.build do |io|
-            io << "with import <nixpkgs> {}; let staticPkgs = pkgs.pkgsStatic; in "
-            io << "buildEnv { name = \"ocawe-packages\"; paths = ["
-            packages.each_with_index do |pkg, i|
-              io << "staticPkgs.#{pkg}"
-              io << " " unless i == packages.size - 1
-            end
-            io << "]; }"
-          end
-          lines << "RUN nix-env -i -E '" + nix_expr + "'"
+        runtime_packages = ["glibc", "zlib", "openssl", "libyaml", "pcre2", "libevent", "zstd", "sqlite", "gcc.cc.lib", "patchelf"]
+        effective_packages = (runtime_packages + packages).uniq
 
-          # Копируем nix store closure пакетов в /nix для финального образа
-          lines << "RUN nix-store -q --requisites $(readlink -f /nix/var/nix/profiles/default) | \\"
-          lines << "  xargs -I {} cp -r --parents {} /nix-export && \\"
-          lines << "  cp -r --parents /nix/var /nix-export || true"
+        if !effective_packages.empty?
+          lines << "RUN nix-env -iA #{effective_packages.map { |pkg| "nixpkgs.#{pkg}" }.join(" ")}"
+        end
+
+        if final_image == "scratch" && !effective_packages.empty?
+          lines << "RUN mkdir -p /nix-export && \\"
+          lines << "  nix-store -q --requisites $(readlink -f /nix/var/nix/profiles/default) | \\"
+          lines << "  xargs -I {} cp -r --parents {} /nix-export/ && \\"
+          lines << "  cp -r --parents /nix/var /nix-export/ && \\"
+          lines << "  mkdir -p /nix-export/lib64 && \\"
+          lines << "  loader=$(find /nix-export/nix/store -path '*/lib/ld-linux-x86-64.so.2' | head -n1) && \\"
+          lines << "  ln -s ${loader#/nix-export} /nix-export/lib64/ld-linux-x86-64.so.2 && \\"
+          lines << "  mkdir -p /nix-export/lib && \\"
+          lines << "  find /nix-export/nix/store -path '*/lib/*.so*' -exec sh -c 'for f do ln -sf ${f#/nix-export} /nix-export/lib/$(basename \"$f\"); done' sh {} +"
         end
 
         lines << ""
         lines << "# Stage 2: final image"
         lines << "FROM #{final_image}"
 
-        # Копируем nix closure
-        if !packages.empty?
+        if final_image == "scratch"
           lines << "COPY --from=nix-build /nix-export/nix /nix"
-          lines << "ENV PATH=\"/nix/var/nix/profiles/default/bin:/nix/store:${PATH}\""
+          lines << "COPY --from=nix-build /nix-export/lib64 /lib64"
+          lines << "COPY --from=nix-build /nix-export/lib /lib"
         end
+        lines << "ENV PATH=\"/nix/var/nix/profiles/default/bin:/nix/store:${PATH}\""
+        lines << "ENV LD_LIBRARY_PATH=\"/nix/var/nix/profiles/default/lib:/nix/var/nix/profiles/default/lib64\""
 
-        # Копируем бинарник и файлы
+        lines << "WORKDIR /app"
         lines << "COPY ocawecore /app/ocawecore"
-        lines << "RUN chmod +x /app/ocawecore"
+        if final_image != "scratch"
+          rpath = [
+            "/nix/var/nix/profiles/default/lib",
+            "/nix/store/8kvxvr3pmsypxiypq4g8zy13glnfr7nx-glibc-2.42-67/lib",
+            "/nix/store/dbz6pb9g67kpgpl95k8d85kzpxm1c32p-zlib-1.3.2/lib",
+            "/nix/store/l0vl4dali2mvbpi30a8da1f71jl85myg-openssl-3.6.2/lib",
+            "/nix/store/iswwp0p9sa9iyiar387r423qhqpwpi4p-libyaml-0.2.5/lib",
+            "/nix/store/x2zjc47pkhcwxr4iyv5xj3hdqfzfnyd9-pcre2-10.46/lib",
+            "/nix/store/4c9lbyb7payh9akmia87v38bi82vdidb-libevent-2.1.12/lib",
+            "/nix/store/fsvb5zrsm1n7m5wshm570imspffi7i8f-zstd-1.5.7/lib",
+            "/nix/store/7nww4d4yl7jzf66qllvyn61xb21vp7ry-gcc-15.2.0-libgcc/lib",
+          ].join(":")
+          lines << "RUN sqlite_lib_dir=$(dirname $(find /nix/store -name libsqlite3.so.0 | head -n 1)) && patchelf --set-interpreter /nix/store/8kvxvr3pmsypxiypq4g8zy13glnfr7nx-glibc-2.42-67/lib64/ld-linux-x86-64.so.2 --set-rpath #{rpath}:$sqlite_lib_dir /app/ocawecore"
+        end
 
         files.each do |file|
           lines << "COPY #{file} /app/#{file}"
@@ -128,6 +145,8 @@ module Ocawe
       private def copy_dir(src : String, dst : String) : Nil
         Dir.mkdir_p(dst)
         Dir.children(src).each do |child|
+          next if ignored_context_entry?(child)
+
           child_src = File.join(src, child)
           child_dst = File.join(dst, child)
           if File.directory?(child_src)
@@ -135,11 +154,16 @@ module Ocawe
           else
             File.open(child_src, "r") do |input|
               File.open(child_dst, "w") do |output|
-                IO.copy(input, output)
-              end
+                  IO.copy(input, output)
+                end
+                File.chmod(child_dst, File.info(child_src).permissions.value)
             end
           end
         end
+      end
+
+      private def ignored_context_entry?(name : String) : Bool
+        [".git", ".turbo", ".next", "build", "dist", "coverage", "node_modules"].includes?(name)
       end
     end
   end

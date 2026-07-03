@@ -7,7 +7,15 @@ module Ocawe
         super("static")
       end
 
-      def build(binary_path : String, tag : String = "", context_dir : String = ".", runtime : String = "docker") : Bool
+      def build(
+        binary_path : String,
+        tag : String = "",
+        context_dir : String = ".",
+        runtime : String = "docker",
+        image : String? = nil,
+        packages : Array(String) = [] of String,
+        files : Array(String) = [] of String
+      ) : Bool
         unless File.file?(binary_path)
           STDERR.puts "Error: binary not found: #{binary_path}"
           return false

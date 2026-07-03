@@ -8,6 +8,7 @@ require "./framework/workflows/declarative/run"
 require "./framework/workflows/declarative/api"
 require "./framework/registry/api"
 require "./framework/config/settings"
+require "./framework/discovery/cawfile_loader"
 require "./framework/integration/pipeline_helpers"
 require "./framework/trigger/public_api"
 require "./framework/http/app"
@@ -46,12 +47,38 @@ module OcaweCore
 
     # Use default config values if not overridden by command line
     workflows_root ||= settings.workflows.preferred_workflows_root
+    if root = workflows_root
+      if bundle = ACD::Discovery::CawfileLoader.load_root(root)
+        settings = OcaweCore::Utils::ConfigParser.apply_cawfile_settings(settings, bundle)
+      end
+    end
+    auto_start_environment(workflows_root)
 
     ACD::Kemal::App.new(
       port,
       workflows_root: workflows_root,
       settings: settings,
     ).start
+  end
+
+  def self.auto_start_environment(workflows_root : String?) : Nil
+    return unless workflows_root
+
+    script = File.join(workflows_root, "start-dev-environment.sh")
+    return unless File.exists?(script)
+
+    status = Process.run(
+      "bash",
+      args: ["-lc", "./start-dev-environment.sh"],
+      chdir: workflows_root,
+      input: Process::Redirect::Close,
+      output: Process::Redirect::Inherit,
+      error: Process::Redirect::Inherit
+    )
+    unless status.success?
+      STDERR.puts "[ocawecore] start-dev-environment.sh failed"
+      exit(1)
+    end
   end
 end
 

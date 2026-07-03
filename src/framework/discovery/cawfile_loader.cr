@@ -10,11 +10,13 @@ module ACD
     struct CawfileContainer
       getter mode : ContainerMode
       getter packages : Array(String)
+      getter files : Array(String)
       getter image : String?
 
       def initialize(
         @mode : ContainerMode = ContainerMode::Static,
         @packages : Array(String) = [] of String,
+        @files : Array(String) = [] of String,
         @image : String? = nil,
       )
       end
@@ -542,6 +544,15 @@ module ACD
                 content = pkg_match[1]
                 packages = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
               end
+              files = [] of String
+              if files_match = inner.match(/files:\s*\[(.*?)\]/)
+                content = files_match[1]
+                files = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
+              end
+              image = nil.as(String?)
+              if image_match = inner.match(/image:\s*"([^"]+)"/)
+                image = image_match[1]
+              end
               # Check for explicit mode: @[Container(mode: "nix")] or @[Container(mode: "static")]
               mode = ContainerMode::Static
               if inner.includes?("mode:")
@@ -552,7 +563,7 @@ module ACD
                 # Packages without explicit mode defaults to Nix
                 mode = ContainerMode::Nix
               end
-              return CawfileContainer.new(mode: mode, packages: packages)
+              return CawfileContainer.new(mode: mode, packages: packages, files: files, image: image)
             end
             return CawfileContainer.new(mode: ContainerMode::Static)
           end

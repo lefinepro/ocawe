@@ -1,8 +1,7 @@
 require "./builder"
 require "./runtime"
 require "./static_builder"
-require "./alpine_builder"
-require "./nixos_builder"
+require "./nix_builder"
 
 module Ocawe
   module Builder
@@ -10,8 +9,7 @@ module Ocawe
       def initialize
         @builders = {} of String => Builder
         register(StaticBuilder.new)
-        register(AlpineBuilder.new)
-        register(NixOSBuilder.new)
+        register(NixBuilder.new)
       end
 
       def register(builder : Builder) : Nil
@@ -25,8 +23,7 @@ module Ocawe
       def reset! : Nil
         @builders.clear
         register(StaticBuilder.new)
-        register(AlpineBuilder.new)
-        register(NixOSBuilder.new)
+        register(NixBuilder.new)
       end
     end
 
