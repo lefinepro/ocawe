@@ -85,6 +85,28 @@ RCL
       end
     end
 
+    it "keeps workflow body lines after nested conditionals" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+workflow "conditional-dsl-test" do
+  prepare
+  if state.disposition == "queued"
+    agent "planner-questions", model: "chat_completion/smallest"
+  end
+  finalize
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "conditional-dsl-test")
+        dsl = bundle.not_nil!.dsl_source.not_nil!.join("\n")
+        dsl.should contain("agent \"planner-questions\"")
+        dsl.should contain("finalize")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it "parses dot-notation keys in settings" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)

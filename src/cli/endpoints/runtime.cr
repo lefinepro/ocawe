@@ -29,8 +29,8 @@ module OcaweCore
             container_tag = "#{container_name}:latest"
             base = case container_config.mode
                    when ACD::Discovery::ContainerMode::Static then "static"
-                   when ACD::Discovery::ContainerMode::Nix then "nixos"
-                   else "static"
+                   when ACD::Discovery::ContainerMode::Nix    then "nixos"
+                   else                                            "static"
                    end
 
             abort_unless_success(build_container(
@@ -105,16 +105,16 @@ module OcaweCore
           container_tag = "#{container_name}:latest"
           base = case container_config.mode
                  when ACD::Discovery::ContainerMode::Static then "static"
-                 when ACD::Discovery::ContainerMode::Nix then "nixos"
-                 else "static"
+                 when ACD::Discovery::ContainerMode::Nix    then "nixos"
+                 else                                            "static"
                  end
 
           abort_unless_success(build_container(
-              binary_path: RUNTIME_BIN,
-              base: base,
-              runtime: detect_runtime,
-              tag: container_tag
-            ))
+            binary_path: RUNTIME_BIN,
+            base: base,
+            runtime: detect_runtime,
+            tag: container_tag
+          ))
         end
 
         command = String.build do |io|
@@ -194,19 +194,31 @@ module OcaweCore
 
       private def build_runtime_entrypoint : String
         cawfile_bundle = ACD::Discovery::CawfileLoader.load_root(Dir.current)
-        registry_files = cawfile_bundle.try(&.crystal_loader).try(&.registry_files) || [] of String
-        return RUNTIME_ENTRY if registry_files.empty?
+        crystal_loader = cawfile_bundle.try(&.crystal_loader)
+        cawfile_code = crystal_loader.try(&.code) || [] of String
+        registry_files = crystal_loader.try(&.registry_files) || [] of String
+        return RUNTIME_ENTRY if cawfile_code.empty? && registry_files.empty?
 
         entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
         Dir.mkdir_p(File.dirname(entrypoint))
+        entrypoint_dir = File.dirname(entrypoint)
         File.write(entrypoint, String.build do |io|
-          io << "require " << RUNTIME_ENTRY.to_json << "\n"
+          io << "require " << require_path(entrypoint_dir, RUNTIME_ENTRY).to_json << "\n"
+          cawfile_code.each do |line|
+            io << line << "\n"
+          end
           registry_files.each do |registry_file|
-            io << "require " << registry_file.to_json << "\n"
+            io << "require " << require_path(entrypoint_dir, registry_file).to_json << "\n"
           end
           io << "\nOcaweCore.run\n"
         end)
         entrypoint
+      end
+
+      private def require_path(from_dir : String, target : String) : String
+        relative = Path[File.expand_path(target)].relative_to(Path[File.expand_path(from_dir)]).to_s
+        relative = "./#{relative}" unless relative.starts_with?(".")
+        relative.sub(/\.cr$/, "")
       end
 
       private def system(command : String) : Bool

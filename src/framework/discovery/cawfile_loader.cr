@@ -11,13 +11,11 @@ module ACD
       getter mode : ContainerMode
       getter packages : Array(String)
       getter image : String?
-      getter files : Array(String)
 
       def initialize(
         @mode : ContainerMode = ContainerMode::Static,
         @packages : Array(String) = [] of String,
         @image : String? = nil,
-        @files : Array(String) = [] of String
       )
       end
     end
@@ -30,7 +28,7 @@ module ACD
       def initialize(
         @code : Array(String) = [] of String,
         @requires : Array(String) = [] of String,
-        @registry_files : Array(String) = [] of String
+        @registry_files : Array(String) = [] of String,
       )
       end
     end
@@ -85,7 +83,7 @@ module ACD
         @output_type : String? = nil,
         @model : String? = nil,
         @crystal_loader : CrystalLoader? = nil,
-        @name : String? = nil
+        @name : String? = nil,
       )
       end
     end
@@ -503,7 +501,8 @@ module ACD
         end_idx = start_idx
         (start_idx...lines.size).each do |idx|
           stripped = lines[idx].strip
-          if stripped.match(/^\s*\bdo\b(?!\w)/)
+          if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel)\b.*\bdo\b/) ||
+             stripped.match(/^\s*(if|unless)\s+/)
             depth += 1
           elsif stripped.match(/^\s*\bend\b/)
             depth -= 1
@@ -531,35 +530,32 @@ module ACD
       end
 
       private def self.extract_container_from_raw(lines : Array(String)) : CawfileContainer?
-        text = lines.join("\n")
-        if container_match = text.match(/@\[Container\s*\(([\s\S]*?)\)\]/m)
-          inner = container_match[1]?
-          if inner
-            packages = [] of String
-            if pkg_match = inner.match(/packages:\s*\[(.*?)\]/m)
-              content = pkg_match[1]
-              packages = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
-            end
-            files = [] of String
-            if files_match = inner.match(/files:\s*\[(.*?)\]/m)
-              content = files_match[1]
-              files = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
-            end
-            image = nil
-            if img_match = inner.match(/image:\s*"([^"]+)"/m)
-              image = img_match[1]
-            end
-            mode = ContainerMode::Static
-            if inner.includes?("mode:")
-              if md = inner.match(/mode:\s*"(\w+)"/m)
-                mode = ContainerMode.parse(md[1])
+        lines.each do |line|
+          stripped = line.strip
+          # Match @[Container] or @[Container(packages: ["pkg1", "pkg2", ...])]
+          if container_match = stripped.match(/\@\[Container(?:\((.*?)\))?\]/)
+            inner = container_match[1]?
+            if inner
+              # Check for packages: @[Container(packages: ["git", "curl"])]
+              packages = [] of String
+              if pkg_match = inner.match(/packages:\s*\[(.*?)\]/)
+                content = pkg_match[1]
+                packages = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
               end
-            elsif !packages.empty?
-              mode = ContainerMode::Nix
+              # Check for explicit mode: @[Container(mode: "nix")] or @[Container(mode: "static")]
+              mode = ContainerMode::Static
+              if inner.includes?("mode:")
+                if md = inner.match(/mode:\s*"(\w+)"/)
+                  mode = ContainerMode.parse(md[1])
+                end
+              elsif !packages.empty?
+                # Packages without explicit mode defaults to Nix
+                mode = ContainerMode::Nix
+              end
+              return CawfileContainer.new(mode: mode, packages: packages)
             end
-            return CawfileContainer.new(mode: mode, packages: packages, image: image, files: files)
+            return CawfileContainer.new(mode: ContainerMode::Static)
           end
-          return CawfileContainer.new(mode: ContainerMode::Static)
         end
         nil
       end
@@ -575,7 +571,7 @@ module ACD
       private def self.extract_model_and_validate(
         lines : Array(String),
         workflow_file : String,
-        workflow_root : String
+        workflow_root : String,
       ) : {String?, String?, String?}
         model = nil.as(String?)
         input_type = nil.as(String?)
@@ -772,7 +768,8 @@ module ACD
             next
           end
           if in_workflow
-            if stripped.match(/^\s*\bdo\b/)
+            if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel)\b.*\bdo\b/) ||
+               stripped.match(/^\s*(if|unless)\s+/)
               workflow_depth += 1
             elsif stripped.match(/^\s*\bend\b/)
               workflow_depth -= 1
@@ -785,6 +782,7 @@ module ACD
 
           # Skip empty lines and comments
           next if stripped.empty? || stripped.starts_with?("#")
+          next if stripped.starts_with?("@[")
 
           # Extract require statements
           if req_match = stripped.match(/^require\s+"([^"]+)"/)
@@ -810,7 +808,7 @@ module ACD
       # For a module "foo/bar", looks for "foo/bar/registry.cr".
       private def self.discover_registry_files(
         requires : Array(String),
-        cawfile_dir : String
+        cawfile_dir : String,
       ) : Array(String)
         registry_files = [] of String
 
