@@ -18,7 +18,12 @@ module ACD
 
           if cli_name
             unless Process.find_executable(cli_name)
-              system("nix profile install nixpkgs##{cli_name} 2>&1")
+              result = system("nix --extra-experimental-features 'nix-command flakes' profile install nixpkgs##{cli_name} 2>&1")
+              unless result
+                env.response.status_code = 422
+                env.response.content_type = "application/json"
+                next({error: {type: "config_error", message: "failed to install CLI '#{cli_name}' from nixpkgs"}}.to_json)
+              end
             end
           end
 
