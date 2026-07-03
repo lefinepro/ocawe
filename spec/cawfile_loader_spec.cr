@@ -368,6 +368,40 @@ RCL
         FileUtils.rm_rf(dir)
       end
     end
+
+    it "loads multiple root workflows and marks service workflows" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+settings do
+  port = 4111
+end
+
+@[Service]
+@[Validate(Input, Output)]
+workflow "shared-service" do
+  exec "boot", runtime: {shell: "bash"}
+end
+
+@[Validate(Input, Output)]
+workflow "chat-task" do
+  follow ["@fmatch.example"]
+  exec "codex", runtime: {acp: {command: "codex"}}
+end
+RCL
+        bundles = ACD::Discovery::CawfileLoader.load_all(dir)
+        bundles.map(&.id).should eq(["shared-service", "chat-task"])
+        bundles[0].service.should eq(true)
+        bundles[1].service.should eq(false)
+        bundles[0].start_settings["port"].should eq(4111)
+        bundles[1].follow.should eq(["@fmatch.example"])
+
+        ACD::Discovery::CawfileLoader.load(dir, "chat-task").not_nil!.id.should eq("chat-task")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
   end
 
   describe ".load_root" do
