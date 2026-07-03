@@ -15,15 +15,6 @@ module OcaweCore
         "hermes"      => "hermes",
       }
 
-      CLI_INSTALL = {
-        "opencode"    => "nix profile install nixpkgs#opencode 2>/dev/null || npm install -g @anthropic-ai/cli-opencode",
-        "claude-code" => "nix profile install nixpkgs#claude-code 2>/dev/null || npm install -g @anthropic-ai/claude-code",
-        "codex"       => "nix profile install nixpkgs#codex 2>/dev/null || pip install codex-cli",
-        "antigravity" => "curl -fsSL https://antigravity.google/cli/install.sh | bash",
-        "cline"       => "npm install -g cline",
-        "openhands"   => "pip install openhands",
-      }
-
       QUIET_PERIOD = 1.5
 
       @@mutex = Mutex.new
@@ -90,13 +81,9 @@ module OcaweCore
         stdout_writer = _stdout_write
 
         unless Process.find_executable(binary)
-          if install_cmd = CLI_INSTALL[binary]?
-            system(install_cmd)
-          else
-            system("nix profile install nixpkgs##{binary} 2>/dev/null")
-          end
+          system("nix profile install nixpkgs##{binary} 2>/dev/null")
           unless Process.find_executable(binary)
-            raise "CLI '#{binary}' not found and could not be installed"
+            raise "CLI '#{binary}' not found in PATH and could not be installed from nixpkgs"
           end
         end
 

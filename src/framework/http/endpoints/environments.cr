@@ -8,6 +8,7 @@ module ACD
           api_key = body["api_key"]?.try(&.as_s?)
           base_url = body["base_url"]?.try(&.as_s?)
           model = body["model"]?.try(&.as_s?)
+          cli_name = body["cli"]?.try(&.as_s?)
 
           unless api_key
             env.response.status_code = 422
@@ -15,9 +16,15 @@ module ACD
             next({error: {type: "config_error", message: "api_key is required"}}.to_json)
           end
 
+          if cli_name
+            unless Process.find_executable(cli_name)
+              system("nix profile install nixpkgs##{cli_name} 2>&1")
+            end
+          end
+
           env.response.status_code = 200
           env.response.content_type = "application/json"
-          next({status: "ok", provider: provider}.to_json)
+          next({status: "ok", provider: provider, cli: cli_name}.to_json)
         end
       end
     end
