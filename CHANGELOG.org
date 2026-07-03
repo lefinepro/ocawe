@@ -7,6 +7,24 @@ All notable changes to Ocawe will be documented in this file.
 The format is based on [[https://keepachangelog.com/en/1.0.0/][Keep a Changelog]],
 and this project adheres to [[https://semver.org/spec/v2.0.0.html][Semantic Versioning]].
 
+* [Unreleased]
+
+** Fixed
+- =@[Container(...)]= parsing now reads =image= and =files= (previously =image= was
+  never parsed and =files= was unavailable), and supports multi-line annotations.
+- Restored compilation of the spec suite (=crystal spec=), which was broken by a
+  missing =CawfileContainer#files= accessor.
+- Replaced the deprecated =Process.fork= in =ocawe up -d= with a direct detached
+  spawn; the recorded PID now points at the runtime process so =kill <pid>= works.
+
+** Changed
+- =@[Container(...)]= =mode:= field is deprecated; the base image is selected by the
+  presence/absence of =image=, and =packages= implies a Nix build stage.
+
+** Documentation
+- Documented the =@[Container(...)]= annotation (=image=/=packages=/=files=) in the
+  workflow format guide and README.
+
 * [26.06.0] - 2026-06-12
 
 ** Added

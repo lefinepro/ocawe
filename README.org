@@ -190,7 +190,7 @@ end
 *Key directives:*
 - =settings do ... end= — runtime config (port, data adapter, federation)
 - =@[Model("provider")]= — default model for the workflow
-- =@[Container(packages: ["pkg1"])]= — container mode with Nix packages (omit packages for static build)
+- =@[Container(image: "...", packages: ["pkg1"], files: ["a.sh"])]= — container packaging: optional base =image= (omit for a =scratch= static build), Nix =packages=, and extra =files= to copy (the deprecated =mode:= field is ignored)
 - =@[Validate(Input, Output)]= — input/output type validation
 
 *API types:*
