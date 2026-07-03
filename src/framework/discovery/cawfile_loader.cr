@@ -689,7 +689,7 @@ module ACD
           end_idx = start_idx
           (start_idx...lines.size).each do |body_idx|
             stripped = lines[body_idx].strip
-            if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel)\b.*\bdo\b/) ||
+            if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel|loop|dataset)\b.*\bdo\b/) ||
                stripped.match(/^\s*(if|unless)\s+/)
               depth += 1
             elsif stripped.match(/^\s*\bend\b/)
@@ -973,7 +973,7 @@ module ACD
             next
           end
           if in_workflow
-            if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel)\b.*\bdo\b/) ||
+            if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel|loop|dataset)\b.*\bdo\b/) ||
                stripped.match(/^\s*(if|unless)\s+/)
               workflow_depth += 1
             elsif stripped.match(/^\s*\bend\b/)

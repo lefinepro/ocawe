@@ -26,7 +26,6 @@ module ACD
             status: "queued",
             request: body,
           )
-          queued_payload["id"] = JSON.parse(task_id.to_json)
           @dataset_service.add_items(CHAT_COMPLETION_TASKS_DATASET, [queued_payload])
 
           spawn do
@@ -61,86 +60,50 @@ module ACD
       end
 
       private def build_chat_completion(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
-          model = body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL
-          messages = extract_chat_messages(body)
-          prompt = chat_prompt_from_messages(messages, body)
-          system_message = chat_system_message(messages, body)
-          metadata = body["metadata"]?.try(&.as_h?) || {} of String => JSON::Any
-          api_key = body["api_key"]?.try(&.as_s?)
-          base_url = body["base_url"]?.try(&.as_s?)
+        model = body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL
+        messages = extract_chat_messages(body)
+        prompt = chat_prompt_from_messages(messages, body)
+        system_message = chat_system_message(messages, body)
+        metadata = body["metadata"]?.try(&.as_h?) || {} of String => JSON::Any
+        api_key = body["api_key"]?.try(&.as_s?)
+        base_url = body["base_url"]?.try(&.as_s?)
 
-          # Check if model is a workflow reference (e.g. "workflow/orator")
-          if model.starts_with?("workflow/")
-            workflow_id = model.sub("workflow/", "")
-            workflow = workflow_by_id(workflow_id)
+        # Check if model is a workflow reference (e.g. "workflow/orator")
+        if model.starts_with?("workflow/")
+          workflow_id = model.sub("workflow/", "")
+          workflow = workflow_by_id(workflow_id)
 
-            unless workflow
-              raise "workflow not found: #{workflow_id}"
-            end
-
-            # Execute workflow with chat input
-            input_data = {
-              "prompt" => JSON.parse(prompt.to_json),
-              "messages" => JSON.parse(messages.to_json),
-            } of String => JSON::Any
-            input_data["system"] = JSON.parse(system_message.to_json) if system_message
-
-              run_result = @workflow_service.start_run(workflow_id, input_data: input_data)
-              snapshot = @workflow_service.load_snapshot(workflow_id, run_result.run_id)
-
-              # Extract text from workflow output
-              output_text = if snap = snapshot
-                              workflow_chat_output(snap)
-                            else
-                              run_result.to_json
-                            end
-
-              now = Time.utc.to_unix
-              return JSON.parse({
-                "id" => "chatcmpl_#{Random::Secure.hex(12)}",
-                "object" => "chat.completion",
-                "created" => now,
-                "model" => model,
-                "choices" => [
-                  {
-                    "index" => 0,
-                    "message" => {
-                      "role" => "assistant",
-                      "content" => output_text,
-                    },
-                    "finish_reason" => "stop",
-                  },
-                ],
-                "usage" => {
-                  "prompt_tokens" => 0,
-                  "completion_tokens" => 0,
-                  "total_tokens" => 0,
-                },
-              }.to_json).as_h
+          unless workflow
+            raise "workflow not found: #{workflow_id}"
           end
 
-          # Standard AI model execution
-            response = OcaweCore::AI::Client.new.generate_text(
-              model_spec: model,
-              prompt: prompt,
-              system: system_message,
-              metadata: metadata,
-              api_key: api_key,
-              base_url: base_url,
-            )
+          # Execute workflow with chat input
+          input_data = {
+            "prompt" => JSON.parse(prompt.to_json),
+            "messages" => JSON.parse(messages.to_json),
+          } of String => JSON::Any
+          input_data["system"] = JSON.parse(system_message.to_json) if system_message
 
+          run_result = @workflow_service.start_run(workflow_id, input_data: input_data)
+          snapshot = @workflow_service.load_snapshot(workflow_id, run_result.run_id)
+          output_text = if snap = snapshot
+                          workflow_chat_output(snap)
+                        else
+                          run_result.to_json
+                        end
           now = Time.utc.to_unix
-          JSON.parse({
+
+          return JSON.parse({
             "id" => "chatcmpl_#{Random::Secure.hex(12)}",
             "object" => "chat.completion",
             "created" => now,
-            "model" => response.model,
+            "model" => model,
             "choices" => [
               {
                 "index" => 0,
                 "message" => {
                   "role" => "assistant",
-                  "content" => response.text,
+                  "content" => output_text,
                 },
                 "finish_reason" => "stop",
               },
@@ -151,6 +114,40 @@ module ACD
               "total_tokens" => 0,
             },
           }.to_json).as_h
+        end
+
+        # Standard AI model execution
+        response = OcaweCore::AI::Client.new.generate_text(
+          model_spec: model,
+          prompt: prompt,
+          system: system_message,
+          metadata: metadata,
+          api_key: api_key,
+          base_url: base_url,
+        )
+
+        now = Time.utc.to_unix
+        JSON.parse({
+          "id" => "chatcmpl_#{Random::Secure.hex(12)}",
+          "object" => "chat.completion",
+          "created" => now,
+          "model" => response.model,
+          "choices" => [
+            {
+              "index" => 0,
+              "message" => {
+                "role" => "assistant",
+                "content" => response.text,
+              },
+              "finish_reason" => "stop",
+            },
+          ],
+          "usage" => {
+            "prompt_tokens" => 0,
+            "completion_tokens" => 0,
+            "total_tokens" => 0,
+          },
+        }.to_json).as_h
       end
 
       private def completion_error_status(ex : Exception) : Int32
@@ -221,6 +218,7 @@ module ACD
       ) : Ocawe::Workflow::AnyHash
         now = Time.utc.to_s
         JSON.parse({
+          "id" => task_id,
           "task_id" => task_id,
           "status" => status,
           "request" => request,

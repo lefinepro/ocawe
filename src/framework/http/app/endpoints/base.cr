@@ -253,6 +253,7 @@ module ACD
 
             begin
               @workflow_service.start_run(workflow_id, run_id: run_id, input_data: input_data)
+              @cache_lock.synchronize { @started_service_workflows.delete(workflow_id) }
               STDERR.puts "[ocawecore] service workflow exited: #{workflow_id}"
             rescue ex
               @cache_lock.synchronize { @started_service_workflows.delete(workflow_id) }
