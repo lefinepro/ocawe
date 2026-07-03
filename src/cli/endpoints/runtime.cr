@@ -29,7 +29,7 @@ module OcaweCore
             container_tag = "#{container_name}:latest"
             base = case container_config.mode
                    when ACD::Discovery::ContainerMode::Static then "static"
-                   when ACD::Discovery::ContainerMode::Nix    then "nixos"
+                   when ACD::Discovery::ContainerMode::Nix    then "nix"
                    else                                            "static"
                    end
 
@@ -37,7 +37,10 @@ module OcaweCore
               binary_path: output,
               base: base,
               runtime: detect_runtime,
-              tag: container_tag
+              tag: container_tag,
+              image: container_config.image,
+              packages: container_config.packages,
+              files: container_config.files
             ))
           end
         end
@@ -53,9 +56,25 @@ module OcaweCore
         exit(1)
       end
 
-      private def build_container(binary_path : String, base : String, runtime : String, tag : String) : Bool
+      private def build_container(
+        binary_path : String,
+        base : String,
+        runtime : String,
+        tag : String,
+        image : String? = nil,
+        packages : Array(String) = [] of String,
+        files : Array(String) = [] of String
+      ) : Bool
         builder = Ocawe::Builder.builder_registry.resolve(base)
-        builder.build(binary_path, tag: tag, context_dir: Dir.current, runtime: runtime)
+        builder.build(
+          binary_path,
+          tag: tag,
+          context_dir: Dir.current,
+          runtime: runtime,
+          image: image,
+          packages: packages,
+          files: files
+        )
       rescue ex
         STDERR.puts "Error: #{ex.message}"
         false
@@ -65,7 +84,6 @@ module OcaweCore
         port = nil
         detached = false
         log_level = nil.as(String?)
-        workflow_path = nil.as(String?)
 
         OptionParser.parse(args) do |parser|
           parser.on("-d", "--detach", "Run in background (detach)") { detached = true }
@@ -73,18 +91,7 @@ module OcaweCore
           parser.on("--log-level LEVEL", "Log level: debug, warning, critical (overrides Cawfile)") { |v| log_level = v }
         end
 
-        workflow_path = args.first?
-
-        workflows_root = if workflow_path
-                           expanded = File.expand_path(workflow_path, PROJECT_ROOT)
-                           if ACD::Discovery::CawfileLoader.find_cawfile(expanded)
-                             expanded
-                           else
-                             File.join(File.expand_path(Dir.current), workflow_path)
-                           end
-                         else
-                           Dir.current
-                         end
+        workflows_root = resolve_workflows_root(args.first?)
 
         port ||= read_port_from_cawfile(workflows_root)
 
@@ -99,13 +106,15 @@ module OcaweCore
 
         abort_unless_success(build_runtime(release: true, output: RUNTIME_BIN))
 
+        container_tag = nil.as(String?)
+
         # Build container if container mode is specified
         if container_config
           container_name = cawfile_bundle.not_nil!.name || cawfile_bundle.not_nil!.id
           container_tag = "#{container_name}:latest"
           base = case container_config.mode
                  when ACD::Discovery::ContainerMode::Static then "static"
-                 when ACD::Discovery::ContainerMode::Nix    then "nixos"
+                 when ACD::Discovery::ContainerMode::Nix    then "nix"
                  else                                            "static"
                  end
 
@@ -113,28 +122,33 @@ module OcaweCore
             binary_path: RUNTIME_BIN,
             base: base,
             runtime: detect_runtime,
-            tag: container_tag
+            tag: container_tag.not_nil!,
+            image: container_config.image,
+            packages: container_config.packages,
+            files: container_config.files
           ))
         end
 
-        command = String.build do |io|
-          io << RUNTIME_BIN
-          io << " --port #{port || DEFAULT_PORT}"
-          io << " --workflows-root=#{workflows_root}"
-          io << " --log-level=#{log_level}" if log_level
+        effective_port = (port || DEFAULT_PORT).not_nil!
+        runtime_args = ["--port", "#{effective_port}"]
+        if image = container_tag
+          runtime_args << "--workflows-root=#{container_workflows_root(workflows_root)}"
+          runtime_args << "--log-level=#{log_level}" if log_level
+          command = container_run_command(detect_runtime, image, container_name_for_bundle(cawfile_bundle.not_nil!), effective_port, runtime_args)
+        else
+          runtime_args << "--workflows-root=#{workflows_root}"
+          runtime_args << "--log-level=#{log_level}" if log_level
+          command = ([RUNTIME_BIN] + runtime_args).map { |part| shell_quote(part) }.join(" ")
         end
 
         if detached
-          pid = Process.fork do
-            runtime = spawn_cmd(command)
-            runtime.wait
-          end
-
           pid_file = File.join(workflows_root, ".ocawe.pid")
+          log_file = File.join(workflows_root, ".ocawe.log")
+          pid = spawn_detached_cmd(command, log_file)
           File.open(pid_file, "w") { |f| f.puts pid }
 
           puts "[ocawe] started in background (PID #{pid}, port #{port || DEFAULT_PORT})"
-          puts "[ocawe] logs: ocawe up --follow"
+          puts "[ocawe] logs: #{log_file}"
           puts "[ocawe] stop: kill #{pid}"
         else
           runtime = spawn_cmd(command)
@@ -144,6 +158,33 @@ module OcaweCore
           end
           runtime.wait
         end
+      end
+
+      private def shell(args : Array(String)) : Nil
+        workflows_root = resolve_workflows_root(args.first?)
+        container_name = container_name_for_workflows_root(workflows_root)
+        command = container_exec_command(detect_runtime, container_name, ["bash"], interactive: true)
+        abort_unless_success(run_interactive_cmd(command))
+      end
+
+      private def exec(args : Array(String)) : Nil
+        workflow_path = nil.as(String?)
+        if first = args.first?
+          unless first == "--"
+            workflow_path = args.shift
+          end
+        end
+        args.shift if args.first? == "--"
+
+        if args.empty?
+          STDERR.puts "Error: ocawe exec requires COMMAND [ARG...]"
+          exit(1)
+        end
+
+        workflows_root = resolve_workflows_root(workflow_path)
+        container_name = container_name_for_workflows_root(workflows_root)
+        command = container_exec_command(detect_runtime, container_name, args, interactive: false)
+        abort_unless_success(run_interactive_cmd(command))
       end
 
       private def read_port_from_cawfile(path : String) : Int32?
@@ -168,6 +209,66 @@ module OcaweCore
         nil
       rescue
         nil
+      end
+
+      private def container_workflows_root(workflows_root : String) : String
+        relative = Path[File.expand_path(workflows_root)].relative_to(Path[File.expand_path(Dir.current)]).to_s
+        File.join("/app", relative)
+      rescue
+        "/app"
+      end
+
+      private def resolve_workflows_root(workflow_path : String?) : String
+        if workflow_path
+          expanded = File.expand_path(workflow_path, PROJECT_ROOT)
+          if ACD::Discovery::CawfileLoader.find_cawfile(expanded)
+            expanded
+          else
+            File.join(File.expand_path(Dir.current), workflow_path)
+          end
+        else
+          Dir.current
+        end
+      end
+
+      private def container_name_for_workflows_root(workflows_root : String) : String
+        cawfile = ACD::Discovery::CawfileLoader.find_cawfile(workflows_root)
+        unless cawfile
+          STDERR.puts "Error: no Cawfile found for #{workflows_root}"
+          exit(1)
+        end
+
+        cawfile_bundle = ACD::Discovery::CawfileLoader.load(workflows_root, "root")
+        unless cawfile_bundle && cawfile_bundle.container
+          STDERR.puts "Error: Cawfile at #{cawfile} has no @[Container] configuration"
+          exit(1)
+        end
+
+        container_name_for_bundle(cawfile_bundle)
+      end
+
+      private def container_name_for_bundle(cawfile_bundle) : String
+        raw_name = cawfile_bundle.name || cawfile_bundle.id
+        "ocawe-#{raw_name.gsub(/[^a-zA-Z0-9_.-]/, "-")}"
+      end
+
+      private def container_run_command(runtime : String, image : String, container_name : String, port : Int32, runtime_args : Array(String)) : String
+        cleanup = [runtime, "rm", "-f", container_name].map { |part| shell_quote(part) }.join(" ")
+        command = [runtime, "run", "--name", container_name, "--rm", "-w", "/app", "-p", "#{port}:#{port}", image, "/app/ocawecore"]
+        command.concat(runtime_args)
+        "#{cleanup} >/dev/null 2>&1 || true; #{command.map { |part| shell_quote(part) }.join(" ")}"
+      end
+
+      private def container_exec_command(runtime : String, container_name : String, command_args : Array(String), interactive : Bool) : String
+        command = [runtime, "exec"]
+        command << "-it" if interactive
+        command.concat(["-w", "/app", "-e", "HOME=/app/.meta/dev-server-context/home", container_name])
+        command.concat(command_args)
+        command.map { |part| shell_quote(part) }.join(" ")
+      end
+
+      private def shell_quote(value : String) : String
+        "'" + value.gsub("'", "'\"'\"'") + "'"
       end
 
       private def build_runtime(release : Bool, static : Bool = false, output : String = RUNTIME_BIN) : Bool
@@ -232,6 +333,23 @@ module OcaweCore
       private def run_cmd(command : String) : Bool
         status = Process.run("bash", args: ["-lc", command], output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
         status.success?
+      end
+
+      private def run_interactive_cmd(command : String) : Bool
+        status = Process.run("bash", args: ["-lc", command], input: Process::Redirect::Inherit, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
+        status.success?
+      end
+
+      private def spawn_detached_cmd(command : String, log_file : String) : String
+        output = IO::Memory.new
+        status = Process.run(
+          "bash",
+          args: ["-lc", "nohup #{command} > #{shell_quote(log_file)} 2>&1 < /dev/null & echo $!"],
+          output: output,
+          error: Process::Redirect::Inherit
+        )
+        abort_unless_success(status.success?)
+        output.to_s.strip
       end
 
       private def abort_unless_success(ok : Bool) : Nil

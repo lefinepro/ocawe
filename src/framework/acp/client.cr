@@ -20,7 +20,7 @@ module ACP
     def initialize(@command : String, @args : Array(String) = [] of String, @env : Hash(String, String) = {} of String => String)
       @request_id = 0
       @pending_responses = {} of Int32 => Channel(JsonRpcResponse)
-      @notification_channel = Channel(JsonRpcNotification).new(100)
+      @notification_channel = Channel(JsonRpcNotification).new(10000)
       @agent_info = nil
       @agent_capabilities = nil
       @session_id = nil
@@ -75,13 +75,10 @@ module ACP
 
     # Create a new session
     def create_session(cwd : String, mcp_servers : Array(JSON::Any) = [] of JSON::Any) : String
-      params_json = {
-        "cwd" => cwd,
-        "mcpServers" => mcp_servers.empty? ? nil : mcp_servers,
-        "additionalDirectories" => nil
-      }.compact
+      params_json = {"cwd" => JSON.parse(cwd.to_json)} of String => JSON::Any
+      params_json["mcpServers"] = JSON.parse(mcp_servers.to_json)
 
-      params = SessionNewParams.from_json(params_json.to_json)
+      params = JSON.parse(params_json.to_json)
 
       result = request("session/new", params)
       session_result = SessionNewResult.from_json(result.to_json)
@@ -165,7 +162,8 @@ module ACP
 
       if proc = @process
         proc.input.close rescue nil
-        proc.wait rescue nil
+        proc.terminate rescue nil
+        spawn { proc.wait rescue nil }
         @process = nil
       end
 
@@ -174,7 +172,7 @@ module ACP
       @notification_channel.close
     end
 
-    private def request(method : String, params : JSON::Serializable) : JSON::Any
+    private def request(method : String, params : JSON::Serializable | JSON::Any) : JSON::Any
       raise "Client not started" unless @process
       raise "Client closed" if @closed
 
@@ -266,7 +264,11 @@ module ACP
       else
         # Notification
         notification = JsonRpcNotification.from_json(line)
-        @notification_channel.send(notification)
+        select
+        when @notification_channel.send(notification)
+        else
+          STDERR.puts "ACP client notification dropped: channel full"
+        end
       end
     rescue ex
       STDERR.puts "ACP client message parse error: #{ex.message}"

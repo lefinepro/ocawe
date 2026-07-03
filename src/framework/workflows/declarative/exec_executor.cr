@@ -21,7 +21,7 @@ module Ocawe
 
       private def exec_acp(ref : String, ctx : NodeContext, acp_config : JSON::Any, env : AnyHash?, workflow_root : String?) : AnyHash
         config = acp_config.as_h? || {} of String => JSON::Any
-        input = ctx.input_data.to_json
+        input = acp_prompt_input(ctx.input_data)
 
         # Build environment
         exec_env = build_exec_env(env) || {} of String => String
@@ -31,6 +31,10 @@ module Ocawe
 
         executor = ACPExecutor.new(ref, cwd, exec_env)
         executor.run(ref, input, config)
+      end
+
+      private def acp_prompt_input(input_data : AnyHash) : String
+        input_data["prompt"]?.try(&.as_s?) || input_data.to_json
       end
 
       private def exec_mcp_tool(ref : String, ctx : NodeContext) : AnyHash
