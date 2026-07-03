@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 PORT="${OCAWE_PORT:-4111}"
 BUILD_ARGS="${OCAWE_BUILD_ARGS:---release}"
