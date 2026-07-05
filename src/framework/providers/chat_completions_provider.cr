@@ -54,7 +54,7 @@ module OcaweCore
 
       private def build_messages(request : TextGenerationRequest) : Array(JSON::Any)
         if raw_messages = request.messages
-          return raw_messages
+          return raw_messages.map { |m| sanitize_message(m) }
         end
 
         messages = [] of JSON::Any
@@ -63,6 +63,27 @@ module OcaweCore
         end
         messages << JSON.parse({"role" => "user", "content" => request.prompt}.to_json)
         messages
+      end
+
+      private def sanitize_message(msg : JSON::Any) : JSON::Any
+        hash = msg.as_h?
+        return msg unless hash
+
+        role = hash["role"]?.try(&.as_s?)
+        content = hash["content"]?
+        tool_calls = hash["tool_calls"]?
+
+        # Ensure content is never null in assistant messages with tool_calls
+        if role == "assistant" && tool_calls
+          is_null = content.nil? || content.raw.nil?
+          if is_null
+            new_hash = hash.dup
+            new_hash["content"] = JSON::Any.new("")
+            return JSON::Any.new(new_hash)
+          end
+        end
+
+        msg
       end
 
       private def normalized_base_url(base : String) : String
