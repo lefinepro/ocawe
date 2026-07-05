@@ -103,11 +103,11 @@ module ACD
           end
 
           now = Time.utc.to_unix
-          message = {"role" => "assistant", "content" => response.text}.to_h
+          message = {"role" => JSON::Any.new("assistant"), "content" => JSON::Any.new(response.text)} of String => JSON::Any
           finish_reason = "stop"
 
           if tc = response.tool_calls
-            message["tool_calls"] = tc
+            message["tool_calls"] = JSON::Any.new(tc)
             finish_reason = "tool_calls"
           end
 
