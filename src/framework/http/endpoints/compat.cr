@@ -12,6 +12,8 @@ module ACD
           metadata = body["metadata"]?.try(&.as_h?) || {} of String => JSON::Any
           api_key = body["api_key"]?.try(&.as_s?)
           base_url = body["base_url"]?.try(&.as_s?)
+          tools = body["tools"]?.try(&.as_a?)
+          raw_messages = body["messages"]?.try(&.as_a?)
 
           # Check if model is a workflow reference (e.g. "workflow/orator")
           if model.starts_with?("workflow/")
@@ -88,6 +90,8 @@ module ACD
               model_spec: model,
               prompt: prompt,
               system: system_message,
+              messages: raw_messages,
+              tools: tools,
               metadata: metadata,
               api_key: api_key,
               base_url: base_url,
@@ -99,6 +103,14 @@ module ACD
           end
 
           now = Time.utc.to_unix
+          message = {"role" => "assistant", "content" => response.text}.to_h
+          finish_reason = "stop"
+
+          if tc = response.tool_calls
+            message["tool_calls"] = tc
+            finish_reason = "tool_calls"
+          end
+
           completion = {
             "id" => "chatcmpl_#{Random::Secure.hex(12)}",
             "object" => "chat.completion",
@@ -107,11 +119,8 @@ module ACD
             "choices" => [
               {
                 "index" => 0,
-                "message" => {
-                  "role" => "assistant",
-                  "content" => response.text,
-                },
-                "finish_reason" => "stop",
+                "message" => message,
+                "finish_reason" => finish_reason,
               },
             ],
             "usage" => {
@@ -145,9 +154,13 @@ module ACD
         id = completion_hash["id"]
         created = completion_hash["created"]
         model = completion_hash["model"]
-        content = completion_hash["choices"].as_a[0]["message"]["content"].as_s
+        choices = completion_hash["choices"].as_a
+        message = choices[0]["message"].as_h
+        content = message["content"]?.try(&.as_s?) || ""
+        finish_reason_val = choices[0]["finish_reason"]?.try(&.as_s?)
 
-        chunk = {
+        # First chunk: role
+        role_chunk = {
           "id" => id,
           "object" => "chat.completion.chunk",
           "created" => created,
@@ -157,28 +170,91 @@ module ACD
               "index" => 0,
               "delta" => {
                 "role" => "assistant",
-                "content" => content,
               },
               "finish_reason" => nil,
             },
           ],
         }
-        final_chunk = {
-          "id" => id,
-          "object" => "chat.completion.chunk",
-          "created" => created,
-          "model" => model,
-          "choices" => [
-            {
-              "index" => 0,
-              "delta" => {} of String => String,
-              "finish_reason" => "stop",
-            },
-          ],
-        }
+        env.response.print "data: #{role_chunk.to_json}\n\n"
 
-        env.response.print "data: #{chunk.to_json}\n\n"
-        env.response.print "data: #{final_chunk.to_json}\n\n"
+        # Content chunks
+        if content && !content.empty?
+          content_chunk = {
+            "id" => id,
+            "object" => "chat.completion.chunk",
+            "created" => created,
+            "model" => model,
+            "choices" => [
+              {
+                "index" => 0,
+                "delta" => {
+                  "content" => content,
+                },
+                "finish_reason" => nil,
+              },
+            ],
+          }
+          env.response.print "data: #{content_chunk.to_json}\n\n"
+        end
+
+        # Tool call chunks
+        if tool_calls = message["tool_calls"]?.try(&.as_a?)
+          tool_calls.each do |tc|
+            tc_hash = tc.as_h
+            tc_id = tc_hash["id"]?.try(&.as_s?) || "call_#{Random::Secure.hex(8)}"
+            tc_type = tc_hash["type"]?.try(&.as_s?) || "function"
+            tc_function = tc_hash["function"]?.try(&.as_h?)
+            tc_name = tc_function.try(&.["name"]?.try(&.as_s?)) || ""
+            tc_args = tc_function.try(&.["arguments"]?.try(&.as_s?)) || "{}"
+
+            tool_chunk = {
+              "id" => id,
+              "object" => "chat.completion.chunk",
+              "created" => created,
+              "model" => model,
+              "choices" => [
+                {
+                  "index" => 0,
+                  "delta" => {
+                    "tool_calls" => [
+                      {
+                        "index" => 0,
+                        "id" => tc_id,
+                        "type" => tc_type,
+                        "function" => {
+                          "name" => tc_name,
+                          "arguments" => tc_args,
+                        },
+                      },
+                    ],
+                  },
+                  "finish_reason" => nil,
+                },
+              ],
+            }
+            env.response.print "data: #{tool_chunk.to_json}\n\n"
+          end
+        end
+
+        # Final chunk
+        final_delta = {"content" => nil}.to_h
+        if finish_reason_val
+          final_chunk = {
+            "id" => id,
+            "object" => "chat.completion.chunk",
+            "created" => created,
+            "model" => model,
+            "choices" => [
+              {
+                "index" => 0,
+                "delta" => {} of String => JSON::Any,
+                "finish_reason" => finish_reason_val,
+              },
+            ],
+          }
+          env.response.print "data: #{final_chunk.to_json}\n\n"
+        end
+
         env.response.print "data: [DONE]\n\n"
         ""
       end
