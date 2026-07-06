@@ -66,6 +66,33 @@ workflow "workspace-flow" do
 end
 ```
 
+### `@[Container(...)]` Annotation
+
+`@[Container(...)]` declares how the workflow is packaged into a container image
+when you run `ocawe build` / `ocawe up`. All fields are optional:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `image` | `String` | Base image for the final stage. Omit for a minimal `scratch`-based static image. |
+| `packages` | `String[]` | System packages installed via Nix (`pkgsStatic`) and copied into the image. |
+| `files` | `String[]` | Extra files copied into the build context. Omit to copy every file in the workflow directory at build time. |
+
+```crystal
+@[Container(
+  image: "docker.io/library/debian",
+  packages: ["git", "curl", "jq"],
+  files: ["script.sh", "config.json"]
+)]
+workflow "container-workflow" do
+  agent "analyzer"
+end
+```
+
+> **Deprecated:** the earlier `mode: "static" | "nix"` field is no longer
+> authoritative. The base is now selected by the presence of `image` (custom
+> base) or its absence (`scratch`); `packages` implies a Nix build stage. The
+> field is still parsed for backward compatibility but should be removed.
+
 ## Execution Control
 
 ### Parallel Execution
@@ -155,6 +182,7 @@ end
 |-----------|-------------|
 | `@[Logger(...)]` | Configure workflow/node logging metadata and runtime log level/shape |
 | `@[Workspace(...)]` | Configure workflow-level or next-node workspace metadata |
+| `@[Container(...)]` | Configure container packaging (`image`, `packages`, `files`) for `ocawe build`/`up` |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
 | `function_name` | Execute internal node kind (registered via `NodeKind::new(function_name)`) |

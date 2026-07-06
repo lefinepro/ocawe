@@ -125,10 +125,11 @@ module OcaweCore
         end
 
         if detached
-          pid = Process.fork do
-            runtime = spawn_cmd(command)
-            runtime.wait
-          end
+          # Spawn the runtime as an independent background process. Previously this
+          # used the now-unsupported `Process.fork`; spawning directly avoids the
+          # deprecation and records the actual runtime PID (so `kill <pid>` works).
+          runtime = spawn_cmd(command)
+          pid = runtime.pid
 
           pid_file = File.join(workflows_root, ".ocawe.pid")
           File.open(pid_file, "w") { |f| f.puts pid }
