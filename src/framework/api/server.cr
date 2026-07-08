@@ -10,6 +10,7 @@ module OcaweCore
         routes = [
           "POST /v1/responses",
           "POST /v1/chat/completions",
+          "GET /v1/chat/completions/:completion_id",
           "GET /v1/workflows",
           "GET /v1/workflows/:workflowId",
           "POST /v1/workflows/:workflowId/runs",

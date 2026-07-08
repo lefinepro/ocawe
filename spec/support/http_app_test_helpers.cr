@@ -120,4 +120,12 @@ class ACD::Kemal::App
   def test_ensure_aptok_subscription(value : String) : Hash(String, JSON::Any)
     ensure_aptok_subscription(value)
   end
+
+  def test_chat_completion_task_ref(completion_id : String) : String
+    chat_completion_task_ref(completion_id)
+  end
+
+  def test_retrieve_chat_completion(completion_id : String)
+    retrieve_chat_completion(completion_id)
+  end
 end
