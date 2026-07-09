@@ -1,78 +1,69 @@
 # Examples
 
-Examples live under `shards/examples` and are designed for direct reuse.
+Examples live under `caws/` as Cawfile workflow bundles.
 
-## Run all examples
+## Run An Example
 
 ```bash
-./build/ocawe up --port 4111 --workflows-root ./shards/examples
+ocawe up caws/01-simple
+ocawe up -d caws/02-multi-agent
+ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent
 ```
 
 ## Bundles
 
-- `agents-example`: agent + model basics
-- `skills-example`: skills with agent context
-- `workflow-example`: agent + function node + schema refs
-- `voice-playground`: voice DSL + voice frontmatter
-- `rag-playground`: rag DSL + skill choreography
-- `simple-model-test`: model override behavior
-- `full-capabilities`: all currently supported `.acd.cr` directives
-- `config-example`: Crystal-native `Ocawe::Config::Settings` template
-- `src/custom_provider_example.cr`: custom provider creation macro + `AI::Client` injection
-- `src/control_flow_workflow_example.cr`: programmatic control-flow example (`parallel`, `then`, events) with explicit node schemas
+- `01-simple`: minimal single agent setup.
+- `02-multi-agent`: sequential agent pipeline.
+- `03-control-flow`: `unless`, `if/else`, `parallel`, `while`, and `until`.
+- `04-rag-assistant`: RAG workflow with vector store.
+- `05-voice-pipeline`: voice transcription and synthesis.
+- `06-full-suite`: combined features, container packaging, and multiple service workflows.
+- `09-custom-agent`: custom agents backed by external binaries.
+- `10-acp-agent`: ACP-compatible external agent execution.
+- `11-git-https-pull`: pulling remote Cawfile bundles with `git+https`.
+- `12-api-nodes`: HTTP `get`, `post`, and `put` steps with `step["name"]` result access.
 
-## Foundation Project: docker-git
+## API Step Demo
 
-`shards/docker-git` is a standalone foundation project that uses `@[Workspace(...)]`
-as the main workflow contract and demonstrates workspace extension APIs.
-
-Run:
+`caws/12-api-nodes` is self-contained. Start the mock API first:
 
 ```bash
-crystal run shards/docker-git/src/docker_git.cr -- --port 4222
+nix develop --command crystal run caws/12-api-nodes/mock_api.cr
 ```
+
+Then run Ocawe with the API workflow:
+
+```bash
+nix develop --command crystal run src/cli/main.cr -- up caws/12-api-nodes --port 4111
+```
+
+Trigger the workflow:
+
+```bash
+curl -s -X POST http://127.0.0.1:4111/v1/triggers/workflows/api \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+The workflow calls `GET /weather`, branches on `step["weather"].current.temperature_2m`, and sends the current weather payload to `POST /farm/start`.
 
 ## Notes
 
-- Use `function_name` (for example `agent_codex`) for internal Crystal handlers, and `exec "path_or_inline", runtime: {...}` for external execution.
-- Function names are not restricted to snake_case. Collision rule: system function keeps base name, user function gets `:1`, `:2`, etc., with optional explicit aliases.
-- Programmatic API exposes `Ocawe::Workflow` and can be extended by inheritance.
-- Programmatic workflow DSL (`WorkflowDefinition` API) supports `parallel`, `then`, and event nodes (`wait_for_event`, `send_event`).
-- Federation MR flow accepts `Create(Ticket)`, `Offer(Ticket)` and direct `Ticket` payloads. MR results are published as ForgeFed-style `Offer` with `object.type=Ticket`, no `object.id`, `object.attributedTo=actor`, HTML `content` and `source` in CommonMark.
-
-## Full Container Example
-
-- Compose file: `docker-compose.solver-full-example.yml`
-- Mock tools:
-  - `tools/mock-data.rb` (returns JSON and saves mock payload file)
-  - `tools/mock-agent-cli.rb` (captures forwarded credentials/config env and saves report file)
-- Workflows:
-  - `provider-credentials-codex`
-  - `provider-credentials-claude`
-  - `provider-credentials-opencode`
-  - `provider-credentials-qwen`
-
-## Custom provider macro
-
-Use `OcaweCore::AI.create_custom_provider` to generate a provider class:
+- Use `agent`, `skill`, `rag`, `voice`, `exec`, or internal function-name nodes for workflow work.
+- Use API steps when the workflow needs deterministic HTTP calls:
 
 ```crystal
-OcaweCore::AI.create_custom_provider(
-  AcmeProvider,
-  "acme",
-  "ACME_BASE_URL",
-  "ACME_API_KEY",
-  "https://acme.example/v1"
-)
+workflow "api" do
+  get "http://127.0.0.1:5055/weather", id: "weather"
+
+  if step["weather"].current.temperature_2m > 0
+    post "http://127.0.0.1:5055/farm/start",
+      id: "start-farm",
+      body: step["weather"].current
+  end
+end
 ```
 
-Inject it into `AI::Client`:
-
-```crystal
-providers = {
-  "acme" => OcaweCore::AI::AcmeProvider.new,
-} of String => OcaweCore::AI::Provider
-
-client = OcaweCore::AI::Client.new(providers)
-response = client.generate_text("acme/demo-model", "Hello")
-```
+- `id:` is the step name used by later expressions.
+- API step results include `step`, `status`, `headers`, `body`, and `raw_body`.
+- JSON object response fields are also exposed directly, so `step["weather"].current` works without writing `step["weather"].body.current`.

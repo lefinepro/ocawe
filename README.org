@@ -247,9 +247,10 @@ caws/                      # workflow bundle examples
   04-rag-assistant/        # retrieval-augmented generation
   05-voice-pipeline/       # voice transcription + synthesis
   06-full-suite/           # all features combined, including container and service workflows
-  07-unified-resources/    # resource management patterns
-  08-model-override/       # per-agent model override
   09-custom-agent/         # how to write custom agents
+  10-acp-agent/            # ACP-compatible external agent execution
+  11-git-https-pull/       # pull remote Cawfile bundles with git+https
+  12-api-nodes/            # HTTP API steps and step["name"] result access
 spec/                      # Crystal specs
 #+end_example
 
@@ -272,11 +273,10 @@ Each example demonstrates a specific feature:
 - *04-rag-assistant* — RAG with vector store
 - *05-voice-pipeline* — voice transcription and synthesis
 - *06-full-suite* — all features combined, including container packaging and multiple =@[Service]= workflows
-- *07-unified-resources* — shared resources with =@[Model]= and =@[Resources]=
-- *08-model-override* — per-agent model configuration
 - *09-custom-agent* — writing custom agents with external binaries
 - *10-acp-agent* — ACP-compatible external agent execution
 - *11-git-https-pull* — pulling remote Cawfile bundles with =git+https=
+- *12-api-nodes* — HTTP =get=, =post=, =put= steps with =step["name"]= result access
 
 * Cawfile Framework
 
