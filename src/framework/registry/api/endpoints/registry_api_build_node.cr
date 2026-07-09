@@ -1,3 +1,5 @@
+require "http/client"
+
 module Ocawe
   module RegistryApi
     extend self
@@ -28,6 +30,20 @@ module Ocawe
       normalized = type.strip.downcase
 
       case normalized
+      when "api"
+        method = config.try(&.["method"]?.try(&.as_s?)) || "GET"
+        url = config.try(&.["url"]?.try(&.as_s?)) || id
+        request_config = config || ({} of String => JSON::Any)
+        metadata = {
+          "dsl_kind" => JSON.parse("api".to_json),
+          "method"   => JSON.parse(method.upcase.to_json),
+          "url"      => JSON.parse(url.to_json),
+        } of String => JSON::Any
+        metadata["config"] = JSON.parse(request_config.to_json)
+
+        return WorkflowNode.new(id, NodeKind::Api, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          WorkflowNodeResult.continue(run_api_node(ctx, method, url, request_config))
+        end
       when "exec"
         if runtime.nil? && !id.starts_with?("mcp:")
           raise "exec requires runtime; internal Crystal functions must be node kinds"
@@ -222,6 +238,140 @@ module Ocawe
       else
         raise "unknown registry node type: #{type}"
       end
+    end
+
+    private def run_api_node(ctx : Workflow::NodeContext, method : String, url : String, config : Workflow::AnyHash) : Workflow::AnyHash
+      resolved_url = resolve_runtime_string(url, ctx)
+      uri = URI.parse(resolved_url)
+      headers = HTTP::Headers.new
+
+      if header_values = config["headers"]?.try(&.as_h?)
+        header_values.each do |key, value|
+          headers[key] = resolve_runtime_json(value, ctx).raw.to_s
+        end
+      end
+
+      query = HTTP::Params.parse(uri.query || "")
+      if params = config["params"]?.try(&.as_h?)
+        params.each do |key, value|
+          query[key] = resolve_runtime_json(value, ctx).raw.to_s
+        end
+      end
+      uri.query = query.empty? ? nil : query.to_s
+
+      request_body = nil.as(String?)
+      if body = config["body"]?
+        headers["Content-Type"] = "application/json" unless headers.has_key?("Content-Type")
+        request_body = resolve_runtime_json(body, ctx).to_json
+      end
+
+      timeout_seconds = config["timeout"]?.try(&.as_f?) || config["timeout"]?.try(&.as_i?).try(&.to_f) || 30.0
+      timeout = timeout_seconds.seconds
+      allow_non_2xx = config["allow_non_2xx"]?.try(&.as_bool?) || false
+
+      response = HTTP::Client.new(uri) do |client|
+        client.connect_timeout = timeout
+        client.read_timeout = timeout
+        client.write_timeout = timeout
+        client.exec(method.upcase, uri.request_target, headers: headers, body: request_body)
+      end
+
+      unless allow_non_2xx || (200..299).includes?(response.status_code)
+        raise "API #{method.upcase} #{uri} returned HTTP #{response.status_code}: #{response.body[0, Math.min(response.body.size, 500)]}"
+      end
+
+      parsed_body = begin
+        JSON.parse(response.body)
+      rescue
+        JSON.parse(response.body.to_json)
+      end
+
+      result = {} of String => JSON::Any
+      if object_body = parsed_body.as_h?
+        object_body.each { |key, value| result[key] = JSON.parse(value.to_json) }
+      end
+
+      result["method"] = JSON.parse(method.upcase.to_json)
+      result["url"] = JSON.parse(uri.to_s.to_json)
+      result["status"] = JSON.parse(response.status_code.to_json)
+      result["headers"] = JSON.parse(response.headers.to_h.to_json)
+      result["body"] = JSON.parse(parsed_body.to_json)
+      result["raw_body"] = JSON.parse(response.body.to_json)
+      result
+    end
+
+    private def resolve_runtime_json(value : JSON::Any, ctx : Workflow::NodeContext) : JSON::Any
+      if text = value.as_s?
+        if resolved = resolve_context_path(text, ctx)
+          return JSON.parse(resolved.to_json)
+        end
+      end
+
+      if hash = value.as_h?
+        return JSON.parse(hash.transform_values { |v| resolve_runtime_json(v, ctx) }.to_json)
+      end
+
+      if array = value.as_a?
+        return JSON.parse(array.map { |v| resolve_runtime_json(v, ctx) }.to_json)
+      end
+
+      value
+    end
+
+    private def resolve_runtime_string(value : String, ctx : Workflow::NodeContext) : String
+      return resolve_context_path(value, ctx).try(&.raw.to_s) || value
+    end
+
+    private def resolve_context_path(path : String, ctx : Workflow::NodeContext) : JSON::Any?
+      normalized = path.strip
+      if match = normalized.match(/^step\["([^"]+)"\](.*)$/)
+        value = ctx.node_results[match[1]]?.try { |result| JSON.parse(result.to_json) }
+        return follow_json_path(value, match[2])
+      end
+      if match = normalized.match(/^(input|state)\.(.+)$/)
+        source = match[1] == "input" ? ctx.input_data : ctx.state
+        first, rest = split_first_path_segment(match[2])
+        return follow_json_path(source[first]?, rest)
+      end
+      nil
+    end
+
+    private def split_first_path_segment(path : String) : Tuple(String, String)
+      dot = path.index('.')
+      bracket = path.index('[')
+      idx = if dot && bracket
+              Math.min(dot, bracket)
+            else
+              dot || bracket
+            end
+      return {path, ""} unless idx
+      {path[0, idx], path[idx, path.size - idx]}
+    end
+
+    private def follow_json_path(value : JSON::Any?, path : String) : JSON::Any?
+      current = value
+      remaining = path
+      while current && !remaining.empty?
+        if match = remaining.match(/^\.(\w+)(.*)$/)
+          hash = current.as_h?
+          return nil unless hash
+          current = hash[match[1]]?
+          remaining = match[2]
+        elsif match = remaining.match(/^\[(\d+)\](.*)$/)
+          array = current.as_a?
+          return nil unless array
+          current = array[match[1].to_i]?
+          remaining = match[2]
+        elsif match = remaining.match(/^\["([^"]+)"\](.*)$/)
+          hash = current.as_h?
+          return nil unless hash
+          current = hash[match[1]]?
+          remaining = match[2]
+        else
+          return nil
+        end
+      end
+      current
     end
   end
 end

@@ -120,6 +120,14 @@ module ACD
             next
           end
 
+          if match = line.match(/^\s*(get|post|put)\s+"([^"]+)"(.*)$/)
+            method = match[1]
+            url = match[2]
+            attributes = parse_line_attributes(match[3]? || "", ctx.workflow_file, "#{method} #{url}")
+            current_nodes << create_api_node(method, url, attributes, ctx.workflow_file)
+            next
+          end
+
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             node_kind = match[1]
             tail = match[2]? || ""
@@ -245,6 +253,20 @@ module ACD
               output_schema: output_schema,
               workflow_root: ctx.workflow_root
             )
+
+            if in_else
+              else_nodes << node
+            else
+              unless_nodes << node
+            end
+            next
+          end
+
+          if match = line.match(/^\s*(get|post|put)\s+"([^"]+)"(.*)$/)
+            method = match[1]
+            url = match[2]
+            attributes = parse_line_attributes(match[3]? || "", ctx.workflow_file, "#{method} #{url}")
+            node = create_api_node(method, url, attributes, ctx.workflow_file)
 
             if in_else
               else_nodes << node

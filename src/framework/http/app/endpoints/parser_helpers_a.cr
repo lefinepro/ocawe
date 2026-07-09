@@ -24,7 +24,10 @@ module ACD
               break
             end
             if data = result.data
-              data.each { |k, v| merged[k] = v }
+              enriched = data.dup
+              enriched["step"] = JSON.parse(node.id.to_json)
+              ctx.node_results[node.id] = enriched
+              enriched.each { |k, v| merged[k] = v }
             end
           end
           halted || Ocawe::Workflow::WorkflowNodeResult.continue(merged)
@@ -52,42 +55,115 @@ module ACD
         return true if normalized == "true"
         return false if normalized == "false"
 
-        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)\s*==\s*"([^"]*)"$/)
-          actual = ctx.input_data[match[1]]?.try(&.as_s?) || ctx.state[match[1]]?.try(&.as_s?)
-          return actual == match[2]
+        if match = normalized.match(/^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)$/)
+          left = resolve_dsl_condition_value(match[1], ctx)
+          right = parse_dsl_condition_literal(match[3], ctx)
+          return compare_dsl_condition_values(left, right, match[2])
         end
-        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)\s*!=\s*"([^"]*)"$/)
-          actual = ctx.input_data[match[1]]?.try(&.as_s?) || ctx.state[match[1]]?.try(&.as_s?)
-          return actual != match[2]
-        end
-        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)\s*==\s*"([^"]*)"$/)
-          actual = ctx.state[match[1]]?.try(&.as_s?)
-          return actual == match[2]
-        end
-        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)\s*!=\s*"([^"]*)"$/)
-          actual = ctx.state[match[1]]?.try(&.as_s?)
-          return actual != match[2]
-        end
-        if match = normalized.match(/^(input|state)\.([a-zA-Z_][a-zA-Z0-9_]*)\s*(>=|<=|>|<)\s*([0-9]+(?:\.[0-9]+)?)$/)
-          source = match[1] == "input" ? ctx.input_data : ctx.state
-          actual = source[match[2]]?.try(&.as_f?) || source[match[2]]?.try(&.as_i?).try(&.to_f)
-          return false unless actual
-          target = match[4].to_f
-          op = match[3]
-          return actual >= target if op == ">="
-          return actual <= target if op == "<="
-          return actual > target if op == ">"
-          return actual < target if op == "<"
-        end
-        if match = normalized.match(/^input\.([a-zA-Z_][a-zA-Z0-9_]*)$/)
-          value = ctx.input_data[match[1]]? || ctx.state[match[1]]?
-          return value.try(&.raw) == true
-        end
-        if match = normalized.match(/^state\.([a-zA-Z_][a-zA-Z0-9_]*)$/)
-          return ctx.state[match[1]]?.try(&.raw) == true
+
+        if value = resolve_dsl_condition_value(normalized, ctx)
+          return truthy_dsl_condition_value(value)
         end
 
         false
+      end
+
+      private def parse_dsl_condition_literal(value : String, ctx : Ocawe::Workflow::NodeContext) : JSON::Any?
+        stripped = value.strip
+        if resolved = resolve_dsl_condition_value(stripped, ctx)
+          return resolved
+        end
+        return JSON.parse(stripped) if stripped.starts_with?('"') || stripped == "true" || stripped == "false" || stripped == "null"
+        return JSON.parse(stripped) if stripped.match(/^-?\d+(?:\.\d+)?$/)
+        JSON.parse(stripped.to_json)
+      rescue
+        JSON.parse(stripped.to_json)
+      end
+
+      private def resolve_dsl_condition_value(path : String, ctx : Ocawe::Workflow::NodeContext) : JSON::Any?
+        normalized = path.strip
+        if match = normalized.match(/^step\["([^"]+)"\](.*)$/)
+          value = ctx.node_results[match[1]]?.try { |result| JSON.parse(result.to_json) }
+          return follow_dsl_condition_path(value, match[2])
+        end
+        if match = normalized.match(/^(input|state)\.(.+)$/)
+          source = match[1] == "input" ? ctx.input_data : ctx.state
+          first, rest = split_dsl_condition_path_segment(match[2])
+          return follow_dsl_condition_path(source[first]?, rest)
+        end
+        nil
+      end
+
+      private def compare_dsl_condition_values(left : JSON::Any?, right : JSON::Any?, op : String) : Bool
+        return op == "!=" if left.nil? || right.nil?
+
+        if left_number = dsl_condition_number(left)
+          if right_number = dsl_condition_number(right)
+            return left_number == right_number if op == "=="
+            return left_number != right_number if op == "!="
+            return left_number >= right_number if op == ">="
+            return left_number <= right_number if op == "<="
+            return left_number > right_number if op == ">"
+            return left_number < right_number if op == "<"
+          end
+        end
+
+        left_raw = left.raw
+        right_raw = right.raw
+        return left_raw == right_raw if op == "=="
+        return left_raw != right_raw if op == "!="
+        false
+      end
+
+      private def dsl_condition_number(value : JSON::Any) : Float64?
+        value.as_f? || value.as_i?.try(&.to_f)
+      end
+
+      private def truthy_dsl_condition_value(value : JSON::Any) : Bool
+        raw = value.raw
+        return raw if raw.is_a?(Bool)
+        return !raw.empty? if raw.is_a?(String)
+        return raw != 0 if raw.is_a?(Int64)
+        return raw != 0.0 if raw.is_a?(Float64)
+        !raw.nil?
+      end
+
+      private def split_dsl_condition_path_segment(path : String) : Tuple(String, String)
+        dot = path.index('.')
+        bracket = path.index('[')
+        idx = if dot && bracket
+                Math.min(dot, bracket)
+              else
+                dot || bracket
+              end
+        return {path, ""} unless idx
+        {path[0, idx], path[idx, path.size - idx]}
+      end
+
+      private def follow_dsl_condition_path(value : JSON::Any?, path : String) : JSON::Any?
+        current = value
+        remaining = path
+        while current && !remaining.empty?
+          if match = remaining.match(/^\.(\w+)(.*)$/)
+            hash = current.as_h?
+            return nil unless hash
+            current = hash[match[1]]?
+            remaining = match[2]
+          elsif match = remaining.match(/^\[(\d+)\](.*)$/)
+            array = current.as_a?
+            return nil unless array
+            current = array[match[1].to_i]?
+            remaining = match[2]
+          elsif match = remaining.match(/^\["([^"]+)"\](.*)$/)
+            hash = current.as_h?
+            return nil unless hash
+            current = hash[match[1]]?
+            remaining = match[2]
+          else
+            return nil
+          end
+        end
+        current
       end
 
       # Helper to build agent user prompt from context

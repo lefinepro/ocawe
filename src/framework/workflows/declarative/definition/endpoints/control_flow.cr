@@ -27,6 +27,80 @@ module Ocawe
         ))
       end
 
+      def get(
+        url : String,
+        id : String? = nil,
+        headers : AnyHash? = nil,
+        params : AnyHash? = nil,
+        timeout : Float64? = nil,
+        allow_non_2xx : Bool = false,
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+      ) : self
+        api("GET", url, id: id, headers: headers, params: params, timeout: timeout, allow_non_2xx: allow_non_2xx, input_schema: input_schema, output_schema: output_schema)
+      end
+
+      def post(
+        url : String,
+        id : String? = nil,
+        headers : AnyHash? = nil,
+        params : AnyHash? = nil,
+        body : JSON::Any? = nil,
+        timeout : Float64? = nil,
+        allow_non_2xx : Bool = false,
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+      ) : self
+        api("POST", url, id: id, headers: headers, params: params, body: body, timeout: timeout, allow_non_2xx: allow_non_2xx, input_schema: input_schema, output_schema: output_schema)
+      end
+
+      def put(
+        url : String,
+        id : String? = nil,
+        headers : AnyHash? = nil,
+        params : AnyHash? = nil,
+        body : JSON::Any? = nil,
+        timeout : Float64? = nil,
+        allow_non_2xx : Bool = false,
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+      ) : self
+        api("PUT", url, id: id, headers: headers, params: params, body: body, timeout: timeout, allow_non_2xx: allow_non_2xx, input_schema: input_schema, output_schema: output_schema)
+      end
+
+      def api(
+        method : String,
+        url : String,
+        id : String? = nil,
+        headers : AnyHash? = nil,
+        params : AnyHash? = nil,
+        body : JSON::Any? = nil,
+        timeout : Float64? = nil,
+        allow_non_2xx : Bool = false,
+        input_schema : Ocawe::Workflows::DSL::Validator? = nil,
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+      ) : self
+        config = {
+          "method" => JSON.parse(method.upcase.to_json),
+          "url"    => JSON.parse(url.to_json),
+        } of String => JSON::Any
+        config["headers"] = JSON.parse(headers.to_json) if headers
+        config["params"] = JSON.parse(params.to_json) if params
+        config["body"] = JSON.parse(body.to_json) if body
+        config["timeout"] = JSON.parse(timeout.to_json) if timeout
+        config["allow_non_2xx"] = JSON.parse(allow_non_2xx.to_json) if allow_non_2xx
+
+        node_id = id || "#{method.downcase}-#{next_node_counter}"
+        append_node(Ocawe::RegistryApi.build_node(
+          self,
+          "api",
+          node_id,
+          config: config,
+          input_schema: input_schema,
+          output_schema: output_schema,
+        ))
+      end
+
       def step(
         kind : Ocawe::NodeKind,
         id : String? = nil,

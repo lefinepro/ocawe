@@ -107,6 +107,28 @@ RCL
       end
     end
 
+    it "keeps API node DSL and node result conditions in workflow body" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+workflow "api-test" do
+  get "http://example.test/weather", id: "weather"
+  if step["weather"].temperature > 0
+    post "http://example.test/sink", body: step["weather"].body
+  end
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "api-test")
+        dsl = bundle.not_nil!.dsl_source.not_nil!.join("\n")
+        dsl.should contain("get \"http://example.test/weather\"")
+        dsl.should contain("if step[\"weather\"].temperature > 0")
+        dsl.should contain("post \"http://example.test/sink\"")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it "parses dot-notation keys in settings" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)

@@ -1,0 +1,46 @@
+#+TITLE: 12 - API Nodes Demo
+
+Self-contained demo for first-class HTTP nodes in a Cawfile workflow.
+
+#+begin_src crystal
+workflow "api" do
+  get "http://127.0.0.1:5055/weather", id: "weather"
+
+  if step["weather"].current.temperature_2m > 0
+    post "http://127.0.0.1:5055/farm/start", id: "start-farm", body: step["weather"].current
+  end
+end
+#+end_src
+
+API step results include =step=, =status=, =headers=, =body=, and =raw_body=. JSON object response fields are also exposed directly on the step result, so =step["weather"].current.temperature_2m= works without writing =step["weather"].body.current.temperature_2m=.
+
+The =id:= option is the step name. Later expressions read previous results by that name, for example =step["weather"].current=. If =id:= is omitted, Ocawe generates a step name automatically.
+
+* Run Demo
+
+1. Start the mock API:
+
+#+begin_src bash
+nix develop --command crystal run caws/12-api-nodes/mock_api.cr
+#+end_src
+
+2. In another terminal, start Ocawe with this Cawfile:
+
+#+begin_src bash
+nix develop --command crystal run src/cli/main.cr -- up caws/12-api-nodes --port 4111
+#+end_src
+
+3. Trigger the workflow:
+
+#+begin_src bash
+curl -s -X POST http://127.0.0.1:4111/v1/triggers/workflows/api \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+#+end_src
+
+4. Expected flow:
+
+- =get "http://127.0.0.1:5055/weather"= returns =current.temperature_2m=.
+- =if step["weather"].current.temperature_2m > 0= passes.
+- =post "http://127.0.0.1:5055/farm/start"= sends =step["weather"].current= as JSON.
+- The mock API prints the received POST body.

@@ -1,0 +1,16 @@
+# 12 - API nodes demo
+
+struct Input
+end
+
+struct Output
+end
+
+@[Validate(Input, Output)]
+workflow "api" do
+  get "http://127.0.0.1:5055/weather", id: "weather"
+
+  if step["weather"].current.temperature_2m > 0
+    post "http://127.0.0.1:5055/farm/start", id: "start-farm", body: step["weather"].current
+  end
+end

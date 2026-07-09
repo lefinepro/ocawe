@@ -25,6 +25,7 @@ module Ocawe
       Suspend
       Voice
       Rag
+      Api
       Control
       Custom
       Federation

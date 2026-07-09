@@ -100,9 +100,11 @@ module Ocawe
           case result.action
           when NodeAction::Continue.to_s.downcase
             if data = result.data
-              @node_results[node.id] = data
-              data.each { |k, v| @state[k] = v }
-              previous_node_result = data
+              enriched = data.dup
+              enriched["step"] = JSON.parse(node.id.to_json)
+              @node_results[node.id] = enriched
+              enriched.each { |k, v| @state[k] = v }
+              previous_node_result = enriched
             end
             runtime_logger.node_completed(node.id, node_logger_config)
             previous_node_id = node.id

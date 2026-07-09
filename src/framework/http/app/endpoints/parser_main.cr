@@ -11,6 +11,7 @@ module ACD
           "include", "extend", "getter", "setter", "property",
           "alias", "enum", "lib", "fun", "require",
           "agent", "skill", "exec", "voice", "rag", "suspend", "dataset",
+          "get", "post", "put",
           "input_type", "output_type", "input_validate", "output_validate",
           "parallel", "if", "elsif", "else", "while", "unless", "until", "loop",
         }
@@ -122,6 +123,22 @@ module ACD
               output_schema: output_schema,
             )
             ctx.last_agent_id = agent_id
+            next
+          end
+          if match = line.match(/^\s*(get|post|put)\s+"([^"]+)"(.*)$/)
+            method = match[1]
+            url = match[2]
+            attributes = parse_line_attributes(match[3]? || "", ctx.workflow_file, "#{method} #{url}")
+            ctx.workflow.api(
+              method,
+              url,
+              id: parse_optional_string(attributes["id"]?),
+              headers: attributes["headers"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) },
+              params: attributes["params"]?.try { |value| parse_runtime_object(value, ctx.workflow_file) },
+              body: attributes["body"]?.try { |value| parse_runtime_literal(value, ctx.workflow_file) },
+              timeout: attributes["timeout"]?.try(&.to_f),
+              allow_non_2xx: attributes["allow_non_2xx"]?.try { |value| parse_runtime_literal(value, ctx.workflow_file).as_bool? || false } || false,
+            )
             next
           end
           if line.match(/^\s*@\[Workspace\(/)

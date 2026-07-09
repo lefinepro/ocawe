@@ -78,6 +78,14 @@ module ACD
             next
           end
 
+          if match = line.match(/^\s*(get|post|put)\s+"([^"]+)"(.*)$/)
+            method = match[1]
+            url = match[2]
+            attributes = parse_line_attributes(match[3]? || "", ctx.workflow_file, "#{method} #{url}")
+            loop_nodes << create_api_node(method, url, attributes, ctx.workflow_file)
+            next
+          end
+
           if match = line.match(/^([a-z][a-z0-9_]*)(.*)$/)
             node_kind = match[1]
             tail = match[2]? || ""
@@ -169,6 +177,34 @@ module ACD
           workflow_root: workflow_root,
           input_schema: input_schema,
           output_schema: output_schema,
+        )
+      end
+
+      private def create_api_node(
+        method : String,
+        url : String,
+        attributes : Hash(String, String),
+        workflow_file : String
+      ) : Ocawe::Workflow::WorkflowNode
+        config = {
+          "method" => JSON.parse(method.upcase.to_json),
+          "url"    => JSON.parse(url.to_json),
+        } of String => JSON::Any
+        node_id = parse_optional_string(attributes["id"]?) || "#{method.downcase}-#{url.hash.abs}"
+        config["headers"] = JSON.parse(parse_runtime_object(attributes["headers"], workflow_file).to_json) if attributes["headers"]?
+        config["params"] = JSON.parse(parse_runtime_object(attributes["params"], workflow_file).to_json) if attributes["params"]?
+        config["body"] = parse_runtime_literal(attributes["body"], workflow_file) if attributes["body"]?
+        config["timeout"] = JSON.parse(attributes["timeout"].to_f.to_json) if attributes["timeout"]?
+        if attributes["allow_non_2xx"]?
+          config["allow_non_2xx"] = JSON.parse((parse_runtime_literal(attributes["allow_non_2xx"], workflow_file).as_bool? || false).to_json)
+        end
+
+        builder = Ocawe::Workflow::WorkflowDefinition.new("__registry_builder__")
+        Ocawe::RegistryApi.build_node(
+          builder,
+          "api",
+          node_id,
+          config: config,
         )
       end
 

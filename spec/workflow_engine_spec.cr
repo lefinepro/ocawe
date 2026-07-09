@@ -1,5 +1,60 @@
 require "./spec_helper"
+require "http/server"
+
 describe Ocawe::Workflow::Engine do
+  it "runs API nodes and lets later workflow steps read previous node results by index and id" do
+    server = HTTP::Server.new do |context|
+      case {context.request.method, context.request.path}
+      when {"GET", "/weather"}
+        context.response.content_type = "application/json"
+        context.response.print({"temperature" => 12, "current" => {"temperature_2m" => 12}}.to_json)
+      when {"POST", "/sink"}
+        body = context.request.body.try(&.gets_to_end).to_s
+        context.response.content_type = "application/json"
+        context.response.print({"received" => JSON.parse(body), "ok" => true}.to_json)
+      else
+        context.response.status_code = 404
+        context.response.print({"error" => "not found"}.to_json)
+      end
+    end
+    address = server.bind_tcp("127.0.0.1", 0)
+    port = address.port
+    spawn { server.listen }
+    Fiber.yield
+
+    workflow = Ocawe::Workflow.create_workflow("wf-api", "api nodes")
+    workflow
+      .get("http://127.0.0.1:#{port}/weather", id: "weather")
+      .while_do(
+        "step[\"weather\"].current.temperature_2m > 0",
+        [
+          Ocawe::RegistryApi.build_node(
+            workflow,
+            "api",
+            "sink",
+            config: {
+              "method" => JSON.parse("POST".to_json),
+              "url"    => JSON.parse("http://127.0.0.1:#{port}/sink".to_json),
+              "body"   => JSON.parse("step[\"weather\"].current".to_json),
+            } of String => JSON::Any,
+          ),
+        ],
+        max_iterations: 1
+      )
+      .commit
+
+    run = workflow.create_run_async
+    result = run.start
+    result.status.should eq("success")
+    state = result.state.not_nil!
+    state["temperature"].as_i.should eq(12)
+    state["received"].as_h["temperature_2m"].as_i.should eq(12)
+    run.get_current_run.node_results.not_nil!["weather"]["step"].as_s.should eq("weather")
+    run.get_current_run.node_results.not_nil!["sink"].should_not be_nil
+  ensure
+    server.try(&.close)
+  end
+
   it "runs start/resume/cancel/time_travel lifecycle" do
     workflow = Ocawe::Workflow.create_workflow("wf-test", "test workflow")
     workflow
