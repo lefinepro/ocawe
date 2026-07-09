@@ -21,6 +21,7 @@ struct VoiceOutput
 end
 
 @[Model("openai/gpt-4.1-mini")]
+@[Validate(VoiceInput, VoiceOutput)]
 workflow "05-voice-pipeline" do
   input_type VoiceInput
   output_type VoiceOutput
@@ -28,12 +29,12 @@ workflow "05-voice-pipeline" do
   input_validate Schema::Types.object({
     "audio" => Schema::Types.optional(Schema::Types.of(String)),
     "text" => Schema::Types.optional(Schema::Types.of(String)),
-  })
+  }, strict: false)
 
   output_validate Schema::Types.object({
     "text" => Schema::Types.optional(Schema::Types.of(String)),
     "audio_url" => Schema::Types.optional(Schema::Types.of(String)),
-  })
+  }, strict: false)
 
   # Voice agent with schema validation
   agent "voice-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")

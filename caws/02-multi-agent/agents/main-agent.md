@@ -1,7 +1,7 @@
 ---
 name: "Main Agent"
 description: "General-purpose assistant"
-model: "cliproxyapi/qwen3-coder-plus"
+model: "openai/gpt-4.1-mini"
 ---
 
 You are a general-purpose assistant. Help with software development tasks.

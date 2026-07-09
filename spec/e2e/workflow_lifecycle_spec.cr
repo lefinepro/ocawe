@@ -131,7 +131,7 @@ describe "E2E: Workflow Lifecycle" do
       workflow = Ocawe::Workflow.create_workflow("e2e-test", "E2E test workflow")
       workflow
         .agent("e2e-processor",
-          model: "clipproxyapi/qwen3-coder-model",
+          model: "openai/gpt-4.1-mini",
           input_schema: Ocawe::Workflows::DSL::Types.object({"task" => Ocawe::Workflows::DSL::Types.of(String)}, strict: false),
           output_schema: Ocawe::Workflows::DSL::Types.object({"result" => Ocawe::Workflows::DSL::Types.of(String)}, strict: false))
         .suspend("e2e-approval", reason: "Review E2E test output")

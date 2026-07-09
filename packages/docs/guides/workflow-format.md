@@ -18,7 +18,7 @@ workflow "agent-tunnel" do
 end
 
 workflow "agents-example" do
-  agent "simple-agent", model: "clipproxyapi/qwen3-coder-plus"
+  agent "simple-agent", model: "openai/gpt-4.1-mini"
 end
 ```
 

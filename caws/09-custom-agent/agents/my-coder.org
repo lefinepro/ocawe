@@ -1,7 +1,7 @@
 ---
 name: "My Coder"
 description: "Custom coding agent that calls an external binary"
-model: "cliproxyapi/qwen3-coder-plus"
+model: "openai/gpt-4.1-mini"
 ---
 
 You are a coding assistant backed by an external CLI tool.

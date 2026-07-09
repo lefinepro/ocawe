@@ -2,14 +2,14 @@
 
 *** Description
 
-Demonstrates multiple agents working together in a sequential pipeline. Shows how to combine different agent types (workflow orchestrator, opencode, main, cliproxy) for complex tasks.
+Demonstrates multiple agents working together in a sequential pipeline. Shows how to combine different agent types (workflow orchestrator, opencode, main) for complex tasks.
 
 *** Features
 
 - Sequential agent pipeline
 - Multiple custom agents: =agent "workflow-agent"=, =agent "opencode-agent"=, =agent "main-agent"=
 - Input/output schema validation with =schema_ref=
-- Type-safe input with =WorkflowInput= struct
+- Type-safe workflow contract with =WorkflowInput=/=WorkflowOutput= structs and =@[Validate]=
 
 *** Structure
 
@@ -41,7 +41,8 @@ curl -X POST http://localhost:4111/v1/workflows/02-multi-agent/runs \
 - Each agent in the pipeline receives output from the previous agent
 - The =workflow-agent= orchestrates task distribution
 - Custom agents defined via markdown files with model frontmatter
-- Use =@[Model("cliproxy")]= to set default model for the workflow
+- Use =@[Model("openai/gpt-4.1-mini")]= to set default model for the workflow
+- Keep workflow-level schemas permissive on output metadata with =strict: false=
 
 *** Next Steps
 

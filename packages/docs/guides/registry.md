@@ -71,7 +71,7 @@ workflow
   .step("voice", "voice-step", config: {"voice_operator" => JSON.parse("openai".to_json)})
   .step("rag", "rag-step", config: {"operation" => JSON.parse("query".to_json)})
   .step("suspend", "approval", reason: "human approval")
-  .step("node_kind", "ext-cliproxy", node_kind_name: "agent_cliproxy", node_kind_attributes: {"model" => JSON.parse("qwen3-coder-plus".to_json)})
+  .step("node_kind", "ext-openai", node_kind_name: "agent_openai", node_kind_attributes: {"model" => JSON.parse("gpt-4.1-mini".to_json)})
   .step("node_kind", "ext-codex", node_kind_name: "agent_codex")
   .step("node_kind", "ext-opencode", node_kind_name: "agent_opencode")
   .commit

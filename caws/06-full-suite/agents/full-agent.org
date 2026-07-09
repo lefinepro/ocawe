@@ -1,6 +1,6 @@
 ---
 description: "Full-featured agent with schema, voice and guardrails"
-model: "cliproxyapi/qwen3-coder-plus"
+model: "openai/gpt-4.1-mini"
 voice:
   voice_operator: "openai"
   speaker: "alloy"

@@ -19,7 +19,8 @@ struct RagOutput
   getter answer : String?
 end
 
-@[Model("cliproxy")]
+@[Model("openai/gpt-4.1-mini")]
+@[Validate(RagInput, RagOutput)]
 workflow "04-rag-assistant" do
   input_type RagInput
   output_type RagOutput
@@ -27,11 +28,11 @@ workflow "04-rag-assistant" do
   input_validate Schema::Types.object({
     "text" => Schema::Types.optional(Schema::Types.of(String)),
     "query" => Schema::Types.optional(Schema::Types.of(String)),
-  })
+  }, strict: false)
 
   output_validate Schema::Types.object({
     "answer" => Schema::Types.optional(Schema::Types.of(String)),
-  })
+  }, strict: false)
 
   # Ingest documentation into vector store
   skill "rag-ingest-skill"

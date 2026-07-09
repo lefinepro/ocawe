@@ -5,8 +5,30 @@ it into a cached single =ocawecore= binary, and runs the selected workflow
 through that binary.
 
 #+begin_src rcl
-exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
-exec "git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent/10-acp-agent", runtime: {"git+ssh"}
+struct RemotePullInput
+  include JSON::Serializable
+  getter prompt : String?
+end
+
+struct RemotePullOutput
+  include JSON::Serializable
+  getter status : String?
+end
+
+@[Validate(RemotePullInput, RemotePullOutput)]
+workflow "11-git-https-pull" do
+  input_type RemotePullInput
+  output_type RemotePullOutput
+
+  input_validate Schema::Types.object({
+    "prompt" => Schema::Types.optional(Schema::Types.of(String)),
+  }, strict: false)
+  output_validate Schema::Types.object({
+    "status" => Schema::Types.optional(Schema::Types.of(String)),
+  }, strict: false)
+
+  exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+end
 #+end_src
 
 Manual cache refresh without running the workflow:

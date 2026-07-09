@@ -77,7 +77,7 @@ describe "E2E: Workflow Configuration" do
     workflow = Ocawe::Workflow.create_workflow("full-demo", "Full demo test")
     workflow
       .agent("full-agent",
-        model: "clipproxyapi/qwen3-coder-plus",
+        model: "openai/gpt-4.1-mini",
         input_schema: Ocawe::Workflows::DSL::Types.object({"input" => Ocawe::Workflows::DSL::Types.any()}, strict: false),
         output_schema: Ocawe::Workflows::DSL::Types.object({"last_response" => Ocawe::Workflows::DSL::Types.of(String)}, strict: false))
       .skill("full-skill", agent: "full-agent")
@@ -127,14 +127,14 @@ describe "E2E: Workflow Configuration" do
     it "demonstrates app configuration usage in tests" do
       config = {
         "api_key"      => json_str("test-key"),
-        "model"        => json_str("clipproxyapi/qwen3-coder-model"),
+        "model"        => json_str("openai/gpt-4.1-mini"),
         "max_tokens"   => JSON.parse(4096.to_json),
         "enable_cache" => json_bool(true),
         "retry_count"  => JSON.parse(3.to_json),
       }
 
       config["api_key"].as_s.should eq("test-key")
-      config["model"].as_s.should eq("clipproxyapi/qwen3-coder-model")
+      config["model"].as_s.should eq("openai/gpt-4.1-mini")
       config["max_tokens"].as_i.should eq(4096)
       config["enable_cache"].raw.should eq(true)
       config["retry_count"].as_i.should eq(3)

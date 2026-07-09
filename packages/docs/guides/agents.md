@@ -98,7 +98,7 @@ end
 **Supported providers**:
 - OpenAI: `openai/gpt-4`, `openai/gpt-4-turbo`, `openai/gpt-3.5-turbo`
 - Anthropic: `anthropic/claude-3-opus`, `anthropic/claude-3-sonnet`
-- Local models: `clipproxyapi/qwen3-coder-plus`
+- Local models: `openai/gpt-4.1-mini`
 - Custom endpoints via configuration
 
 ### Custom Prompts

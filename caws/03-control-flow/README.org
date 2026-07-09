@@ -10,6 +10,7 @@ Demonstrates Crystal-native control flow in the Ocawe workflow DSL. Shows how to
 - =if/else= - Conditional agent selection (translator vs passthrough)
 - =parallel= - Run validator and formatter concurrently
 - Sequential execution for analyzer and finalizer
+- Type-safe control flags with =ControlFlowInput=/=ControlFlowOutput= and =@[Validate]=
 
 *** Structure
 

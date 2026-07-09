@@ -9,7 +9,7 @@ Retrieval-Augmented Generation (RAG) assistant for agents. Ingests code document
 - Document ingestion via =rag "rag-ingest"= with upsert operation
 - Context-aware querying via =rag "rag-query"= with topK retrieval
 - Memory-based vector store for local development
-- Type-safe input/output with =RagInput=/=RagOutput= structs
+- Type-safe input/output with =RagInput=/=RagOutput= structs and =@[Validate]=
 
 *** Structure
 

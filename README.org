@@ -302,9 +302,15 @@ struct Output
   include Api::Federation::Outbox
 end
 
-@[Model("cliproxy")]
+@[Model("openai/gpt-4.1-mini")]
 @[Validate(Input, Output)]
 workflow "solver-codex" do
+  input_type Input
+  output_type Output
+
+  input_validate Schema::Types.any()
+  output_validate Schema::Types.any()
+
   follow ["@coder@example.com"]
   agent "codex-agent"
 end
@@ -315,15 +321,30 @@ workflow "agent-tunnel" do
 end
 
 workflow "codex-acp" do
+  input_type Input
+  output_type Output
+  input_validate Schema::Types.any()
+  output_validate Schema::Types.any()
+
   exec "codex",
     runtime: {acp: {command: "codex", args: ["--server"]}}
 end
 
 workflow "remote-acp" do
+  input_type Input
+  output_type Output
+  input_validate Schema::Types.any()
+  output_validate Schema::Types.any()
+
   exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
 end
 
 workflow "remote-acp-ssh" do
+  input_type Input
+  output_type Output
+  input_validate Schema::Types.any()
+  output_validate Schema::Types.any()
+
   exec "git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent/10-acp-agent", runtime: {"git+ssh"}
 end
 #+end_src
@@ -334,6 +355,7 @@ end
 - =@[Model("provider")]= — default model for the workflow
 - =@[Container(image: "...", packages: ["pkg1"], files: ["a.sh"])]= — container packaging: optional base =image= (omit for a =scratch= static build), Nix =packages=, and extra =files= to copy (the deprecated =mode:= field is ignored)
 - =@[Validate(Input, Output)]= — input/output type validation
+- =input_type= / =output_type= and =input_validate= / =output_validate= — explicit workflow API contract and runtime JSON validation
 - =exec "...", runtime: {acp: {...}}= — run an external ACP-compatible agent
 - =exec "git+https://github.com/org/repo/path", runtime: {"git+https"}= — clone or fast-forward pull a remote Cawfile reference over HTTPS, compile it into a cached single =ocawecore= binary, then run the selected workflow through that binary
 - =exec "git+ssh://github.com/org/repo/path/workflow", runtime: {"git+ssh"}= — clone or fast-forward pull a remote Cawfile reference over SSH, compile it into a cached single =ocawecore= binary, then run the selected workflow through that binary
@@ -350,7 +372,7 @@ Agents are defined via markdown files with frontmatter:
 ---
 name: "My Coder"
 description: "Custom agent"
-model: "cliproxyapi/qwen3-coder-plus"
+model: "openai/gpt-4.1-mini"
 ---
 
 You are a helpful assistant.

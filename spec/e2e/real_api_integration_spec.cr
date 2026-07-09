@@ -1,7 +1,7 @@
 require "./e2e_spec_helper"
 
 describe "E2E: Real Model API Integration" do
-  # These tests make real API calls when CLIPROXY_API_KEY is set
+  # These tests make real API calls when OPENAI_API_KEY is set
   # and COGNICORE_MOCK_LLM is not set to "1"
   #
   # Note: These tests are expected to pass in mock mode. When running with
@@ -9,7 +9,7 @@ describe "E2E: Real Model API Integration" do
   # API key is invalid. This is acceptable behavior - the CI should pass
   # in mock mode, and real API tests are for manual verification.
 
-  describe "cliproxyapi integration" do
+  describe "model API integration" do
     it "generates text using configured model" do
       # In mock mode, just verify the workflow structure is correct
       if E2ETestHelpers.mock_mode?
@@ -35,7 +35,7 @@ describe "E2E: Real Model API Integration" do
       # Real API mode - attempt the API call but handle failures gracefully
       if !E2ETestHelpers.api_key_available?
         # No API key, skip this test
-        pending!("CLIPROXY_API_KEY not set - skipping real API test")
+        pending!("OPENAI_API_KEY not set - skipping real API test")
       end
 
       model = E2ETestHelpers.default_model

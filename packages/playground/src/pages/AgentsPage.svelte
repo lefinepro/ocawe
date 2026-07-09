@@ -93,7 +93,7 @@
     <h3>{selected.name}</h3>
     <p class="muted">{selected.description}</p>
     <p><strong>Workflow:</strong> {selected.workflow_id}</p>
-    <p><strong>Model:</strong> {selected.model || selected.default_model || "cliproxyapi/qwen3-coder-plus"}</p>
+    <p><strong>Model:</strong> {selected.model || selected.default_model || "openai/gpt-4.1-mini"}</p>
     <label class="muted" for="model-override">Model override</label>
     <input id="model-override" class="input" bind:value={modelOverride} placeholder="openai/gpt-4.1-mini" />
   </div>

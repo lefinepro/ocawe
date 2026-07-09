@@ -8,8 +8,35 @@ settings do
   port = 4111
 end
 
+struct FullSuiteInput
+  include JSON::Serializable
+  getter task : String?
+  getter text : String?
+  getter audio : String?
+end
+
+struct FullSuiteOutput
+  include JSON::Serializable
+  getter last_response : String?
+  getter status : String?
+end
+
 @[Container(packages: ["git", "curl", "jq"])]
+@[Validate(FullSuiteInput, FullSuiteOutput)]
 workflow "06-full-suite" do
+  input_type FullSuiteInput
+  output_type FullSuiteOutput
+
+  input_validate Schema::Types.object({
+    "task" => Schema::Types.optional(Schema::Types.of(String)),
+    "text" => Schema::Types.optional(Schema::Types.of(String)),
+    "audio" => Schema::Types.optional(Schema::Types.of(String)),
+  }, strict: false)
+  output_validate Schema::Types.object({
+    "last_response" => Schema::Types.optional(Schema::Types.of(String)),
+    "status" => Schema::Types.optional(Schema::Types.of(String)),
+  }, strict: false)
+
   # Primary agent with schema validation
   agent "full-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
 

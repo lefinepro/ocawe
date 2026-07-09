@@ -11,6 +11,7 @@ Voice-enabled assistant pipeline. Converts audio input to text, processes with a
 - Audio synthesis via =voice "voice-synthesize"=
 - Guardrails for input filtering
 - OpenAI voice operator with "alloy" speaker
+- Type-safe input/output with =VoiceInput=/=VoiceOutput= structs and =@[Validate]=
 
 *** Structure
 

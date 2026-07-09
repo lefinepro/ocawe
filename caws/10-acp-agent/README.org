@@ -33,8 +33,22 @@ This runs the =codex= binary (expected in PATH or container) and communicates wi
 ** With Container
 
 #+begin_src crystal
+struct Input
+  include Api::ACP::Agent
+end
+
+struct Output
+  include Api::ACP::Agent
+end
+
 @[Container(packages: ["codex-acp"])]
+@[Validate(Input, Output)]
 workflow "acp-example" do
+  input_type Input
+  output_type Output
+  input_validate Schema::Types.any()
+  output_validate Schema::Types.any()
+
   exec "codex", runtime: {"acp"}
 end
 #+end_src
@@ -54,7 +68,11 @@ struct Output
   include Api::ACP::Agent
 end
 
+@[Validate(Input, Output)]
 workflow "acp-server" do
+  input_type Input
+  output_type Output
+
   # ... workflow logic
 end
 #+end_src
@@ -107,7 +125,13 @@ Packages are installed automatically via the =@[Container]= annotation:
 
 #+begin_src crystal
 @[Container(packages: ["codex-acp"])]
+@[Validate(Input, Output)]
 workflow "acp-example" do
+  input_type Input
+  output_type Output
+  input_validate Schema::Types.any()
+  output_validate Schema::Types.any()
+
   exec "codex", runtime: {"acp"}
 end
 #+end_src

@@ -7,8 +7,31 @@ settings do
   port = 4111
 end
 
+struct ControlFlowInput
+  include JSON::Serializable
+  getter skip_preprocessing : Bool?
+  getter needs_translation : Bool?
+end
+
+struct ControlFlowOutput
+  include JSON::Serializable
+  getter last_response : String?
+end
+
 @[Model("openai/gpt-4.1")]
+@[Validate(ControlFlowInput, ControlFlowOutput)]
 workflow "03-control-flow" do
+  input_type ControlFlowInput
+  output_type ControlFlowOutput
+
+  input_validate Schema::Types.object({
+    "skip_preprocessing" => Schema::Types.optional(Schema::Types.of(Bool)),
+    "needs_translation" => Schema::Types.optional(Schema::Types.of(Bool)),
+  }, strict: false)
+  output_validate Schema::Types.object({
+    "last_response" => Schema::Types.optional(Schema::Types.of(String)),
+  }, strict: false)
+
   # Execute agent unless condition is true
   unless input.skip_preprocessing
     agent "preprocessor"
