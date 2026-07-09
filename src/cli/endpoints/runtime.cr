@@ -204,7 +204,9 @@ module OcaweCore
         action = pulled.cloned ? "cloned" : "pulled"
         puts "[ocawe] #{action} #{pulled.repo_slug} via #{transport}"
         puts "[ocawe] local path: #{pulled.local_path}"
-        puts "[ocawe] workflow: #{workflow_id}" if workflow_id = pulled.workflow_id
+        if workflow_id = pulled.workflow_id
+          puts "[ocawe] workflow: #{workflow_id}"
+        end
         if Dir.exists?(pulled.local_path)
           if cawfile = ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path)
             puts "[ocawe] Cawfile: #{cawfile}"

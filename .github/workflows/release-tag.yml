@@ -72,10 +72,14 @@ jobs:
 
       - name: Package assets
         run: |
-          mkdir -p dist/ocawe/bin dist/ocawe/share/ocawe dist/ocawe/share/doc/ocawe
-          install -m 0755 build/ocawe dist/ocawe/bin/ocawe
-          install -m 0755 build/ocawecore dist/ocawe/bin/ocawecore
+          mkdir -p dist/ocawe/bin dist/ocawe/libexec dist/ocawe/share/ocawe/source dist/ocawe/share/doc/ocawe
+          install -m 0755 build/ocawe dist/ocawe/libexec/ocawe
+          install -m 0755 build/ocawecore dist/ocawe/libexec/ocawecore
+          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'export OCAWE_SOURCE_ROOT="${OCAWE_SOURCE_ROOT:-${root}/share/ocawe/source}"' 'exec "${root}/libexec/ocawe" "$@"' > dist/ocawe/bin/ocawe
+          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'export OCAWE_SOURCE_ROOT="${OCAWE_SOURCE_ROOT:-${root}/share/ocawe/source}"' 'exec "${root}/libexec/ocawecore" "$@"' > dist/ocawe/bin/ocawecore
+          chmod 0755 dist/ocawe/bin/ocawe dist/ocawe/bin/ocawecore
           cp -R caws scripts dist/ocawe/share/ocawe/
+          cp -R src lib shard.yml shard.lock shards.nix dist/ocawe/share/ocawe/source/
           install -m 0644 README.org dist/ocawe/share/doc/ocawe/README.org
           tar -czf release/ocawe-linux-x86_64.tar.gz -C dist/ocawe .
           tar -czf release/ocawecore-linux.tar.gz -C build ocawecore

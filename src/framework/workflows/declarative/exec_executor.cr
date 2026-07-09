@@ -1,3 +1,6 @@
+require "digest/sha256"
+require "http/client"
+require "uri"
 require "../../mcp/manager"
 require "../../discovery/cawfile_loader"
 require "../../discovery/git_https_puller"
@@ -19,11 +22,11 @@ module Ocawe
         end
 
         if runtime.has_key?("git+https")
-          return exec_git(ref, "git+https")
+          return exec_git(ref, ctx, "git+https")
         end
 
         if runtime.has_key?("git+ssh")
-          return exec_git(ref, "git+ssh")
+          return exec_git(ref, ctx, "git+ssh")
         end
 
         exec_external(ref, ctx, runtime, env, workflow_root)
@@ -53,24 +56,151 @@ module Ocawe
         Ocawe::MCP.manager.call_tool(server_id, tool_name, arguments)
       end
 
-      private def exec_git(ref : String, transport : String) : AnyHash
+      private def exec_git(ref : String, ctx : NodeContext, transport : String) : AnyHash
         pulled = ACD::Discovery::GitHttpsPuller.new.pull(ref, transport)
-        cawfile = if Dir.exists?(pulled.local_path)
-                    ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path)
-                  end
+        workflow_id, cawfile = resolve_remote_caw_workflow(pulled)
+        binary = compile_remote_caw_binary(pulled, cawfile)
+        run = run_remote_caw_binary(binary, pulled.local_path, workflow_id, ctx)
+
+        cawfile_path = if Dir.exists?(pulled.local_path)
+                         ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path)
+                       end
 
         {
-          "transport" => JSON.parse(transport.to_json),
+          "transport" => JSON.parse(pulled.transport.to_json),
           "ref"        => JSON.parse(pulled.ref.to_json),
           "repo"       => JSON.parse(pulled.repo_slug.to_json),
           "repo_url"   => JSON.parse(pulled.repo_url.to_json),
           "repo_dir"   => JSON.parse(pulled.repo_dir.to_json),
           "local_path" => JSON.parse(pulled.local_path.to_json),
-          "workflow_id" => JSON.parse(pulled.workflow_id.to_json),
-          "cawfile"    => JSON.parse(cawfile.to_json),
+          "workflow_id" => JSON.parse(workflow_id.to_json),
+          "cawfile"    => JSON.parse(cawfile_path.to_json),
+          "binary"     => JSON.parse(binary.to_json),
+          "run"        => JSON.parse(run.to_json),
           "cloned"     => JSON.parse(pulled.cloned.to_json),
           "pulled"     => JSON.parse(pulled.pulled.to_json),
         } of String => JSON::Any
+      end
+
+      private def resolve_remote_caw_workflow(pulled : ACD::Discovery::GitHttpsPullResult)
+        if workflow_id = pulled.workflow_id
+          cawfile = ACD::Discovery::CawfileLoader.load(pulled.local_path, workflow_id)
+          raise "#{pulled.local_path}: unknown remote workflow '#{workflow_id}'" unless cawfile
+          return {workflow_id, cawfile}
+        end
+
+        cawfiles = ACD::Discovery::CawfileLoader.load_all(pulled.local_path)
+        raise "#{pulled.local_path}: remote Cawfile has no workflow blocks" if cawfiles.empty?
+        if cawfiles.size > 1
+          ids = cawfiles.map(&.id).join(", ")
+          raise "#{pulled.local_path}: remote Cawfile has multiple workflows (#{ids}); append /<workflow-id> to the ref"
+        end
+
+        cawfile = cawfiles.first
+        {cawfile.id, cawfile}
+      end
+
+      private def compile_remote_caw_binary(pulled : ACD::Discovery::GitHttpsPullResult, cawfile : ACD::Discovery::CawfileBundle) : String
+        source_root = ocawe_source_root
+        runtime_entry = File.join(source_root, "src", "ocawe.cr")
+        unless File.file?(runtime_entry)
+          raise "remote Cawfile exec requires Ocawe source at #{source_root}; set OCAWE_SOURCE_ROOT"
+        end
+        unless command_available?("crystal")
+          raise "remote Cawfile exec requires crystal compiler in PATH"
+        end
+
+        digest = Digest::SHA256.hexdigest("#{pulled.transport}:#{pulled.ref}:#{File.info(ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path) || pulled.local_path).modification_time.to_unix_ms}")[0, 16]
+        build_dir = File.join(pulled.repo_dir, ".ocawe", "binaries", digest)
+        binary = File.join(build_dir, "ocawecore")
+        return binary if File.file?(binary) && !pulled.pulled
+
+        entrypoint = File.join(build_dir, "entrypoint.cr")
+        Dir.mkdir_p(build_dir)
+        entrypoint_dir = File.dirname(entrypoint)
+        crystal_loader = cawfile.crystal_loader
+        cawfile_code = crystal_loader.try(&.code) || [] of String
+        registry_files = crystal_loader.try(&.registry_files) || [] of String
+
+        File.write(entrypoint, String.build do |io|
+          io << "require " << require_path(entrypoint_dir, runtime_entry).to_json << "\n"
+          cawfile_code.each { |line| io << line << "\n" }
+          registry_files.each do |registry_file|
+            io << "require " << require_path(entrypoint_dir, registry_file).to_json << "\n"
+          end
+          io << "\nOcaweCore.run\n"
+        end)
+
+        status = Process.run(
+          "crystal",
+          args: ["build", entrypoint, "--release", "--no-debug", "-Docawe_runtime_main", "-o", binary],
+          chdir: source_root,
+          input: Process::Redirect::Close,
+          output: Process::Redirect::Inherit,
+          error: Process::Redirect::Inherit
+        )
+        raise "remote Cawfile compile failed: #{pulled.ref}" unless status.success?
+        binary
+      end
+
+      private def run_remote_caw_binary(binary : String, workflows_root : String, workflow_id : String, ctx : NodeContext) : AnyHash
+        port = 20000 + Random.rand(20000)
+        process = Process.new(
+          binary,
+          args: ["--port=#{port}", "--workflows-root=#{workflows_root}"],
+          input: Process::Redirect::Close,
+          output: Process::Redirect::Inherit,
+          error: Process::Redirect::Inherit
+        )
+        begin
+          wait_for_remote_runtime!(port)
+          input_data = ctx.state.empty? ? ctx.input_data : ctx.state
+          payload = {"input_data" => JSON.parse(input_data.to_json)} of String => JSON::Any
+          headers = HTTP::Headers{"Content-Type" => "application/json"}
+          path = "/v1/workflows/#{URI.encode_path_segment(workflow_id)}/runs"
+          response = HTTP::Client.post("http://127.0.0.1:#{port}#{path}", headers: headers, body: payload.to_json)
+          unless response.status_code >= 200 && response.status_code < 300
+            raise "remote workflow #{workflow_id} failed HTTP #{response.status_code}: #{response.body}"
+          end
+          parsed = JSON.parse(response.body).as_h?
+          raise "remote workflow #{workflow_id} returned non-object response" unless parsed
+          parsed
+        ensure
+          terminate_process(process)
+        end
+      end
+
+      private def terminate_process(process : Process) : Nil
+        process.terminate
+        process.wait
+      rescue
+      end
+
+      private def wait_for_remote_runtime!(port : Int32) : Nil
+        deadline = Time.monotonic + 15.seconds
+        loop do
+          begin
+            response = HTTP::Client.get("http://127.0.0.1:#{port}/health")
+            return if response.status_code == 200
+          rescue
+          end
+          raise "remote Cawfile runtime did not become healthy on port #{port}" if Time.monotonic > deadline
+          sleep 100.milliseconds
+        end
+      end
+
+      private def ocawe_source_root : String
+        ENV["OCAWE_SOURCE_ROOT"]? || File.expand_path("../../../..", __DIR__)
+      end
+
+      private def require_path(from_dir : String, target : String) : String
+        relative = Path[File.expand_path(target)].relative_to(Path[File.expand_path(from_dir)]).to_s
+        relative = "./#{relative}" unless relative.starts_with?(".")
+        relative.sub(/\.cr$/, "")
+      end
+
+      private def command_available?(name : String) : Bool
+        Process.run("sh", args: ["-c", "command -v #{name} >/dev/null 2>&1"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
       end
 
       private def exec_external(ref : String, ctx : NodeContext, runtime : AnyHash, env : AnyHash?, workflow_root : String?) : AnyHash

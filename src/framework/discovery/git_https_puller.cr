@@ -5,6 +5,7 @@ module ACD
   module Discovery
     struct GitHttpsPullResult
       getter ref : String
+      getter transport : String
       getter repo_slug : String
       getter repo_url : String
       getter repo_dir : String
@@ -15,6 +16,7 @@ module ACD
 
       def initialize(
         @ref : String,
+        @transport : String,
         @repo_slug : String,
         @repo_url : String,
         @repo_dir : String,
@@ -81,6 +83,7 @@ module ACD
 
         GitHttpsPullResult.new(
           ref: ref,
+          transport: transport,
           repo_slug: repo_slug,
           repo_url: repo_url,
           repo_dir: repo_dir,

@@ -105,7 +105,7 @@ describe Ocawe::Workflow::ExecExecutor do
 set -euo pipefail
 if [ "$1" = "clone" ]; then
   mkdir -p "$3/caws/10-acp-agent"
-  printf 'workflow "10-acp-agent" do\\nend\\n' > "$3/caws/10-acp-agent/Cawfile"
+  printf 'struct Input\\nend\\nstruct Output\\nend\\n@[Validate(Input, Output)]\\nworkflow "10-acp-agent" do\\nend\\n' > "$3/caws/10-acp-agent/Cawfile"
   exit 0
 fi
 if [ "$1" = "-C" ]; then
@@ -141,6 +141,7 @@ SH
       result["transport"].as_s.should eq("git+https")
       result["local_path"].as_s.ends_with?("github.com/lefinepro/ocawe/caws/10-acp-agent").should eq(true)
       result["cawfile"].as_s.ends_with?("Cawfile").should eq(true)
+      result["run"].as_h["status"].as_s.should eq("success")
       result["cloned"].as_bool.should eq(true)
     ensure
       if old_path
@@ -170,7 +171,7 @@ set -euo pipefail
 if [ "$1" = "clone" ]; then
   printf '%s\\n' "$2" > "#{clone_url_file}"
   mkdir -p "$3/caws/10-acp-agent"
-  printf 'workflow "10-acp-agent" do\\nend\\n' > "$3/caws/10-acp-agent/Cawfile"
+  printf 'struct Input\\nend\\nstruct Output\\nend\\n@[Validate(Input, Output)]\\nworkflow "10-acp-agent" do\\nend\\n' > "$3/caws/10-acp-agent/Cawfile"
   exit 0
 fi
 if [ "$1" = "-C" ]; then
@@ -208,6 +209,7 @@ SH
       result["local_path"].as_s.ends_with?("github.com/lefinepro/ocawe/caws/10-acp-agent").should eq(true)
       result["workflow_id"].as_s.should eq("10-acp-agent")
       result["cawfile"].as_s.ends_with?("Cawfile").should eq(true)
+      result["run"].as_h["status"].as_s.should eq("success")
       File.read(clone_url_file).strip.should eq("git@github.com:lefinepro/ocawe.git")
     ensure
       if old_path

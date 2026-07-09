@@ -37,6 +37,7 @@
 
             nativeBuildInputs = [
               pkgs.cacert
+              pkgs.makeWrapper
               pkgs.pkg-config
               pkgs.shards
             ];
@@ -65,7 +66,11 @@
               install -Dm755 ocawecore "$out/bin/ocawecore"
               mkdir -p "$out/share/ocawe"
               cp -R caws scripts "$out/share/ocawe/"
+              mkdir -p "$out/share/ocawe/source"
+              cp -R src lib shard.yml shard.lock shards.nix "$out/share/ocawe/source/"
               install -Dm644 README.org "$out/share/doc/ocawe/README.org"
+              wrapProgram "$out/bin/ocawe" --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source"
+              wrapProgram "$out/bin/ocawecore" --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source"
               runHook postInstall
             '';
 

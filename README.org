@@ -335,8 +335,8 @@ end
 - =@[Container(image: "...", packages: ["pkg1"], files: ["a.sh"])]= — container packaging: optional base =image= (omit for a =scratch= static build), Nix =packages=, and extra =files= to copy (the deprecated =mode:= field is ignored)
 - =@[Validate(Input, Output)]= — input/output type validation
 - =exec "...", runtime: {acp: {...}}= — run an external ACP-compatible agent
-- =exec "git+https://github.com/org/repo/path", runtime: {"git+https"}= — clone or fast-forward pull a remote Cawfile reference into the Ocawe cache over HTTPS
-- =exec "git+ssh://github.com/org/repo/path/workflow", runtime: {"git+ssh"}= — clone or fast-forward pull a remote Cawfile reference into the Ocawe cache over SSH
+- =exec "git+https://github.com/org/repo/path", runtime: {"git+https"}= — clone or fast-forward pull a remote Cawfile reference over HTTPS, compile it into a cached single =ocawecore= binary, then run the selected workflow through that binary
+- =exec "git+ssh://github.com/org/repo/path/workflow", runtime: {"git+ssh"}= — clone or fast-forward pull a remote Cawfile reference over SSH, compile it into a cached single =ocawecore= binary, then run the selected workflow through that binary
 
 *API types:*
 - ="federation"= — ForgeFed-only mode (enabled when =Api::Federation::Inbox= or =Api::Federation::Outbox= is included)
