@@ -726,8 +726,7 @@ module ACD
       end
 
       private def self.extract_container_from_raw(lines : Array(String)) : CawfileContainer?
-        lines.each do |line|
-          stripped = line.strip
+        container_annotations(lines).each do |stripped|
           # Match @[Container] or @[Container(packages: ["pkg1", "pkg2", ...])]
           if container_match = stripped.match(/\@\[Container(?:\((.*?)\))?\]/)
             inner = container_match[1]?
@@ -763,6 +762,33 @@ module ACD
           end
         end
         nil
+      end
+
+      private def self.container_annotations(lines : Array(String)) : Array(String)
+        annotations = [] of String
+        idx = 0
+
+        while idx < lines.size
+          stripped = lines[idx].strip
+          unless stripped.starts_with?("@[Container")
+            idx += 1
+            next
+          end
+
+          parts = [stripped]
+          bracket_balance = stripped.count('[') - stripped.count(']')
+          while bracket_balance > 0 && idx + 1 < lines.size
+            idx += 1
+            next_line = lines[idx].strip
+            parts << next_line
+            bracket_balance += next_line.count('[') - next_line.count(']')
+          end
+
+          annotations << parts.join(" ")
+          idx += 1
+        end
+
+        annotations
       end
 
       private def self.detect_federation_from_raw(lines : Array(String)) : Bool

@@ -7,7 +7,7 @@ describe "ACP::Client" do
       mock_script = File.join(__DIR__, "support", "mock_acp_agent.cr")
       next unless File.file?(mock_script)
 
-      client = ACP::Client.new("ruby", [mock_script])
+      client = ACP::Client.new("crystal", ["run", mock_script])
       begin
         result = client.start
 
@@ -27,7 +27,7 @@ describe "ACP::Client" do
       mock_script = File.join(__DIR__, "support", "mock_acp_agent.cr")
       next unless File.file?(mock_script)
 
-      client = ACP::Client.new("ruby", [mock_script])
+      client = ACP::Client.new("crystal", ["run", mock_script])
       begin
         client.start
         session_id = client.create_session(Dir.current)
@@ -45,7 +45,7 @@ describe "ACP::Client" do
       mock_script = File.join(__DIR__, "support", "mock_acp_agent.cr")
       next unless File.file?(mock_script)
 
-      client = ACP::Client.new("ruby", [mock_script])
+      client = ACP::Client.new("crystal", ["run", mock_script])
       begin
         client.start
         client.create_session(Dir.current)

@@ -12,8 +12,8 @@ describe "E2E: ACP Protocol Support" do
           "mock-acp",
           runtime: {
             "acp" => json_h({
-              "command" => "ruby",
-              "args" => [mock_script],
+              "command" => "crystal",
+              "args" => ["run", mock_script],
             })
           }
         )
@@ -44,8 +44,8 @@ describe "E2E: ACP Protocol Support" do
           "codex",
           runtime: {
             "acp" => json_h({
-              "command" => "ruby",
-              "args" => [mock_script],
+              "command" => "crystal",
+              "args" => ["run", mock_script],
             })
           }
         )
@@ -76,8 +76,8 @@ describe "E2E: ACP Protocol Support" do
           "codex",
           runtime: {
             "acp" => json_h({
-              "command" => "ruby",
-              "args" => [mock_script],
+              "command" => "crystal",
+              "args" => ["run", mock_script],
               "env" => json_h({
                 "API_KEY" => "test_key_123"
               })

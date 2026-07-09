@@ -1,5 +1,7 @@
 # Mock ACP agent - responds to initialize, session/new, session/prompt
-# Usage: ruby mock_acp_agent.cr
+# Usage: crystal run mock_acp_agent.cr
+
+require "json"
 
 STDOUT.sync = true
 STDIN.sync = true
@@ -46,9 +48,9 @@ def handle_request(req)
     session_id = params["sessionId"]
     prompt = params["prompt"]
     prompt_text = ""
-    prompt.each do |block|
-      if block["type"] == "text"
-        prompt_text = block["text"]
+    prompt.as_a.each do |block|
+      if block["type"]?.try(&.as_s?) == "text"
+        prompt_text = block["text"]?.try(&.as_s?) || ""
       end
     end
 
@@ -102,8 +104,8 @@ loop do
   line = line.chomp
   next if line.empty?
 
+  req = JSON.parse(line)
   begin
-    req = JSON.parse(line)
     resp = handle_request(req)
     puts resp.to_json
     STDOUT.flush

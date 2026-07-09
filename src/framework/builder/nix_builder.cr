@@ -75,7 +75,7 @@ module Ocawe
         packages : Array(String) = [] of String,
         files : Array(String) = [] of String
       ) : String
-        final_image = image || "nix-build"
+        final_image = image || "scratch"
 
         lines = [
           "# Stage 1: nix build environment",
@@ -84,10 +84,15 @@ module Ocawe
         ]
 
         runtime_packages = ["glibc", "zlib", "openssl", "libyaml", "pcre2", "libevent", "zstd", "sqlite", "gcc.cc.lib", "patchelf"]
-        effective_packages = (runtime_packages + packages).uniq
+        package_prefix = final_image == "scratch" ? "pkgsStatic" : "nixpkgs"
+        effective_packages = if final_image == "scratch"
+                               packages
+                             else
+                               (runtime_packages + packages).uniq
+                             end
 
         if !effective_packages.empty?
-          lines << "RUN nix-env -iA #{effective_packages.map { |pkg| "nixpkgs.#{pkg}" }.join(" ")}"
+          lines << "RUN nix-env -iA #{effective_packages.map { |pkg| "#{package_prefix}.#{pkg}" }.join(" ")}"
         end
 
         if final_image == "scratch" && !effective_packages.empty?
