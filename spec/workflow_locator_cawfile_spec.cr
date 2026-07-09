@@ -71,7 +71,7 @@ end
 RCL
         locator = ACD::Discovery::WorkflowLocator.new(root)
         bundles = locator.list_workflows
-        bundles.map(&.id).sort.should eq(["chat-completions", "server-services"])
+        bundles.map(&.id).sort!.should eq(["chat-completions", "server-services"])
 
         service = locator.resolve("server-services")
         service.source_root_type.should eq("root-cawfile")

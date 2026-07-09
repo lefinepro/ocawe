@@ -460,11 +460,9 @@ module ACD
       end
 
       private def self.parse_root_config(raw_content : String, raw_lines : Array(String)) : CawfileBundle
-        begin
-          parse_settings_block(RCL.parse_string(raw_content))
-        rescue
-          parse_raw_settings(raw_lines)
-        end
+        parse_settings_block(RCL.parse_string(raw_content))
+      rescue
+        parse_raw_settings(raw_lines)
       end
 
       private def self.parse_raw_settings(raw_lines : Array(String)) : CawfileBundle
