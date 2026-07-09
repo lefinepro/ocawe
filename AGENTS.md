@@ -31,6 +31,11 @@ Develop and evolve Ocawe framework internals safely and consistently.
 4. Add or adjust specs under `spec/`.
 5. Validate no stale API names remain.
 
+## Commit Instructions
+- Analyze the project changes and make a commit with conventional commits format.
+- Make a commit explaining why the changes were made and what's new.
+- Commit only changed files, not all files, and do not add new files unless they were added manually.
+
 ## API Direction
 - Use `Workflow#step(type, id, ...)` as the unified node entry for built-in and external nodes.
 - For NodeKind steps use `Workflow#step(Ocawe::NodeKind.new(...), id: ...)`.

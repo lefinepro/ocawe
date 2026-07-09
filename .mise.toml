@@ -1,6 +1,7 @@
 [tools]
 crystal = "1.12.2"
 bun = "1.2.22"
+lua = "5.4.8"
 
 [tasks.cli-build]
 run = "mkdir -p build && crystal build src/cli/main.cr -o build/cogni"

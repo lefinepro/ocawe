@@ -31,13 +31,65 @@ packaging live outside this repository, primarily in =sireng/= and the root
 
 * Quickstart
 
-Build CLI:
+Run with Nix:
 
 #+begin_src bash
-crystal build src/cli/main.cr -o build/ocawe
+git clone https://github.com/lefinepro/ocawe.git
+cd ocawe
+
+nix run . -- --help
+nix run . -- up caws/01-simple
 #+end_src
 
-=ocawe build/dev/up= now auto-bootstrap Crystal when =crystal= is missing by downloading a platform archive into =./.tools/crystal=.
+Install with Nix:
+
+#+begin_src bash
+nix profile install github:lefinepro/ocawe
+ocawe --help
+
+OCAWE_EXAMPLES="$(nix path-info github:lefinepro/ocawe#ocawe)/share/ocawe/caws"
+ocawe up "$OCAWE_EXAMPLES/01-simple"
+#+end_src
+
+The Nix package includes the CLI/runtime dependencies used by the distribution,
+including Crystal build inputs, Git, Node.js, Ruby, SQLite, and Lua 5.4. It also
+installs example Cawfiles and helper scripts under =share/ocawe=.
+
+Install with mise from GitHub Releases:
+
+#+begin_src bash
+mise use -g "github:lefinepro/ocawe[matching=ocawe-linux,bin_path=bin,filter_bins=ocawe]@latest"
+ocawe --help
+#+end_src
+
+Declarative =mise.toml=:
+
+#+begin_src toml
+[tools]
+"github:lefinepro/ocawe" = { version = "latest", matching = "ocawe-linux", bin_path = "bin", filter_bins = "ocawe" }
+#+end_src
+
+Install CLI from source without Nix:
+
+#+begin_src bash
+# Uses system Crystal if present; otherwise downloads Crystal into ./.tools/crystal.
+source scripts/bootstrap-crystal.sh
+crystal build src/cli/main.cr -o build/ocawe
+./build/ocawe --help
+#+end_src
+
+Optional shell install:
+
+#+begin_src bash
+mkdir -p ~/.local/bin
+ln -sf "$PWD/build/ocawe" ~/.local/bin/ocawe
+ocawe --help
+#+end_src
+
+If =~/.local/bin= is not in =PATH=, add it in your shell profile.
+
+The bootstrap script downloads a platform Crystal archive into =./.tools/crystal=
+only when =crystal= is missing.
 
 You can control bootstrap with env vars:
 - =OCAWE_CRYSTAL_VERSION= (default =1.13.3=)
@@ -45,15 +97,64 @@ You can control bootstrap with env vars:
 - =OCAWE_CRYSTAL_FORCE_BOOTSTRAP=1= (force local toolchain even if system =crystal= exists)
 - =OCAWE_CRYSTAL_VERBOSE=1= (print toolchain version during bootstrap)
 
-Run runtime server:
+Run an example:
 
 #+begin_src bash
-ocawe up
+ocawe up caws/01-simple
+#+end_src
+
+Pull a remote Cawfile workflow:
+
+#+begin_src bash
 ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
 #+end_src
 
-The runtime reads =Cawfile= from the current directory. The port is configured
-there via =settings do port = 4111 end=.
+The runtime reads =Cawfile= from the selected workflow directory or the current
+directory. The port is configured there via =settings do port = 4111 end=.
+
+** Declarative Nix
+
+Use Ocawe as a flake input:
+
+#+begin_src nix
+{
+  inputs.ocawe.url = "github:lefinepro/ocawe";
+
+  outputs = { nixpkgs, ocawe, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ocawe.nixosModules.default
+        {
+          services.ocawe = {
+            enable = true;
+            workflowsRoot = "/srv/ocawe/caws";
+            port = 4111;
+          };
+        }
+      ];
+    };
+  };
+}
+#+end_src
+
+Use the overlay:
+
+#+begin_src nix
+{
+  nixpkgs.overlays = [ inputs.ocawe.overlays.default ];
+  environment.systemPackages = [ pkgs.ocawe ];
+}
+#+end_src
+
+Use with Home Manager:
+
+#+begin_src nix
+{
+  imports = [ inputs.ocawe.homeManagerModules.default ];
+  programs.ocawe.enable = true;
+}
+#+end_src
 
 * CLI Commands
 
@@ -277,11 +378,14 @@ pnpm run dev
 ** Development Tasks (mise)
 
 #+begin_src bash
+mise install
 mise run cli-build
 mise run up
 mise run playground-build
 mise run docs-build
 #+end_src
+
+The mise environment installs Crystal, Bun, and Lua 5.4 for local development.
 
 ** Testing
 

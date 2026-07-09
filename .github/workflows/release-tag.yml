@@ -55,7 +55,8 @@ jobs:
       - name: Build runtime binary
         run: |
           mkdir -p build release
-          crystal build src/ocawe.cr --release -o build/ocawecore
+          crystal build src/cli/main.cr --release --no-debug -o build/ocawe
+          crystal build src/ocawe.cr --release --no-debug -Docawe_runtime_main -o build/ocawecore
 
       - name: Build playground prebuild
         run: |
@@ -71,15 +72,24 @@ jobs:
 
       - name: Package assets
         run: |
+          mkdir -p dist/ocawe/bin dist/ocawe/share/ocawe dist/ocawe/share/doc/ocawe
+          install -m 0755 build/ocawe dist/ocawe/bin/ocawe
+          install -m 0755 build/ocawecore dist/ocawe/bin/ocawecore
+          cp -R caws scripts dist/ocawe/share/ocawe/
+          install -m 0644 README.org dist/ocawe/share/doc/ocawe/README.org
+          tar -czf release/ocawe-linux-x86_64.tar.gz -C dist/ocawe .
           tar -czf release/ocawecore-linux.tar.gz -C build ocawecore
           tar -czf release/ocawe-playground-dist.tar.gz -C packages/playground dist
           tar -czf release/ocawe-docs-dist.tar.gz -C packages/docs/.vitepress dist
+          (cd release && sha256sum *.tar.gz > SHA256SUMS)
 
       - name: Upload release bundles
         uses: actions/upload-artifact@v4
         with:
           name: release-bundles
-          path: release/*.tar.gz
+          path: |
+            release/*.tar.gz
+            release/SHA256SUMS
 
   publish-release:
     needs: build-release-assets
@@ -97,7 +107,9 @@ jobs:
         with:
           tag_name: ${{ needs.build-release-assets.outputs.tag_name }}
           files: |
+            release/ocawe-linux-x86_64.tar.gz
             release/ocawecore-linux.tar.gz
             release/ocawe-playground-dist.tar.gz
             release/ocawe-docs-dist.tar.gz
+            release/SHA256SUMS
           generate_release_notes: true
