@@ -19,7 +19,11 @@ module Ocawe
         end
 
         if runtime.has_key?("git+https")
-          return exec_git_https(ref)
+          return exec_git(ref, "git+https")
+        end
+
+        if runtime.has_key?("git+ssh")
+          return exec_git(ref, "git+ssh")
         end
 
         exec_external(ref, ctx, runtime, env, workflow_root)
@@ -49,18 +53,20 @@ module Ocawe
         Ocawe::MCP.manager.call_tool(server_id, tool_name, arguments)
       end
 
-      private def exec_git_https(ref : String) : AnyHash
-        pulled = ACD::Discovery::GitHttpsPuller.new.pull(ref)
+      private def exec_git(ref : String, transport : String) : AnyHash
+        pulled = ACD::Discovery::GitHttpsPuller.new.pull(ref, transport)
         cawfile = if Dir.exists?(pulled.local_path)
                     ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path)
                   end
 
         {
+          "transport" => JSON.parse(transport.to_json),
           "ref"        => JSON.parse(pulled.ref.to_json),
           "repo"       => JSON.parse(pulled.repo_slug.to_json),
           "repo_url"   => JSON.parse(pulled.repo_url.to_json),
           "repo_dir"   => JSON.parse(pulled.repo_dir.to_json),
           "local_path" => JSON.parse(pulled.local_path.to_json),
+          "workflow_id" => JSON.parse(pulled.workflow_id.to_json),
           "cawfile"    => JSON.parse(cawfile.to_json),
           "cloned"     => JSON.parse(pulled.cloned.to_json),
           "pulled"     => JSON.parse(pulled.pulled.to_json),

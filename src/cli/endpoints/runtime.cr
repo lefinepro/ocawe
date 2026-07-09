@@ -199,10 +199,12 @@ module OcaweCore
         end
 
         ref = args.first
-        pulled = ACD::Discovery::GitHttpsPuller.new.pull(ref)
+        transport = git_transport_for_ref(ref)
+        pulled = ACD::Discovery::GitHttpsPuller.new.pull(ref, transport)
         action = pulled.cloned ? "cloned" : "pulled"
-        puts "[ocawe] #{action} #{pulled.repo_slug}"
+        puts "[ocawe] #{action} #{pulled.repo_slug} via #{transport}"
         puts "[ocawe] local path: #{pulled.local_path}"
+        puts "[ocawe] workflow: #{workflow_id}" if workflow_id = pulled.workflow_id
         if Dir.exists?(pulled.local_path)
           if cawfile = ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path)
             puts "[ocawe] Cawfile: #{cawfile}"
@@ -211,6 +213,15 @@ module OcaweCore
       rescue ex
         STDERR.puts "Error: #{ex.message}"
         exit(1)
+      end
+
+      private def git_transport_for_ref(ref : String) : String
+        stripped = ref.strip
+        if stripped.starts_with?("git+ssh://")
+          "git+ssh"
+        else
+          "git+https"
+        end
       end
 
       private def read_port_from_cawfile(path : String) : Int32?

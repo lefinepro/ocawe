@@ -106,7 +106,8 @@ ocawe up caws/01-simple
 Pull a remote Cawfile workflow:
 
 #+begin_src bash
-ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
+ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent
+ocawe pull git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent
 #+end_src
 
 The runtime reads =Cawfile= from the selected workflow directory or the current
@@ -261,7 +262,7 @@ Run any example:
 #+begin_src bash
 ocawe up caws/01-simple
 ocawe up -d caws/02-multi-agent  # background mode
-ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
+ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent
 #+end_src
 
 Each example demonstrates a specific feature:
@@ -319,7 +320,11 @@ workflow "codex-acp" do
 end
 
 workflow "remote-acp" do
-  exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+  exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+end
+
+workflow "remote-acp-ssh" do
+  exec "git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent/10-acp-agent", runtime: {"git+ssh"}
 end
 #+end_src
 
@@ -330,7 +335,8 @@ end
 - =@[Container(image: "...", packages: ["pkg1"], files: ["a.sh"])]= — container packaging: optional base =image= (omit for a =scratch= static build), Nix =packages=, and extra =files= to copy (the deprecated =mode:= field is ignored)
 - =@[Validate(Input, Output)]= — input/output type validation
 - =exec "...", runtime: {acp: {...}}= — run an external ACP-compatible agent
-- =exec "github.com/org/repo/path", runtime: {"git+https"}= — clone or fast-forward pull a remote Cawfile reference into the Ocawe cache
+- =exec "git+https://github.com/org/repo/path", runtime: {"git+https"}= — clone or fast-forward pull a remote Cawfile reference into the Ocawe cache over HTTPS
+- =exec "git+ssh://github.com/org/repo/path/workflow", runtime: {"git+ssh"}= — clone or fast-forward pull a remote Cawfile reference into the Ocawe cache over SSH
 
 *API types:*
 - ="federation"= — ForgeFed-only mode (enabled when =Api::Federation::Inbox= or =Api::Federation::Outbox= is included)

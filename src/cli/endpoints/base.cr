@@ -54,7 +54,7 @@ module OcaweCore
             exec [PATH] -- COMMAND [ARG...]
                 Execute a command inside the running workflow container.
             pull REF
-                Clone or fast-forward pull a git+https Cawfile reference.
+                Clone or fast-forward pull a git Cawfile reference.
             -v, --version
                 Print version.
             -h, --help
@@ -67,8 +67,10 @@ module OcaweCore
             @[Container(mode: "nix", packages: ["git", "curl"])]
 
           Remote Cawfile references:
-            ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
-            exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+            ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent
+            ocawe pull git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent
+            exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+            exec "git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent/10-acp-agent", runtime: {"git+ssh"}
         TXT
       end
 

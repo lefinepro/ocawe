@@ -8,5 +8,5 @@ settings do
 end
 
 workflow "11-git-https-pull" do
-  exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+  exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
 end

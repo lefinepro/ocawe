@@ -3,11 +3,13 @@
 This example pulls a remote Cawfile bundle into the local Ocawe cache.
 
 #+begin_src rcl
-exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+exec "git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent/10-acp-agent", runtime: {"git+ssh"}
 #+end_src
 
 Manual refresh:
 
 #+begin_src bash
-ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
+ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent
+ocawe pull git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent
 #+end_src
