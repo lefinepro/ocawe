@@ -118,7 +118,7 @@ module ACD
         host = uri_host || parts[0]?
         owner = parts[1]?
         repo = parts[2]?
-        raise "invalid #{transport} ref #{ref}; expected git+https://github.com/owner/repo[/path] or git+ssh://github.com/owner/repo[/path]" unless host && owner && repo
+        raise "invalid #{transport} ref #{ref}; expected github.com/owner/repo[/path], git+https://github.com/owner/repo[/path], or git+ssh://github.com/owner/repo[/path]" unless host && owner && repo
 
         repo = repo.sub(/\.git$/, "")
         repo_slug = File.join(host, owner, repo)

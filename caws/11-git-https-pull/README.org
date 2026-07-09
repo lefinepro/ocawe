@@ -17,7 +17,7 @@ end
 
 @[Validate(RemotePullInput, RemotePullOutput)]
 workflow "11-git-https-pull" do
-  exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+  exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
 end
 #+end_src
 

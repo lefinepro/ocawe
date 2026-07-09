@@ -94,7 +94,7 @@ describe Ocawe::Workflow::ExecExecutor do
     end
   end
 
-  it "auto-pulls git+https Cawfile refs" do
+  it "auto-pulls bare GitHub Cawfile refs with git+https runtime" do
     tmp_dir = File.tempname("git-https-runtime")
     bin_dir = File.join(tmp_dir, "bin")
     cache_dir = File.join(tmp_dir, "cache")
@@ -132,12 +132,13 @@ SH
       runtime = {"git+https" => json_any(true)} of String => JSON::Any
 
       result = executor.exec(
-        "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent",
+        "github.com/lefinepro/ocawe/caws/10-acp-agent",
         ctx,
         runtime: runtime,
       )
 
       result["repo"].as_s.should eq("github.com/lefinepro/ocawe")
+      result["repo_url"].as_s.should eq("https://github.com/lefinepro/ocawe.git")
       result["transport"].as_s.should eq("git+https")
       result["local_path"].as_s.ends_with?("github.com/lefinepro/ocawe/caws/10-acp-agent").should eq(true)
       result["cawfile"].as_s.ends_with?("Cawfile").should eq(true)

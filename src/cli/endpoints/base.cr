@@ -69,7 +69,7 @@ module OcaweCore
           Remote Cawfile references:
             ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent
             ocawe pull git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent
-            exec "git+https://github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+            exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
             exec "git+ssh://github.com/lefinepro/ocawe/caws/10-acp-agent/10-acp-agent", runtime: {"git+ssh"}
         TXT
       end
