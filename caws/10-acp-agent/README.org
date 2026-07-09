@@ -44,11 +44,6 @@ end
 @[Container(packages: ["codex-acp"])]
 @[Validate(Input, Output)]
 workflow "acp-example" do
-  input_type Input
-  output_type Output
-  input_validate Schema::Types.any()
-  output_validate Schema::Types.any()
-
   exec "codex", runtime: {"acp"}
 end
 #+end_src
@@ -70,9 +65,6 @@ end
 
 @[Validate(Input, Output)]
 workflow "acp-server" do
-  input_type Input
-  output_type Output
-
   # ... workflow logic
 end
 #+end_src
@@ -127,11 +119,6 @@ Packages are installed automatically via the =@[Container]= annotation:
 @[Container(packages: ["codex-acp"])]
 @[Validate(Input, Output)]
 workflow "acp-example" do
-  input_type Input
-  output_type Output
-  input_validate Schema::Types.any()
-  output_validate Schema::Types.any()
-
   exec "codex", runtime: {"acp"}
 end
 #+end_src

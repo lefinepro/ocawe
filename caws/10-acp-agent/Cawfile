@@ -27,11 +27,5 @@ end
 @[Container(packages: ["codex-acp"])]
 @[Validate(Input, Output)]
 workflow "10-acp-agent" do
-  input_type Input
-  output_type Output
-
-  input_validate Schema::Types.any()
-  output_validate Schema::Types.any()
-
   exec "codex", runtime: {"acp"}
 end

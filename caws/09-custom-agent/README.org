@@ -83,7 +83,7 @@ curl -X POST http://localhost:4111/v1/workflows/09-custom-agent/runs \
 - Model is specified in frontmatter (=model: "provider/model"=)
 - External binaries are called by the agent framework
 - API keys are passed via environment variables
-- Use =@[Model("openai/gpt-4.1-mini")]=, =@[Validate]=, and =input_type=/=output_type= in Cawfile to set the workflow contract
+- Use =@[Model("openai/gpt-4.1-mini")]= and =@[Validate]= in Cawfile to set the workflow contract
 
 *** Next Steps
 

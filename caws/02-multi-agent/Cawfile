@@ -20,16 +20,6 @@ end
 @[Model("openai/gpt-4.1-mini")]
 @[Validate(WorkflowInput, WorkflowOutput)]
 workflow "02-multi-agent" do
-  input_type WorkflowInput
-  output_type WorkflowOutput
-
-  input_validate Schema::Types.object({
-    "task" => Schema::Types.of(String),
-  })
-  output_validate Schema::Types.object({
-    "last_response" => Schema::Types.optional(Schema::Types.of(String)),
-  }, strict: false)
-
   # Sequential agent pipeline
   agent "workflow-agent", input_schema: schema_ref("input"), output_schema: schema_ref("output")
   agent "opencode-agent", input_schema: Schema::Types.any(), output_schema: Schema::Types.any()

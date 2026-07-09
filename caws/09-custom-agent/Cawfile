@@ -23,16 +23,5 @@ end
 @[Model("openai/gpt-4.1-mini")]
 @[Validate(CustomAgentInput, CustomAgentOutput)]
 workflow "09-custom-agent" do
-  input_type CustomAgentInput
-  output_type CustomAgentOutput
-
-  input_validate Schema::Types.object({
-    "prompt" => Schema::Types.optional(Schema::Types.of(String)),
-    "input" => Schema::Types.optional(Schema::Types.any()),
-  }, strict: false)
-  output_validate Schema::Types.object({
-    "last_response" => Schema::Types.optional(Schema::Types.of(String)),
-  }, strict: false)
-
   agent "my-coder"
 end

@@ -24,11 +24,5 @@ end
 @[Validate(InputSimple, OutputSimple)]
 @[Model(Kimi)]
 workflow "01-simple" do
-  input_type InputSimple
-  output_type OutputSimple
-
-  input_validate Schema::Types.any()
-  output_validate Schema::Types.any()
-
   agent "assistant"
 end
