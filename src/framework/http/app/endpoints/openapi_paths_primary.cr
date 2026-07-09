@@ -230,6 +230,31 @@ module ACD
                 "responses" => {"501" => {"$ref" => "#/components/responses/NotImplemented"}},
               },
             },
+            "/v1/chat/completions/{completion_id}" => {
+              "get" => {
+                "tags" => ["Compat"],
+                "summary" => "Retrieve a stored OpenAI chat completion",
+                "parameters" => [
+                  {
+                    "name" => "completion_id",
+                    "in" => "path",
+                    "required" => true,
+                    "schema" => {"type" => "string"},
+                  },
+                ],
+                "responses" => {
+                  "200" => {
+                    "description" => "Chat completion result or pending status",
+                    "content" => {
+                      "application/json" => {
+                        "schema" => {"type" => "object"},
+                      },
+                    },
+                  },
+                  "404" => {"$ref" => "#/components/responses/NotFound"},
+                },
+              },
+            },
         }
       end
     end

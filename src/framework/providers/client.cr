@@ -12,10 +12,10 @@ module OcaweCore
       def initialize(@providers : Hash(String, Provider)? = nil)
       end
 
-      def generate_text(model_spec : String, prompt : String, system : String? = nil, metadata : AnyHash = {} of String => JSON::Any, api_key : String? = nil, base_url : String? = nil) : TextGenerationResponse
+      def generate_text(model_spec : String, prompt : String, system : String? = nil, messages : Array(JSON::Any)? = nil, tools : Array(JSON::Any)? = nil, metadata : AnyHash = {} of String => JSON::Any, api_key : String? = nil, base_url : String? = nil) : TextGenerationResponse
         model = ModelRef.parse(model_spec)
         provider = provider_for(model.provider)
-        provider.generate_text(TextGenerationRequest.new(model: model.model, prompt: prompt, system: system, metadata: metadata, api_key: api_key, base_url: base_url))
+        provider.generate_text(TextGenerationRequest.new(model: model.model, prompt: prompt, system: system, messages: messages, tools: tools, metadata: metadata, api_key: api_key, base_url: base_url))
       end
 
       private def provider_for(name : String) : Provider

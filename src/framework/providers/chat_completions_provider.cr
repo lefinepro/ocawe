@@ -29,6 +29,10 @@ module OcaweCore
           "messages" => any(build_messages(request)),
         } of String => JSON::Any
 
+        if tools = request.tools
+          payload["tools"] = JSON.parse(tools.to_json)
+        end
+
         effective_base = request.base_url || @base_url
         response = HTTP::Client.post(
           "#{normalized_base_url(effective_base)}/chat/completions",
@@ -44,41 +48,76 @@ module OcaweCore
         end
 
         body = JSON.parse(response.body)
-        TextGenerationResponse.new(provider: "chat_completion", model: request.model, text: extract_text(body))
+        text, tool_calls = extract_result(body)
+        TextGenerationResponse.new(provider: "chat_completion", model: request.model, text: text, tool_calls: tool_calls)
       end
 
-      private def build_messages(request : TextGenerationRequest) : Array(Hash(String, JSON::Any))
-        messages = [] of Hash(String, JSON::Any)
-        if system = request.system
-          messages << {"role" => any("system"), "content" => any(system)}
+      private def build_messages(request : TextGenerationRequest) : Array(JSON::Any)
+        if raw_messages = request.messages
+          return raw_messages.map { |m| sanitize_message(m) }
         end
-        messages << {"role" => any("user"), "content" => any(request.prompt)}
+
+        messages = [] of JSON::Any
+        if system = request.system
+          messages << JSON.parse({"role" => "system", "content" => system}.to_json)
+        end
+        messages << JSON.parse({"role" => "user", "content" => request.prompt}.to_json)
         messages
+      end
+
+      private def sanitize_message(msg : JSON::Any) : JSON::Any
+        hash = msg.as_h?
+        return msg unless hash
+
+        role = hash["role"]?.try(&.as_s?)
+        content = hash["content"]?
+        tool_calls = hash["tool_calls"]?
+
+        # Ensure content is never null in assistant messages with tool_calls
+        if role == "assistant" && tool_calls
+          is_null = content.nil? || content.raw.nil?
+          if is_null
+            new_hash = hash.dup
+            new_hash["content"] = JSON::Any.new("")
+            return JSON::Any.new(new_hash)
+          end
+        end
+
+        msg
       end
 
       private def normalized_base_url(base : String) : String
         base = base.ends_with?("/") ? base[0..-2] : base
+        if (idx = base.index("/v1/"))
+          base = base[0, idx + 3]
+        end
         base.ends_with?("/v1") ? base : "#{base}/v1"
       end
 
-      private def extract_text(payload : JSON::Any) : String
+      private def extract_result(payload : JSON::Any) : Tuple(String, Array(JSON::Any)?)
         choices = payload["choices"]?.try(&.as_a?)
-        message = choices.try(&.first?)
-        content = message.try(&.["message"]? ).try(&.as_h?)
+        return {"", nil} unless choices && choices.size > 0
 
-        value = content.try(&.["content"]?)
-        if text = value.try(&.as_s?)
-          return text
-        end
+        message = choices.first["message"]?.try(&.as_h?)
+        return {"", nil} unless message
 
-        if parts = value.try(&.as_a?)
-          rendered = parts.compact_map do |part|
-            part.as_h?.try(&.["text"]? ).try(&.as_s?)
-          end
-          return rendered.join("\n") unless rendered.empty?
-        end
+        content = message["content"]?
+        text = if content_value = content
+                 if s = content_value.as_s?
+                   s
+                 elsif parts = content_value.as_a?
+                   parts.compact_map { |part| part.as_h?.try(&.["text"]?).try(&.as_s?) }.join("\n")
+                 else
+                   content_value.to_json
+                 end
+               else
+                 ""
+               end
 
-        raise "ChatCompletion response is missing generated text"
+        tool_calls = message["tool_calls"]?.try(&.as_a?)
+        return {text, nil} unless tool_calls && tool_calls.size > 0
+
+        {text, tool_calls}
       end
 
       private def any(value) : JSON::Any

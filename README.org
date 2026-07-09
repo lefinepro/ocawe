@@ -11,6 +11,13 @@ It includes:
 - A Svelte playground for workflows, tools, skills, and agent chat
 - VitePress docs with a custom =/playground/= route
 
+* Workspace Ownership
+
+Ocawe owns the workflow runtime framework and example Cawfiles. Deployment
+library code, CI workflows, host modules, and Lefinepro production pipeline
+packaging live outside this repository, primarily in =sireng/= and the root
+=lefinepro= workspace.
+
 * Why Ocawe
 
 - Crystal workflow runtime with Cawfile-based bundles (=*.acd.cr= or =Cawfile=)
@@ -190,7 +197,7 @@ end
 *Key directives:*
 - =settings do ... end= — runtime config (port, data adapter, federation)
 - =@[Model("provider")]= — default model for the workflow
-- =@[Container(packages: ["pkg1"])]= — container mode with Nix packages (omit packages for static build)
+- =@[Container(image: "...", packages: ["pkg1"], files: ["a.sh"])]= — container packaging: optional base =image= (omit for a =scratch= static build), Nix =packages=, and extra =files= to copy (the deprecated =mode:= field is ignored)
 - =@[Validate(Input, Output)]= — input/output type validation
 
 *API types:*
@@ -252,5 +259,4 @@ crystal spec
 cd packages/playground && bun run lint
 cd packages/docs && bun run build
 #+end_src
-
 

@@ -56,6 +56,9 @@ module OcaweCore
 
       private def normalized_base_url(base : String) : String
         base = base.ends_with?("/") ? base[0..-2] : base
+        if (idx = base.index("/v1/"))
+          base = base[0, idx + 3]
+        end
         base.ends_with?("/v1") ? base : "#{base}/v1"
       end
 

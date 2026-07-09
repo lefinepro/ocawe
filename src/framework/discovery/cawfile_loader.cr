@@ -10,14 +10,16 @@ module ACD
     struct CawfileContainer
       getter mode : ContainerMode
       getter packages : Array(String)
-      getter files : Array(String)
       getter image : String?
+      # Explicit list of files to copy into the container build context.
+      # Empty means "resolve at build time" (copy all directory files).
+      getter files : Array(String)
 
       def initialize(
         @mode : ContainerMode = ContainerMode::Static,
         @packages : Array(String) = [] of String,
-        @files : Array(String) = [] of String,
         @image : String? = nil,
+        @files : Array(String) = [] of String,
       )
       end
     end
@@ -725,70 +727,47 @@ module ACD
         [] of String
       end
 
-      private def self.extract_container_from_raw(lines : Array(String)) : CawfileContainer?
-        container_annotations(lines).each do |stripped|
-          # Match @[Container] or @[Container(packages: ["pkg1", "pkg2", ...])]
-          if container_match = stripped.match(/\@\[Container(?:\((.*?)\))?\]/)
-            inner = container_match[1]?
-            if inner
-              # Check for packages: @[Container(packages: ["git", "curl"])]
-              packages = [] of String
-              if pkg_match = inner.match(/packages:\s*\[(.*?)\]/)
-                content = pkg_match[1]
-                packages = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
-              end
-              files = [] of String
-              if files_match = inner.match(/files:\s*\[(.*?)\]/)
-                content = files_match[1]
-                files = content.split(',').map { |s| s.strip.delete('"') }.reject { |s| s.empty? }
-              end
-              image = nil.as(String?)
-              if image_match = inner.match(/image:\s*"([^"]+)"/)
-                image = image_match[1]
-              end
-              # Check for explicit mode: @[Container(mode: "nix")] or @[Container(mode: "static")]
-              mode = ContainerMode::Static
-              if inner.includes?("mode:")
-                if md = inner.match(/mode:\s*"(\w+)"/)
-                  mode = ContainerMode.parse(md[1])
-                end
-              elsif !packages.empty?
-                # Packages without explicit mode defaults to Nix
-                mode = ContainerMode::Nix
-              end
-              return CawfileContainer.new(mode: mode, packages: packages, files: files, image: image)
-            end
-            return CawfileContainer.new(mode: ContainerMode::Static)
-          end
+      # Parses `key: ["a", "b"]` inside a `@[Container(...)]` annotation body into
+      # a clean array of unquoted, non-empty strings. Returns [] when absent.
+      # `[\s\S]` is used instead of `.` so arrays may span multiple lines.
+      private def self.extract_string_array(inner : String, key : String) : Array(String)
+        if match = inner.match(/#{key}:\s*\[([\s\S]*?)\]/)
+          match[1].split(',').map { |s| s.strip.delete('"') }.reject(&.empty?)
+        else
+          [] of String
         end
-        nil
       end
 
-      private def self.container_annotations(lines : Array(String)) : Array(String)
-        annotations = [] of String
-        idx = 0
+      private def self.extract_container_from_raw(lines : Array(String)) : CawfileContainer?
+        # The annotation may span multiple lines, so match against the whole blob
+        # rather than line-by-line. `[\s\S]*?` crosses newlines up to the first `)]`.
+        blob = lines.join('\n')
+        container_match = blob.match(/@\[Container(?:\(([\s\S]*?)\))?\]/)
+        return nil unless container_match
 
-        while idx < lines.size
-          stripped = lines[idx].strip
-          unless stripped.starts_with?("@[Container")
-            idx += 1
-            next
-          end
+        inner = container_match[1]?
+        return CawfileContainer.new(mode: ContainerMode::Static) unless inner
 
-          parts = [stripped]
-          bracket_balance = stripped.count('[') - stripped.count(']')
-          while bracket_balance > 0 && idx + 1 < lines.size
-            idx += 1
-            next_line = lines[idx].strip
-            parts << next_line
-            bracket_balance += next_line.count('[') - next_line.count(']')
-          end
-
-          annotations << parts.join(" ")
-          idx += 1
+        # Check for packages: @[Container(packages: ["git", "curl"])]
+        packages = extract_string_array(inner, "packages")
+        # Check for files: @[Container(files: ["script.sh", "config.json"])]
+        files = extract_string_array(inner, "files")
+        # Check for image: @[Container(image: "alpine:latest")]
+        image = nil.as(String?)
+        if img_match = inner.match(/image:\s*"([^"]+)"/)
+          image = img_match[1]
         end
-
-        annotations
+        # `mode:` is deprecated and no longer authoritative; presence of an
+        # explicit image selects the base, otherwise packages imply a Nix build.
+        mode = ContainerMode::Static
+        if inner.includes?("mode:")
+          if md = inner.match(/mode:\s*"(\w+)"/)
+            mode = ContainerMode.parse(md[1])
+          end
+        elsif !packages.empty?
+          mode = ContainerMode::Nix
+        end
+        CawfileContainer.new(mode: mode, packages: packages, image: image, files: files)
       end
 
       private def self.detect_federation_from_raw(lines : Array(String)) : Bool
