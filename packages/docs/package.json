@@ -2,10 +2,11 @@
   "name": "ocawe-docs",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
-    "sync:playground": "cd ../playground && bun run build:docs",
+    "sync:playground": "pnpm --dir ../playground install --frozen-lockfile && pnpm --dir ../playground run build:docs",
     "dev": "vitepress dev .",
-    "build": "bun run sync:playground && vitepress build .",
+    "build": "pnpm run sync:playground && vitepress build .",
     "preview": "vitepress preview .",
     "sync:openapi": "node scripts/sync-openapi.mjs"
   },

@@ -4,12 +4,16 @@ Understand the fundamental building blocks of Ocawe: workflows, agents, tools, a
 
 ## Overview
 
-Ocawe is a Crystal-first runtime for building AI-powered workflows. It provides:
+Ocawe is a Crystal-first Cawfile framework and runtime for building
+AI-powered workflows. It provides:
 
+- **Cawfile framework** - Define runtime settings, structs, services, and multiple workflows in one root file
 - **Declarative workflow DSL** - Define complex agent pipelines in Crystal
 - **Runtime execution engine** - Execute workflows with state management and control flow
 - **HTTP APIs** - Trigger and manage workflows via REST endpoints
+- **Dataset storage** - Back workflow state, queues, and task APIs with memory, file, or SQLite stores
 - **MCP integration** - Connect external tools and resources
+- **ACP execution** - Run external AI agents through the Agent Client Protocol
 - **Type-safe schemas** - Validate inputs and outputs with Crystal types
 
 ## When to Use What
@@ -59,9 +63,20 @@ Ocawe is a Crystal-first runtime for building AI-powered workflows. It provides:
 
 ### Workflows
 
-Workflows are declarative definitions of agent pipelines written in Crystal DSL (`.acd.cr` files).
+Workflows are declarative definitions of agent pipelines written in the Cawfile
+DSL. A root `Cawfile` can contain settings and multiple workflows:
 
 ```crystal
+settings do
+  port = 4111
+  datasets.adapter = "sqlite"
+end
+
+@[Service]
+workflow "agent-tunnel" do
+  exec "localtunnel", runtime: {shell: "bash"}
+end
+
 workflow "example" do
   agent "researcher"
   agent "analyzer"
@@ -69,12 +84,20 @@ workflow "example" do
 end
 ```
 
+Directory-local `Cawfile` files are preferred for workflow bundles. `.acd.cr`
+files remain supported as legacy or single-workflow fallback.
+
+**Service workflows** use `@[Service]` and start when the runtime starts or
+reloads. Use them for long-lived helpers such as tunnels, daemons, watchers,
+or background schedulers.
+
 **Key features:**
 - Crystal-native DSL
 - Type-safe execution
 - Built-in control flow (parallel, conditional, loops)
 - State management
 - Suspend/resume support
+- OpenAI-compatible workflow-as-model and async task execution
 
 ### Agents
 
@@ -124,6 +147,15 @@ workflow "example" do
   exec "tools/fetch_data.sh",
     runtime: {shell: "bash"},
     env: {API_KEY: "..."}
+end
+```
+
+**ACP agent execution**:
+
+```crystal
+workflow "example" do
+  exec "codex",
+    runtime: {acp: {command: "codex", args: ["--server"]}}
 end
 ```
 

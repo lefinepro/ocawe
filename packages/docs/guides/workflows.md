@@ -4,7 +4,10 @@ Master workflow orchestration with control flow, state management, and advanced 
 
 ## What are Workflows?
 
-Workflows are declarative definitions of agent pipelines written in Crystal DSL (`.acd.cr` files). They provide:
+Workflows are declarative definitions of agent pipelines written in the Cawfile
+DSL. A root `Cawfile` can hold runtime settings, service workflows, and
+multiple normal workflows; `.acd.cr` remains supported as a legacy fallback.
+They provide:
 
 - **Deterministic execution** - Predictable, reproducible behavior
 - **Control flow** - Parallel, conditional, loops
@@ -31,12 +34,31 @@ Workflows are declarative definitions of agent pipelines written in Crystal DSL 
 
 ### Basic Workflow
 
-Create a workflow file `workflows/example.acd.cr`:
+Create a root or bundle-local `Cawfile`:
 
 ```crystal
+settings do
+  port = 4111
+end
+
 workflow "example" do
   agent "assistant",
     prompt: "You are a helpful assistant"
+end
+```
+
+For bundle directories, Ocawe resolves `Cawfile` first and then falls back to
+`<workflow-id>.acd.cr`.
+
+### Service Workflow
+
+Service workflows start with `ocawe up`. Use them for runtime helpers such as
+tunnels, daemons, watchers, or background schedulers:
+
+```crystal
+@[Service]
+workflow "agent-tunnel" do
+  exec "localtunnel", runtime: {shell: "bash"}
 end
 ```
 
@@ -943,6 +965,36 @@ The workflow output is returned as a chat completion response:
   ]
 }
 ```
+
+### Retrieve a Completion
+
+If a workflow response includes a persisted completion id, retrieve it later:
+
+```bash
+curl http://localhost:4111/v1/chat/completions/chatcmpl_abc123
+```
+
+### Async Chat Completion Tasks
+
+Queue longer workflow-as-model requests through the task endpoint:
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "workflow/customer-support",
+    "messages": [{"role": "user", "content": "Open a billing ticket"}]
+  }'
+```
+
+The response includes a `task_id` and `status_url`. Poll the status URL:
+
+```bash
+curl http://localhost:4111/v1/chat/completions/tasks/<task_id>
+```
+
+Task records are stored in the configured dataset store, so SQLite-backed
+runtimes can keep queue state across process restarts.
 
 ### Use Cases
 

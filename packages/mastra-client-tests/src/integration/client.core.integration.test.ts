@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { createClient } from "../test-utils/client-factory";
 import { callMethod, tryGetResource } from "../test-utils/invoke";
 import { ensureTestService, getLastRequestMeta, resetTestService, setServiceMode, stopTestService } from "../test-utils/test-service";

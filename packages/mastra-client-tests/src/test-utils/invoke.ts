@@ -78,13 +78,13 @@ function createWorkflowsAdapter(client: any): any {
       const workflow = client.getWorkflow(workflowId);
       if (workflow?.run) return workflow.run(payload);
       if (workflow?.start) return workflow.start(payload);
-      throw new Error("Method 'run' is not available");
+      throw new Error("Method 'run' is not implemented");
     },
     async watch(...args: any[]) {
       const workflowId = typeof args[0] === "string" ? args[0] : args[0]?.workflowId;
       const workflow = client.getWorkflow(workflowId);
       if (workflow?.watch) return workflow.watch(args[1] ?? args[0]);
-      throw new Error("Method 'watch' is not available");
+      throw new Error("Method 'watch' is not implemented");
     },
   };
 }
@@ -98,7 +98,14 @@ export function tryGetResource(client: any, name: string): ResourceLookupResult 
   const getterName = `get${name[0].toUpperCase()}${name.slice(1)}`;
   const getter = client?.[getterName];
   if (typeof getter === "function") {
-    return { found: true, resource: getter.call(client) };
+    try {
+      return { found: true, resource: getter.call(client) };
+    } catch (error) {
+      return {
+        found: false,
+        reason: `Resource '${name}' getter failed: ${asError(error).message}`,
+      };
+    }
   }
 
   if (name === "agents") {

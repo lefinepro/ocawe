@@ -6,8 +6,8 @@ Ocawe ships a Svelte playground and exposes it as a VitePress custom route at `/
 
 ```bash
 cd packages/playground
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 ```
 
 The playground dev server runs on `http://localhost:4173` and proxies `/api` to the runtime server.
@@ -18,7 +18,7 @@ Build and mirror the playground into VitePress static assets:
 
 ```bash
 cd packages/playground
-bun run build:docs
+pnpm run build:docs
 ```
 
 This writes static files to `packages/docs/public/playground`.
@@ -27,7 +27,7 @@ When you run docs build:
 
 ```bash
 cd packages/docs
-bun run build
+pnpm run build
 ```
 
 the docs package automatically refreshes `/playground/` first via `sync:playground`.

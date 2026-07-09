@@ -1,6 +1,6 @@
 # Ocawe Playground
 
-This workspace contains the Bun + Svelte playground for OcaweCore.
+This workspace contains the Node.js/pnpm + Svelte playground for OcaweCore.
 
 - Runtime app root: `.`
 - Companion docs package: `../docs`
@@ -9,8 +9,8 @@ This workspace contains the Bun + Svelte playground for OcaweCore.
 ## Commands
 
 ```bash
-bun install
-bun run dev
-bun run build
-bun run build:docs
+pnpm install
+pnpm run dev
+pnpm run build
+pnpm run build:docs
 ```

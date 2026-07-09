@@ -9,8 +9,8 @@ Include `Api::Federation::Inbox` or `Api::Federation::Outbox` in your Cawfile st
 ```crystal
 # Cawfile
 settings do
-  data.adapter = "memory"
   port = 4111
+  datasets.adapter = "sqlite"
   
   federation do
     local_actor = "https://your.domain/actors/codex"

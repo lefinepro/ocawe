@@ -1,6 +1,8 @@
 # Ocawe
 
-Build AI agents and workflows your users actually depend on. Ocawe is a Crystal-first runtime that gives you everything you need to prototype fast and ship with confidence.
+Build AI agents and workflows your users actually depend on. Ocawe is a
+Crystal-first Cawfile framework with a production HTTP runtime, service
+workflows, ACP agent execution, datasets, and OpenAI-compatible APIs.
 
 ## Quickstart
 
@@ -8,12 +10,17 @@ Build and start the runtime:
 
 ```bash
 crystal build src/cli/main.cr -o build/ocawe
-./build/ocawe up --port 4111
+./build/ocawe up
 ```
 
-Create your first workflow (`hello-world.acd.cr`):
+Create your first root `Cawfile`:
 
 ```crystal
+settings do
+  port = 4111
+  datasets.adapter = "sqlite"
+end
+
 workflow "hello-world" do
   agent "greeter",
     model: "openai/gpt-4",
@@ -43,11 +50,15 @@ See the [quickstart guide](/guides/quickstart) for a full walkthrough.
 
 ## Core Features
 
+- **Cawfile-first framework** - Root Cawfiles define settings, structs, services, and multiple workflows
 - **Declarative workflow DSL** - Crystal-native syntax for building complex agent pipelines
 - **Type-safe execution** - Crystal's type system catches errors at compile time
 - **Control flow primitives** - Parallel, conditional, loops, suspend/resume
+- **Service workflows** - `@[Service]` workflows start with the runtime for tunnels, daemons, and watchers
 - **Agent Client Protocol (ACP)** - Integrate external AI agents (Codex, Claude) via standardized protocol
 - **Workflow-as-Model** - Execute workflows through OpenAI-compatible `/v1/chat/completions` API
+- **Async chat completion tasks** - Queue workflow chat jobs through `/v1/chat/completions/tasks`
+- **Dataset store** - In-memory, file, and SQLite-backed dataset APIs for workflow state and queues
 - **MCP integration** - Connect external tools and resources via Model Context Protocol
 - **HTTP APIs** - Trigger and manage workflows via REST endpoints
 - **Dynamic model discovery** - `/v1/models` endpoint exposes workflows, agents, skills, and tools
@@ -76,8 +87,8 @@ Start the interactive Svelte playground:
 
 ```bash
 cd packages/playground
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 ```
 
 Open in your browser:

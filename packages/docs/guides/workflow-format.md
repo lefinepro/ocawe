@@ -1,14 +1,30 @@
-# Workflow Format (`.acd.cr`)
+# Workflow Format (`Cawfile` and `.acd.cr`)
 
-Ocawe workflows use Crystal DSL files with extension `.acd.cr`.
+Ocawe workflows use a Crystal-like Cawfile DSL. The preferred format is a root
+or bundle-local `Cawfile`; `.acd.cr` files remain supported for legacy and
+single-workflow layouts.
 
-Example:
+Root `Cawfile` example:
 
 ```crystal
+settings do
+  port = 4111
+  datasets.adapter = "sqlite"
+end
+
+@[Service]
+workflow "agent-tunnel" do
+  exec "localtunnel", runtime: {shell: "bash"}
+end
+
 workflow "agents-example" do
   agent "simple-agent", model: "clipproxyapi/qwen3-coder-plus"
 end
 ```
+
+A root `Cawfile` can define runtime settings, Crystal structs, annotations, and
+multiple `workflow` blocks. A bundle-local `Cawfile` is loaded before legacy
+`<id>.acd.cr` files.
 
 ## Agent Configuration
 
@@ -92,6 +108,26 @@ end
 > authoritative. The base is now selected by the presence of `image` (custom
 > base) or its absence (`scratch`); `packages` implies a Nix build stage. The
 > field is still parsed for backward compatibility but should be removed.
+
+### `@[Service]` Annotation
+
+`@[Service]` marks a workflow as a runtime service. Service workflows are
+discovered from the active `Cawfile` and started by `ocawe up` when the HTTP
+runtime boots or reloads.
+
+Use service workflows for long-lived helpers such as local tunnels, watchers,
+sidecar agents, or schedulers:
+
+```crystal
+@[Service]
+workflow "agent-tunnel" do
+  exec "localtunnel", runtime: {shell: "bash"}
+end
+```
+
+Service state is tracked separately from normal workflow triggers. When a
+service exits or fails, the runtime clears its started marker so a later reload
+can start it again.
 
 ## Execution Control
 
@@ -183,10 +219,11 @@ end
 | `@[Logger(...)]` | Configure workflow/node logging metadata and runtime log level/shape |
 | `@[Workspace(...)]` | Configure workflow-level or next-node workspace metadata |
 | `@[Container(...)]` | Configure container packaging (`image`, `packages`, `files`) for `ocawe build`/`up` |
+| `@[Service]` | Start workflow automatically with the runtime |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |
 | `function_name` | Execute internal node kind (registered via `NodeKind::new(function_name)`) |
-| `exec "path_or_inline", runtime: {...}, env: {...}` | Execute external script path or inline script |
+| `exec "path_or_inline", runtime: {...}, env: {...}` | Execute external script path, inline script, MCP tool, or ACP agent |
 | `voice "..."` | Voice node |
 | `rag "..."` | RAG node |
 | `suspend "..."` | Suspend-and-resume node (`reason`, `resume_schema`) |
@@ -233,6 +270,27 @@ For `agent`, `exec`, and internal function-name nodes, runtime passes a chained 
 If exec/internal-node attributes are defined in DSL, runtime includes these attributes as flat fields in the input envelope.
 
 For internal function-name nodes, `input_schema` and `output_schema` are reserved schema keys; all other named args are passed through as node attributes.
+
+## ACP Runtime
+
+`exec` can run an external Agent Client Protocol process by passing an `acp`
+runtime block:
+
+```crystal
+workflow "codex-acp" do
+  exec "codex",
+    runtime: {
+      acp: {
+        command: "codex",
+        args: ["--server"],
+        env: {CODEX_HOME: ".codex"}
+      }
+    }
+end
+```
+
+The runtime starts the process over stdio, opens an ACP session, sends the
+node input as the prompt, and returns structured ACP output to the workflow.
 
 ## Function Resolution and Aliases
 

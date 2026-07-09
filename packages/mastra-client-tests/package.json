@@ -3,18 +3,20 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "bun@1.2.22",
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
-    "test": "bun test",
-    "test:integration": "bun test",
-    "test:integration:coverage": "bun test --coverage",
+    "test": "vitest run",
+    "test:integration": "vitest run",
+    "test:integration:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@mastra/client-js": "latest"
   },
   "devDependencies": {
-    "bun-types": "latest",
-    "typescript": "^5.9.2"
+    "@types/node": "^26.1.1",
+    "@vitest/coverage-v8": "^4.0.15",
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.15"
   }
 }

@@ -1,18 +1,19 @@
 # Quickstart
 
-Get started with Ocawe in minutes. Build your first AI workflow with agents, tools, and Crystal-native runtime.
+Get started with Ocawe in minutes. Build your first Cawfile workflow with
+agents, tools, and the Crystal-native runtime.
 
 ## Prerequisites
 
 - Crystal (>= 1.9.0)
-- Bun or Node.js (for playground)
+- Node.js and pnpm (for playground and docs)
 
 ## Installation
 
 Clone the repository and build the runtime:
 
 ```bash
-git clone https://github.com/your-org/ocawe.git
+git clone https://github.com/lefinepro/ocawe.git
 cd ocawe
 crystal build src/cli/main.cr -o build/ocawe
 ```
@@ -22,10 +23,11 @@ crystal build src/cli/main.cr -o build/ocawe
 Start the Ocawe runtime server:
 
 ```bash
-./build/ocawe up --port 4111
+./build/ocawe up
 ```
 
-The runtime is now listening on `http://localhost:4111`.
+The runtime reads settings and workflows from the root `Cawfile`. With the
+example below, it listens on `http://localhost:4111`.
 
 ## Start the Playground (Optional)
 
@@ -33,8 +35,8 @@ For interactive development, start the Svelte playground:
 
 ```bash
 cd packages/playground
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 ```
 
 Open your browser:
@@ -43,15 +45,24 @@ Open your browser:
 
 ## Your First Workflow
 
-Create your first workflow file `hello-world.acd.cr`:
+Create a root `Cawfile`:
 
 ```crystal
+settings do
+  port = 4111
+  datasets.adapter = "sqlite"
+end
+
 workflow "hello-world" do
   agent "greeter",
     model: "openai/gpt-4",
     prompt: "You are a friendly assistant. Greet the user warmly."
 end
 ```
+
+A root `Cawfile` can hold multiple workflows. Directory-local `Cawfile` files
+are preferred for bundles, and `.acd.cr` files remain supported for legacy or
+single-workflow layouts.
 
 ## Run Your Workflow
 
@@ -69,6 +80,20 @@ curl -X POST http://localhost:4111/v1/triggers/workflows/hello-world \
   -d '{"input": {"message": "Hello!"}}'
 ```
 
+Or through the OpenAI-compatible workflow-as-model API:
+
+```bash
+curl -X POST http://localhost:4111/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "workflow/hello-world",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+For queued work, use `POST /v1/chat/completions/tasks` and poll the returned
+`status_url`.
+
 ## What's Next?
 
 - **[Concepts](/guides/concepts)** - Understand agents, workflows, and tools
@@ -78,6 +103,24 @@ curl -X POST http://localhost:4111/v1/triggers/workflows/hello-world \
 - **[API Reference](/api/reference)** - Complete API documentation
 
 ## Common Patterns
+
+### Service Workflow
+
+```crystal
+@[Service]
+workflow "agent-tunnel" do
+  exec "localtunnel", runtime: {shell: "bash"}
+end
+```
+
+### External ACP Agent
+
+```crystal
+workflow "codex-acp" do
+  exec "codex",
+    runtime: {acp: {command: "codex", args: ["--server"]}}
+end
+```
 
 ### Multi-Agent Pipeline
 

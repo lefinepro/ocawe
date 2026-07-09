@@ -1,21 +1,24 @@
 # mastra-client-tests
 
-Integration test suite for `@mastra/client-js` using `bun test` and an in-process compatibility test service with test workflows.
+Integration test suite for `@mastra/client-js` using Vitest on Node.js and an
+in-process compatibility test service with test workflows.
 
 ## Install
 
 ```bash
 cd packages/mastra-client-tests
-BUN_INSTALL=/tmp/bun-install BUN_TMPDIR=/tmp/bun-tmp bun install
+pnpm install
 ```
 
 ## Run
 
 ```bash
-bun test
-bun test --coverage
+pnpm run test
+pnpm run test:integration:coverage
 ```
 
 ## Coverage target
 
-The suite validates all public client resources and methods (core, agents, tools, workflows, vectors, memory, logs, traces, evals) with success and failure paths.
+The suite validates all public client resources and methods (core, agents,
+tools, workflows, vectors, memory, logs, traces, evals) with success and
+failure paths.

@@ -11,7 +11,7 @@ try {
   console.log(`synced OpenAPI from ${url}`);
 } catch (error) {
   if (!fs.existsSync(target)) {
-    fs.writeFileSync(target, JSON.stringify({ openapi: "3.0.3", info: { title: "CogniCore API", version: "dev" }, paths: {} }, null, 2));
+    fs.writeFileSync(target, JSON.stringify({ openapi: "3.0.3", info: { title: "OcaweCore API", version: "dev" }, paths: {} }, null, 2));
   }
   console.log(`OpenAPI sync skipped: ${error.message}`);
 }

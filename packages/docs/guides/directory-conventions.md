@@ -1,12 +1,18 @@
 # Directory Conventions
 
 ## Production workflows
-- Root: `src/workflows`
+- Runtime root: current directory by default, or the directory passed to `ocawe up`
+- Root framework file: `Cawfile`
 - Bundle layout:
-  - `<workflow-id>/<workflow-id>.acd.cr`
+  - `<workflow-id>/Cawfile`
+  - `<workflow-id>/<workflow-id>.acd.cr` (legacy fallback)
   - `<workflow-id>/agents/*.md`
   - `<workflow-id>/skills/*.md`
   - `<workflow-id>/tools/*` (optional)
+
+The root `Cawfile` can define `settings`, shared structs, `@[Service]`
+workflows, and multiple normal `workflow` blocks. Bundle-local `Cawfile` files
+are resolved before `.acd.cr`.
 
 ## Agent markdown conventions
 - Frontmatter may include `model`, `voice`, and `guardrails`.

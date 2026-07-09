@@ -5,6 +5,18 @@ All notable changes to Ocawe will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Cawfile-first framework documentation**
+  - Root `Cawfile` support for runtime settings, shared structs, multiple workflows, and `@[Service]` workflows
+  - Bundle-local `Cawfile` resolution before legacy `.acd.cr` fallback
+  - Service workflow examples for tunnels, daemons, watchers, and schedulers
+  - ACP `exec` runtime examples for external agents
+  - OpenAI-compatible chat completion retrieval and async task endpoints
+  - Dataset API and SQLite-backed task queue documentation
+
 ## [26.06.0] - 2026-06-12
 
 ### Added

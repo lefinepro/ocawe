@@ -39,10 +39,15 @@ jobs:
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: 1.2.22
+          node-version: 22
+
+      - name: Enable pnpm
+        run: |
+          corepack enable pnpm
+          corepack prepare pnpm@11.9.0 --activate
 
       - name: Install shards
         run: shards update --production
@@ -54,14 +59,14 @@ jobs:
 
       - name: Build playground prebuild
         run: |
-          bun --cwd packages/playground install
-          bun --cwd packages/playground run build
+          pnpm --dir packages/playground install --frozen-lockfile
+          pnpm --dir packages/playground run build
           test -d packages/playground/dist
 
       - name: Build docs static
         run: |
-          bun --cwd packages/docs install
-          bun --cwd packages/docs run build
+          pnpm --dir packages/docs install --frozen-lockfile
+          pnpm --dir packages/docs run build
           test -d packages/docs/.vitepress/dist
 
       - name: Package assets

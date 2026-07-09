@@ -2,7 +2,8 @@
 #+AUTHOR: Konrad Geletey
 #+DATE: 2026-06-10
 
-Ocawe is a Crystal-first runtime for workflow bundles, agents, tools, and skills.
+Ocawe is a Crystal-first framework and runtime for Cawfile workflow bundles,
+agents, tools, skills, and OpenAI-compatible workflow execution.
 
 *Licenses:* [[https://spdx.org/licenses/0BSD.html][0BSD]] (=LICENSE=).
 
@@ -20,11 +21,13 @@ packaging live outside this repository, primarily in =sireng/= and the root
 
 * Why Ocawe
 
-- Crystal workflow runtime with Cawfile-based bundles (=*.acd.cr= or =Cawfile=)
+- Cawfile-first workflow framework with root-level multi-workflow bundles
+- =@[Service]= workflows that start with the runtime for tunnels, daemons, and watchers
 - Agent + skill + tool discovery from workflow directories
 - Voice and RAG patterns through workflow DSL
+- ACP execution for external agents through =exec ..., runtime: {acp: {...}}=
 - Schema validation and guardrails in agent/workflow execution
-- OpenAI-compatible chat completions endpoint support
+- OpenAI-compatible chat completions, retrieval, and async task endpoints
 
 * Quickstart
 
@@ -48,7 +51,8 @@ Run runtime server:
 ocawe up
 #+end_src
 
-The port is configured in =Cawfile= via =settings { port = 4111 }=.
+The runtime reads =Cawfile= from the current directory. The port is configured
+there via =settings do port = 4111 end=.
 
 * CLI Commands
 
@@ -108,6 +112,9 @@ Use =OCAWE_TRIGGER_BASE_URL= or =--base-url= to target a non-default runtime URL
 ** Compatibility
 
 - =POST /v1/chat/completions=
+- =GET /v1/chat/completions/:completion_id=
+- =POST /v1/chat/completions/tasks=
+- =GET /v1/chat/completions/tasks/:taskId=
 
 ** Federation APIs
 
@@ -128,7 +135,7 @@ src/
   cli/                     # ocawe CLI (build/dev/up)
   framework/               # runtime framework + HTTP endpoints
 packages/
-  playground/              # Svelte playground (Vite + Bun)
+  playground/              # Svelte playground (Vite + pnpm/Node.js)
   docs/                    # VitePress docs and static playground route
 caws/                      # workflow bundle examples
   01-simple/               # minimal single agent
@@ -165,16 +172,19 @@ Each example demonstrates a specific feature:
 - *08-model-override* — per-agent model configuration
 - *09-custom-agent* — writing custom agents with external binaries
 
-* Cawfile Configuration
+* Cawfile Framework
 
-Framework configuration uses =Cawfile= (RCL format) in the workflow root.
+Framework configuration uses =Cawfile= in the workflow root. A root =Cawfile=
+can define runtime settings, Crystal structs, annotations, and multiple
+workflow blocks. Directory-local =Cawfile= files are preferred for bundles;
+=*.acd.cr= files are still supported as legacy/single-workflow fallback.
 
 Example =Cawfile=:
 
 #+begin_src rcl
 settings do
-  data.adapter = "memory"
   port = 4111
+  datasets.adapter = "sqlite"
 end
 
 # Federation is enabled by including Api::Federation types
@@ -192,13 +202,25 @@ workflow "solver-codex" do
   follow ["@coder@example.com"]
   agent "codex-agent"
 end
+
+@[Service]
+workflow "agent-tunnel" do
+  exec "localtunnel", runtime: {shell: "bash"}
+end
+
+workflow "codex-acp" do
+  exec "codex",
+    runtime: {acp: {command: "codex", args: ["--server"]}}
+end
 #+end_src
 
 *Key directives:*
-- =settings do ... end= — runtime config (port, data adapter, federation)
+- =settings do ... end= — runtime config (port, datasets adapter, federation)
+- =@[Service]= — workflow starts with =ocawe up= and restarts on runtime reload
 - =@[Model("provider")]= — default model for the workflow
 - =@[Container(image: "...", packages: ["pkg1"], files: ["a.sh"])]= — container packaging: optional base =image= (omit for a =scratch= static build), Nix =packages=, and extra =files= to copy (the deprecated =mode:= field is ignored)
 - =@[Validate(Input, Output)]= — input/output type validation
+- =exec "...", runtime: {acp: {...}}= — run an external ACP-compatible agent
 
 *API types:*
 - ="federation"= — ForgeFed-only mode (enabled when =Api::Federation::Inbox= or =Api::Federation::Outbox= is included)
@@ -231,16 +253,16 @@ See =caws/09-custom-agent= for a complete example.
 
 #+begin_src bash
 cd packages/playground
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 #+end_src
 
 ** Run Docs
 
 #+begin_src bash
 cd packages/docs
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 #+end_src
 
 ** Development Tasks (mise)
@@ -256,7 +278,6 @@ mise run docs-build
 
 #+begin_src bash
 crystal spec
-cd packages/playground && bun run lint
-cd packages/docs && bun run build
+cd packages/playground && pnpm run lint
+cd packages/docs && pnpm run build
 #+end_src
-

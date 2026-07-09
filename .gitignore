@@ -1,6 +1,8 @@
 build/
 packages/**/dist
+packages/**/coverage/
 packages/**/node_modules/
+packages/docs/public/playground/
 packages/docs/.vitepress/cache/
 packages/playground/.svelte-kit/
 *.log

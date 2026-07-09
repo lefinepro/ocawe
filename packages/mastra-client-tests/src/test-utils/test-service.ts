@@ -1,3 +1,5 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+
 const encoder = new TextEncoder();
 
 type Mode = "ok" | "error";
@@ -32,7 +34,8 @@ const state: ServiceState = {
 const AGENT = { id: "agent-weather", name: "Weather Agent" };
 const WORKFLOW = { id: "workflow-onboarding", name: "Onboarding" };
 
-let server: ReturnType<typeof Bun.serve> | null = null;
+let server: Server | null = null;
+let serverPort = 0;
 
 function json(data: unknown, init?: ResponseInit): Response {
   return Response.json(data, init);
@@ -193,22 +196,41 @@ function resetState(): void {
 
 export async function ensureTestService(): Promise<string> {
   if (server) {
-    return `http://127.0.0.1:${server.port}`;
+    return `http://127.0.0.1:${serverPort}`;
   }
 
   resetState();
-  server = Bun.serve({
-    port: 0,
-    fetch: handleCompat,
+
+  server = createServer(async (req, res) => {
+    try {
+      const response = await handleCompat(await toFetchRequest(req));
+      await writeFetchResponse(res, response);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: message }));
+    }
   });
 
-  return `http://127.0.0.1:${server.port}`;
+  await new Promise<void>((resolve, reject) => {
+    server!.once("error", reject);
+    server!.listen(0, "127.0.0.1", () => resolve());
+  });
+
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("test service did not bind to a TCP port");
+  }
+  serverPort = address.port;
+
+  return `http://127.0.0.1:${serverPort}`;
 }
 
 export function stopTestService(): void {
   if (!server) return;
-  server.stop(true);
+  server.close();
   server = null;
+  serverPort = 0;
 }
 
 export function resetTestService(): void {
@@ -221,4 +243,38 @@ export function setServiceMode(mode: Mode): void {
 
 export function getLastRequestMeta(): RequestMeta {
   return { ...state.lastRequest };
+}
+
+async function toFetchRequest(req: IncomingMessage): Promise<Request> {
+  const host = req.headers.host ?? "127.0.0.1";
+  const url = `http://${host}${req.url ?? "/"}`;
+  const chunks: Uint8Array[] = [];
+
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? encoder.encode(chunk) : new Uint8Array(chunk));
+  }
+
+  const body = chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+  return new Request(url, {
+    method: req.method,
+    headers: req.headers as HeadersInit,
+    body,
+  });
+}
+
+async function writeFetchResponse(res: ServerResponse, response: Response): Promise<void> {
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+
+  res.writeHead(response.status, headers);
+
+  if (!response.body) {
+    res.end();
+    return;
+  }
+
+  const body = Buffer.from(await response.arrayBuffer());
+  res.end(body);
 }
