@@ -129,7 +129,6 @@ Use Ocawe as a flake input:
         {
           services.ocawe = {
             enable = true;
-            workflowsRoot = "/srv/ocawe/caws";
             port = 4111;
           };
         }
@@ -138,6 +137,11 @@ Use Ocawe as a flake input:
   };
 }
 #+end_src
+
+By default the NixOS module declaratively installs packaged examples by linking
+=services.ocawe.workflowsRoot= to =${package}/share/ocawe/caws= when the path
+does not already exist. Disable that with =services.ocawe.installExamples =
+false= when you manage the workflows directory yourself.
 
 Use the overlay:
 

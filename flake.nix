@@ -5,12 +5,31 @@
 
   outputs = { self, nixpkgs }:
     let
+      lib = nixpkgs.lib;
+
       supportedSystems = [
         "x86_64-linux"
         "aarch64-linux"
       ];
 
-      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+      forAllSystems = lib.genAttrs supportedSystems;
+
+      runtimeAssets = [
+        "caws"
+        "scripts"
+      ];
+
+      sourceAssets = [
+        "src"
+        "lib"
+        "shard.yml"
+        "shard.lock"
+        "shards.nix"
+      ];
+
+      docAssets = [
+        "README.org"
+      ];
     in
     {
       packages = forAllSystems (system:
@@ -62,22 +81,44 @@
 
             installPhase = ''
               runHook preInstall
+
               install -Dm755 ocawe "$out/bin/ocawe"
               install -Dm755 ocawecore "$out/bin/ocawecore"
+
               mkdir -p "$out/share/ocawe"
-              cp -R caws scripts "$out/share/ocawe/"
+              ${lib.concatMapStringsSep "\n" (path: ''
+                cp -R ${path} "$out/share/ocawe/"
+              '') runtimeAssets}
+
               mkdir -p "$out/share/ocawe/source"
-              cp -R src lib shard.yml shard.lock shards.nix "$out/share/ocawe/source/"
-              install -Dm644 README.org "$out/share/doc/ocawe/README.org"
-              wrapProgram "$out/bin/ocawe" --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source"
-              wrapProgram "$out/bin/ocawecore" --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source"
+              ${lib.concatMapStringsSep "\n" (path: ''
+                cp -R ${path} "$out/share/ocawe/source/"
+              '') sourceAssets}
+
+              ${lib.concatMapStringsSep "\n" (path: ''
+                install -Dm644 ${path} "$out/share/doc/ocawe/${path}"
+              '') docAssets}
+
+              wrapProgram "$out/bin/ocawe" \
+                --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source" \
+                --set OCAWE_EXAMPLES "$out/share/ocawe/caws"
+              wrapProgram "$out/bin/ocawecore" \
+                --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source" \
+                --set OCAWE_EXAMPLES "$out/share/ocawe/caws"
+
               runHook postInstall
             '';
 
             doInstallCheck = true;
             installCheckPhase = ''
               runHook preInstallCheck
+
               "$out/bin/ocawe" --help > /dev/null
+              test -d "$out/share/ocawe/caws/12-api-nodes"
+              test -f "$out/share/ocawe/caws/12-api-nodes/Cawfile"
+              test -f "$out/share/ocawe/source/src/ocawe.cr"
+              test -f "$out/share/doc/ocawe/README.org"
+
               runHook postInstallCheck
             '';
           };
@@ -168,6 +209,18 @@
               description = "Directory containing Ocawe Cawfile workflows.";
             };
 
+            installExamples = lib.mkOption {
+              type = lib.types.bool;
+              default = true;
+              description = ''
+                Declaratively install the packaged Cawfile examples at
+                services.ocawe.workflowsRoot when that path does not already
+                exist. The path is installed as a symlink to the package's
+                share/ocawe/caws directory, so package updates update examples
+                without copying mutable state.
+              '';
+            };
+
             port = lib.mkOption {
               type = lib.types.port;
               default = 4111;
@@ -196,10 +249,15 @@
           config = lib.mkIf cfg.enable {
             environment.systemPackages = [ cfg.package ];
 
+            systemd.tmpfiles.rules = lib.optionals cfg.installExamples [
+              "d ${builtins.dirOf cfg.workflowsRoot} 0755 root root - -"
+              "L ${cfg.workflowsRoot} - - - - ${cfg.package}/share/ocawe/caws"
+            ];
+
             systemd.services.ocawe = {
               description = "Ocawe runtime";
               wantedBy = [ "multi-user.target" ];
-              after = [ "network-online.target" ];
+              after = [ "network-online.target" "systemd-tmpfiles-setup.service" ];
               wants = [ "network-online.target" ];
               environment = cfg.environment // {
                 SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
