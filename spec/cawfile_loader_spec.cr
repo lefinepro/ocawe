@@ -368,6 +368,75 @@ RCL
         FileUtils.rm_rf(dir)
       end
     end
+
+    it "loads multiple root workflows and marks service workflows" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+settings do
+  port = 4111
+end
+
+@[Service]
+@[Validate(Input, Output)]
+workflow "shared-service" do
+  exec "boot", runtime: {shell: "bash"}
+end
+
+@[Validate(Input, Output)]
+workflow "chat-task" do
+  follow ["@fmatch.example"]
+  exec "codex", runtime: {acp: {command: "codex"}}
+end
+RCL
+        bundles = ACD::Discovery::CawfileLoader.load_all(dir)
+        bundles.map(&.id).should eq(["shared-service", "chat-task"])
+        bundles[0].service.should eq(true)
+        bundles[1].service.should eq(false)
+        bundles[0].start_settings["port"].should eq(4111)
+        bundles[1].follow.should eq(["@fmatch.example"])
+
+        ACD::Discovery::CawfileLoader.load(dir, "chat-task").not_nil!.id.should eq("chat-task")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "keeps nested dataset and loop blocks inside the owning workflow slice" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+@[Validate(Input, Output)]
+workflow "with-nested-blocks" do
+  dataset "profiles" do
+    description "Profiles"
+  end
+  loop do
+    exec "tick", runtime: {shell: "bash"}
+  end
+end
+
+@[Validate(Input, Output)]
+workflow "next-workflow" do
+  exec "next", runtime: {shell: "bash"}
+end
+RCL
+        bundles = ACD::Discovery::CawfileLoader.load_all(dir)
+        bundles.map(&.id).should eq(["with-nested-blocks", "next-workflow"])
+
+        first_source = bundles[0].dsl_source.not_nil!.join("\n")
+        first_source.should contain("dataset \"profiles\"")
+        first_source.should contain("loop do")
+        first_source.should contain("exec \"tick\"")
+        first_source.should_not contain("workflow \"next-workflow\"")
+
+        bundles[1].dsl_source.not_nil!.join("\n").should contain("exec \"next\"")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
   end
 
   describe ".load_root" do

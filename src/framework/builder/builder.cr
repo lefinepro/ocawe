@@ -6,7 +6,15 @@ module Ocawe
       def initialize(@base : String)
       end
 
-      abstract def build(binary_path : String, tag : String = "", context_dir : String = ".", runtime : String = "docker") : Bool
+      abstract def build(
+        binary_path : String,
+        tag : String = "",
+        context_dir : String = ".",
+        runtime : String = "docker",
+        image : String? = nil,
+        packages : Array(String) = [] of String,
+        files : Array(String) = [] of String
+      ) : Bool
 
       protected def run_build_command(runtime : String, context : String, tag : String) : Bool
         cmd =

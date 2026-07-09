@@ -6,7 +6,7 @@ module OcaweCore
       private RUNTIME_ENTRY            = "#{PROJECT_ROOT}/src/ocawe.cr"
       private RUNTIME_BIN              = "#{PROJECT_ROOT}/build/ocawecore"
       private WORKFLOWS_PATH           = "#{PROJECT_ROOT}/src/workflows"
-      private CORE_COMMANDS            = Set{"build", "up", "-v", "--version", "-h", "--help"}
+      private CORE_COMMANDS            = Set{"build", "up", "shell", "exec", "-v", "--version", "-h", "--help"}
 
       def initialize
       end
@@ -19,6 +19,10 @@ module OcaweCore
           build(args)
         when "up"
           up(args)
+        when "shell"
+          shell(args)
+        when "exec"
+          exec(args)
         when "-v", "--version"
           puts OcaweCore::VERSION
         when "-h", "--help"
@@ -43,6 +47,10 @@ module OcaweCore
                 PATH: optional workflow directory (default: current directory)
                 -d/--detach: run in background
                 --log-level: debug, warning, or critical (default: warning)
+            shell [PATH]
+                Open an interactive shell inside the running workflow container.
+            exec [PATH] -- COMMAND [ARG...]
+                Execute a command inside the running workflow container.
             -v, --version
                 Print version.
             -h, --help

@@ -1,6 +1,7 @@
 require "./spec_helper"
 require "file_utils"
 require "../src/framework/discovery/cawfile_loader"
+require "../src/framework/discovery/workflow_locator"
 
 describe ACD::Discovery::WorkflowLocator do
   describe "Cawfile primary support" do
@@ -46,6 +47,40 @@ describe ACD::Discovery::WorkflowLocator do
         Dir.mkdir(workflow_dir)
         locator = ACD::Discovery::WorkflowLocator.new(root)
         expect_raises(Exception) { locator.resolve("empty") }
+      ensure
+        FileUtils.rm_rf(root)
+      end
+    end
+
+    it "lists multiple workflows from a root Cawfile and preserves service metadata" do
+      root = File.tempname("wf_loc")
+      Dir.mkdir_p(root)
+      begin
+        Dir.mkdir_p(File.join(root, "tools"))
+        File.write(File.join(root, "Cawfile"), <<-RCL)
+@[Service]
+@[Validate(Input, Output)]
+workflow "server-services" do
+  exec "localtunnel", runtime: {shell: "bash"}
+end
+
+@[Validate(Input, Output)]
+workflow "chat-completions" do
+  exec "codex", runtime: {acp: {command: "codex"}}
+end
+RCL
+        locator = ACD::Discovery::WorkflowLocator.new(root)
+        bundles = locator.list_workflows
+        bundles.map(&.id).sort!.should eq(["chat-completions", "server-services"])
+
+        service = locator.resolve("server-services")
+        service.source_root_type.should eq("root-cawfile")
+        service.root_path.should eq(root)
+        service.service.should eq(true)
+
+        chat = locator.resolve("chat-completions")
+        chat.source_root_type.should eq("root-cawfile")
+        chat.service.should eq(false)
       ensure
         FileUtils.rm_rf(root)
       end

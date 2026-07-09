@@ -118,5 +118,31 @@
             program = "${pkg}/bin/ocawecore";
           };
         });
+
+      devShells = forAllSystems (system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          default = pkgs.mkShell {
+            packages = [
+              pkgs.crystal
+              pkgs.pkg-config
+              pkgs.shards
+              pkgs.ruby
+            ];
+
+            buildInputs = [
+              pkgs.boehmgc
+              pkgs.libevent
+              pkgs.libxml2
+              pkgs.libyaml
+              pkgs.openssl
+              pkgs.pcre2
+              pkgs.sqlite
+              pkgs.zlib
+            ];
+          };
+        });
     };
 }

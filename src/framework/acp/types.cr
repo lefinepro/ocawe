@@ -75,7 +75,7 @@ module ACP
     property protocolVersion : Int32
     property agentCapabilities : AgentCapabilities
     property agentInfo : AgentInfo?
-    property authMethods : Array(String)?
+    property authMethods : JSON::Any?
   end
 
   struct AgentCapabilities
@@ -219,7 +219,8 @@ module ACP
     getter data : JSON::Any?
 
     def initialize(message : String, @code : Int32, @data : JSON::Any? = nil)
-      super(message)
+      detail = @data ? "#{message}: #{@data.not_nil!.to_json}" : message
+      super(detail)
     end
   end
 end

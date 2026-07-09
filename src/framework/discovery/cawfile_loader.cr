@@ -65,6 +65,8 @@ module ACD
       getter model : String?
       # Default name extracted from #+name: header
       getter name : String?
+      # Whether this workflow should start when the HTTP runtime starts.
+      getter service : Bool
       # Crystal code extracted from Cawfile (requires, structs, etc.)
       getter crystal_loader : CrystalLoader?
 
@@ -88,7 +90,17 @@ module ACD
         @model : String? = nil,
         @crystal_loader : CrystalLoader? = nil,
         @name : String? = nil,
+        @service : Bool = false,
       )
+      end
+    end
+
+    private struct WorkflowBlockSlice
+      getter id : String
+      getter annotations : Array(String)
+      getter dsl_source : Array(String)
+
+      def initialize(@id : String, @annotations : Array(String), @dsl_source : Array(String))
       end
     end
 
@@ -104,6 +116,58 @@ module ACD
       end
 
       def self.load(dir : String, id : String) : CawfileBundle?
+        bundles = load_all(dir)
+        return nil if bundles.empty?
+
+        bundles.find { |bundle| bundle.id == id } || bundles.first?
+      end
+
+      def self.load_all(dir : String) : Array(CawfileBundle)
+        path = find_cawfile(dir)
+        return [] of CawfileBundle unless path
+
+        raw_content = File.read(path)
+        raw_lines = raw_content.lines
+        workflow_slices = extract_workflow_block_slices(raw_lines)
+        return [] of CawfileBundle if workflow_slices.empty?
+
+        root_config = parse_root_config(raw_content, raw_lines)
+        container = extract_container_from_raw(raw_lines)
+        enable_federation = detect_federation_from_raw(raw_lines)
+        enable_models = detect_models_from_raw(raw_lines)
+        name = extract_name_from_raw(raw_lines)
+
+        crystal = extract_crystal_code(raw_lines)
+        crystal.registry_files = discover_registry_files(crystal.requires, dir)
+
+        workflow_slices.map do |slice|
+          model, input_type, output_type = extract_model_and_validate(slice.annotations, path, dir)
+          CawfileBundle.new(
+            id: slice.id,
+            dsl_source: slice.dsl_source,
+            config_federation: root_config.config_federation,
+            config_datasets: root_config.config_datasets,
+            config_workflows: root_config.config_workflows,
+            config_node_kinds: root_config.config_node_kinds,
+            config_functions: root_config.config_functions,
+            config_mcp: root_config.config_mcp,
+            config_log: root_config.config_log,
+            start_settings: root_config.start_settings,
+            follow: extract_follow_from_raw(slice.dsl_source),
+            container: container,
+            enable_federation: enable_federation,
+            enable_models: enable_models,
+            input_type: input_type,
+            output_type: output_type,
+            model: model,
+            crystal_loader: crystal,
+            name: name,
+            service: service_annotation?(slice.annotations),
+          )
+        end
+      end
+
+      def self.load_legacy(dir : String, id : String) : CawfileBundle?
         path = find_cawfile(dir)
         return nil unless path
 
@@ -395,6 +459,81 @@ module ACD
         end
       end
 
+      private def self.parse_root_config(raw_content : String, raw_lines : Array(String)) : CawfileBundle
+        parse_settings_block(RCL.parse_string(raw_content))
+      rescue
+        parse_raw_settings(raw_lines)
+      end
+
+      private def self.parse_raw_settings(raw_lines : Array(String)) : CawfileBundle
+        fed = {} of String => RCL::Value
+        ds = {} of String => RCL::Value
+        wf = {} of String => RCL::Value
+        nk = {} of String => RCL::Value
+        fn = {} of String => RCL::Value
+        mcp = {} of String => RCL::Value
+        start = {} of String => RCL::Value
+
+        in_settings = false
+        settings_depth = 0
+        raw_lines.each do |line|
+          stripped = line.strip
+          if stripped.match(/^\s*settings\s+do/)
+            in_settings = true
+            settings_depth = 1
+            next
+          end
+          if in_settings
+            if stripped.match(/^do/)
+              settings_depth += 1
+              next
+            end
+            if stripped.match(/^end/)
+              settings_depth -= 1
+              if settings_depth <= 0
+                in_settings = false
+                next
+              end
+            end
+            if eq_idx = stripped.index('=')
+              key = stripped[0, eq_idx].strip
+              value_raw = stripped[eq_idx + 1, stripped.size - eq_idx - 1].strip
+              case key
+              when "port"
+                start["port"] = parse_value(value_raw)
+              when "log_level"
+                start["log_level"] = parse_value(value_raw)
+              else
+                if key.includes?('.')
+                  parts = key.split('.', 2)
+                  block_name = parts[0]
+                  prop_name = parts[1]
+                  case block_name
+                  when "federation"
+                    fed[prop_name] = parse_value(value_raw)
+                  when "data", "datasets"
+                    ds[prop_name] = parse_value(value_raw)
+                  when "workflows"
+                    wf[prop_name] = parse_value(value_raw)
+                  end
+                end
+              end
+            end
+          end
+        end
+
+        CawfileBundle.new(
+          id: "root",
+          config_federation: fed,
+          config_datasets: ds,
+          config_workflows: wf,
+          config_node_kinds: nk,
+          config_functions: fn,
+          config_mcp: mcp,
+          start_settings: start,
+        )
+      end
+
       # Parses settings block for federation, data, etc.
       # settings do
       #   federation.auto_subscribe = [...]
@@ -518,6 +657,59 @@ module ACD
         end
 
         lines[start_idx...end_idx]
+      end
+
+      private def self.extract_workflow_block_slices(lines : Array(String)) : Array(WorkflowBlockSlice)
+        slices = [] of WorkflowBlockSlice
+
+        idx = 0
+        while idx < lines.size
+          line = lines[idx]
+          match = line.match(/^\s*workflow\s+"([^"]+)"\s+do\s*(?:#.*)?$/)
+          unless match
+            idx += 1
+            next
+          end
+
+          annotations = [] of String
+          annotation_idx = idx - 1
+          while annotation_idx >= 0
+            stripped = lines[annotation_idx].strip
+            if stripped.empty?
+              annotation_idx -= 1
+              next
+            end
+            break unless stripped.starts_with?("@[")
+            annotations.unshift(stripped)
+            annotation_idx -= 1
+          end
+
+          start_idx = idx + 1
+          depth = 1
+          end_idx = start_idx
+          (start_idx...lines.size).each do |body_idx|
+            stripped = lines[body_idx].strip
+            if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel|loop|dataset)\b.*\bdo\b/) ||
+               stripped.match(/^\s*(if|unless)\s+/)
+              depth += 1
+            elsif stripped.match(/^\s*\bend\b/)
+              depth -= 1
+              if depth == 0
+                end_idx = body_idx
+                break
+              end
+            end
+          end
+
+          slices << WorkflowBlockSlice.new(match[1], annotations, lines[start_idx...end_idx])
+          idx = end_idx + 1
+        end
+
+        slices
+      end
+
+      private def self.service_annotation?(annotations : Array(String)) : Bool
+        annotations.any? { |line| line.match(/^\s*@\[Service(?:\([^)]*\))?\]\s*$/) }
       end
 
       private def self.extract_follow_from_raw(lines : Array(String)) : Array(String)
@@ -784,7 +976,7 @@ module ACD
             next
           end
           if in_workflow
-            if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel)\b.*\bdo\b/) ||
+            if stripped.match(/^\s*(workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel|loop|dataset)\b.*\bdo\b/) ||
                stripped.match(/^\s*(if|unless)\s+/)
               workflow_depth += 1
             elsif stripped.match(/^\s*\bend\b/)

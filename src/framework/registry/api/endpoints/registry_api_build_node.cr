@@ -72,7 +72,7 @@ module Ocawe
             agent_type: "default-agent",
             content: response.text,
             provider: response.provider,
-            model: "#{response.provider}/#{response.model}",
+            model: resolved_model,
           ).to_any_hash
 
           agent_content = agent_payload["content"]?.try(&.as_s?) || ""
