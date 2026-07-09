@@ -91,7 +91,7 @@ module Ocawe
               enriched = data.dup
               enriched["step"] = JSON.parse(node.id.to_json)
               ctx.node_results[node.id] = enriched
-              enriched.each { |k, v| merged[k] = v }
+              data.each { |k, v| merged[k] = v }
             end
           end
           failed || WorkflowNodeResult.continue(merged)

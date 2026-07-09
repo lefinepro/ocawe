@@ -103,8 +103,8 @@ module Ocawe
               enriched = data.dup
               enriched["step"] = JSON.parse(node.id.to_json)
               @node_results[node.id] = enriched
-              enriched.each { |k, v| @state[k] = v }
-              previous_node_result = enriched
+              data.each { |k, v| @state[k] = v }
+              previous_node_result = data
             end
             runtime_logger.node_completed(node.id, node_logger_config)
             previous_node_id = node.id
