@@ -49,6 +49,7 @@ Run runtime server:
 
 #+begin_src bash
 ocawe up
+ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
 #+end_src
 
 The runtime reads =Cawfile= from the current directory. The port is configured
@@ -159,6 +160,7 @@ Run any example:
 #+begin_src bash
 ocawe up caws/01-simple
 ocawe up -d caws/02-multi-agent  # background mode
+ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
 #+end_src
 
 Each example demonstrates a specific feature:
@@ -171,6 +173,8 @@ Each example demonstrates a specific feature:
 - *07-unified-resources* — shared resources with =@[Model]= and =@[Resources]=
 - *08-model-override* — per-agent model configuration
 - *09-custom-agent* — writing custom agents with external binaries
+- *10-acp-agent* — ACP-compatible external agent execution
+- *11-git-https-pull* — pulling remote Cawfile bundles with =git+https=
 
 * Cawfile Framework
 
@@ -212,6 +216,10 @@ workflow "codex-acp" do
   exec "codex",
     runtime: {acp: {command: "codex", args: ["--server"]}}
 end
+
+workflow "remote-acp" do
+  exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+end
 #+end_src
 
 *Key directives:*
@@ -221,6 +229,7 @@ end
 - =@[Container(image: "...", packages: ["pkg1"], files: ["a.sh"])]= — container packaging: optional base =image= (omit for a =scratch= static build), Nix =packages=, and extra =files= to copy (the deprecated =mode:= field is ignored)
 - =@[Validate(Input, Output)]= — input/output type validation
 - =exec "...", runtime: {acp: {...}}= — run an external ACP-compatible agent
+- =exec "github.com/org/repo/path", runtime: {"git+https"}= — clone or fast-forward pull a remote Cawfile reference into the Ocawe cache
 
 *API types:*
 - ="federation"= — ForgeFed-only mode (enabled when =Api::Federation::Inbox= or =Api::Federation::Outbox= is included)

@@ -6,7 +6,7 @@ module OcaweCore
       private RUNTIME_ENTRY            = "#{PROJECT_ROOT}/src/ocawe.cr"
       private RUNTIME_BIN              = "#{PROJECT_ROOT}/build/ocawecore"
       private WORKFLOWS_PATH           = "#{PROJECT_ROOT}/src/workflows"
-      private CORE_COMMANDS            = Set{"build", "up", "shell", "exec", "-v", "--version", "-h", "--help"}
+      private CORE_COMMANDS            = Set{"build", "up", "shell", "exec", "pull", "-v", "--version", "-h", "--help"}
 
       def initialize
       end
@@ -23,6 +23,8 @@ module OcaweCore
           shell(args)
         when "exec"
           exec(args)
+        when "pull"
+          pull(args)
         when "-v", "--version"
           puts OcaweCore::VERSION
         when "-h", "--help"
@@ -51,6 +53,8 @@ module OcaweCore
                 Open an interactive shell inside the running workflow container.
             exec [PATH] -- COMMAND [ARG...]
                 Execute a command inside the running workflow container.
+            pull REF
+                Clone or fast-forward pull a git+https Cawfile reference.
             -v, --version
                 Print version.
             -h, --help
@@ -61,6 +65,10 @@ module OcaweCore
             @[Container(mode: "nix")]       # NixOS with packages
             @[Container(packages: ["git"])] # NixOS with git package
             @[Container(mode: "nix", packages: ["git", "curl"])]
+
+          Remote Cawfile references:
+            ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
+            exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
         TXT
       end
 

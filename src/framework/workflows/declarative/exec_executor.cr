@@ -1,4 +1,6 @@
 require "../../mcp/manager"
+require "../../discovery/cawfile_loader"
+require "../../discovery/git_https_puller"
 require "./acp_executor"
 
 module Ocawe
@@ -14,6 +16,10 @@ module Ocawe
         # Check for ACP runtime
         if acp_config = runtime["acp"]?
           return exec_acp(ref, ctx, acp_config, env, workflow_root)
+        end
+
+        if runtime.has_key?("git+https")
+          return exec_git_https(ref)
         end
 
         exec_external(ref, ctx, runtime, env, workflow_root)
@@ -41,6 +47,24 @@ module Ocawe
         server_id, tool_name = Ocawe::MCP.parse_mcp_ref(ref)
         arguments = ctx.input_data["input"]?.try(&.as_h?) || ctx.input_data
         Ocawe::MCP.manager.call_tool(server_id, tool_name, arguments)
+      end
+
+      private def exec_git_https(ref : String) : AnyHash
+        pulled = ACD::Discovery::GitHttpsPuller.new.pull(ref)
+        cawfile = if Dir.exists?(pulled.local_path)
+                    ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path)
+                  end
+
+        {
+          "ref"        => JSON.parse(pulled.ref.to_json),
+          "repo"       => JSON.parse(pulled.repo_slug.to_json),
+          "repo_url"   => JSON.parse(pulled.repo_url.to_json),
+          "repo_dir"   => JSON.parse(pulled.repo_dir.to_json),
+          "local_path" => JSON.parse(pulled.local_path.to_json),
+          "cawfile"    => JSON.parse(cawfile.to_json),
+          "cloned"     => JSON.parse(pulled.cloned.to_json),
+          "pulled"     => JSON.parse(pulled.pulled.to_json),
+        } of String => JSON::Any
       end
 
       private def exec_external(ref : String, ctx : NodeContext, runtime : AnyHash, env : AnyHash?, workflow_root : String?) : AnyHash

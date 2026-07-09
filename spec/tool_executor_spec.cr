@@ -93,4 +93,66 @@ describe Ocawe::Workflow::ExecExecutor do
       FileUtils.rm_rf(tmp_dir)
     end
   end
+
+  it "auto-pulls git+https Cawfile refs" do
+    tmp_dir = File.tempname("git-https-runtime")
+    bin_dir = File.join(tmp_dir, "bin")
+    cache_dir = File.join(tmp_dir, "cache")
+    Dir.mkdir_p(bin_dir)
+    fake_git = File.join(bin_dir, "git")
+    File.write(fake_git, <<-SH)
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "$1" = "clone" ]; then
+  mkdir -p "$3/caws/10-acp-agent"
+  printf 'workflow "10-acp-agent" do\\nend\\n' > "$3/caws/10-acp-agent/Cawfile"
+  exit 0
+fi
+if [ "$1" = "-C" ]; then
+  exit 0
+fi
+exit 1
+SH
+    File.chmod(fake_git, 0o755)
+
+    old_path = ENV["PATH"]?
+    old_cache = ENV["OCAWE_CACHE_DIR"]?
+    ENV["PATH"] = "#{bin_dir}:#{old_path}"
+    ENV["OCAWE_CACHE_DIR"] = cache_dir
+
+    begin
+      executor = Ocawe::Workflow::ExecExecutor.new
+      ctx = Ocawe::Workflow::NodeContext.new(
+        workflow_id: "wf",
+        run_id: "run_git_https",
+        node_id: "remote-caw",
+        input_data: {} of String => JSON::Any,
+        state: {} of String => JSON::Any,
+      )
+      runtime = {"git+https" => json_any(true)} of String => JSON::Any
+
+      result = executor.exec(
+        "github.com/lefinepro/ocawe/caws/10-acp-agent",
+        ctx,
+        runtime: runtime,
+      )
+
+      result["repo"].as_s.should eq("github.com/lefinepro/ocawe")
+      result["local_path"].as_s.ends_with?("github.com/lefinepro/ocawe/caws/10-acp-agent").should eq(true)
+      result["cawfile"].as_s.ends_with?("Cawfile").should eq(true)
+      result["cloned"].as_bool.should eq(true)
+    ensure
+      if old_path
+        ENV["PATH"] = old_path
+      else
+        ENV.delete("PATH")
+      end
+      if old_cache
+        ENV["OCAWE_CACHE_DIR"] = old_cache
+      else
+        ENV.delete("OCAWE_CACHE_DIR")
+      end
+      FileUtils.rm_rf(tmp_dir)
+    end
+  end
 end

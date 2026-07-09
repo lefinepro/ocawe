@@ -1,0 +1,13 @@
+#+TITLE: 11 - git+https Cawfile Pull
+
+This example pulls a remote Cawfile bundle into the local Ocawe cache.
+
+#+begin_src rcl
+exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+#+end_src
+
+Manual refresh:
+
+#+begin_src bash
+ocawe pull github.com/lefinepro/ocawe/caws/10-acp-agent
+#+end_src

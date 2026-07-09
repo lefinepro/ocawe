@@ -12,6 +12,7 @@ describe OcaweCore::CLI::Main do
     output.includes?("Usage: ocawe").should eq(true)
     output.includes?("build").should eq(true)
     output.includes?("up").should eq(true)
+    output.includes?("pull REF").should eq(true)
   end
 
   it "prints help on unknown command" do

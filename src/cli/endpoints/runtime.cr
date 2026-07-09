@@ -1,5 +1,6 @@
 require "option_parser"
 require "../../framework/discovery/cawfile_loader"
+require "../../framework/discovery/git_https_puller"
 require "../../framework/builder"
 
 module OcaweCore
@@ -189,6 +190,27 @@ module OcaweCore
         container_name = container_name_for_workflows_root(workflows_root)
         command = container_exec_command(detect_runtime, container_name, args, interactive: false)
         abort_unless_success(run_interactive_cmd(command))
+      end
+
+      private def pull(args : Array(String)) : Nil
+        if args.empty?
+          STDERR.puts "Error: ocawe pull requires REF"
+          exit(1)
+        end
+
+        ref = args.first
+        pulled = ACD::Discovery::GitHttpsPuller.new.pull(ref)
+        action = pulled.cloned ? "cloned" : "pulled"
+        puts "[ocawe] #{action} #{pulled.repo_slug}"
+        puts "[ocawe] local path: #{pulled.local_path}"
+        if Dir.exists?(pulled.local_path)
+          if cawfile = ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path)
+            puts "[ocawe] Cawfile: #{cawfile}"
+          end
+        end
+      rescue ex
+        STDERR.puts "Error: #{ex.message}"
+        exit(1)
       end
 
       private def read_port_from_cawfile(path : String) : Int32?

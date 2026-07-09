@@ -1,0 +1,12 @@
+# 11 - git+https Cawfile Pull
+#
+# Demonstrates pulling a remote Cawfile bundle from GitHub.
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+workflow "11-git-https-pull" do
+  exec "github.com/lefinepro/ocawe/caws/10-acp-agent", runtime: {"git+https"}
+end
