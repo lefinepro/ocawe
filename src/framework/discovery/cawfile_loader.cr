@@ -725,11 +725,12 @@ module ACD
         [] of String
       end
 
-      # Parses `key: ["a", "b"]` inside a `@[Container(...)]` annotation body into
+      # Parses `key: ["a", "b"]` or `key = ["a", "b"]` inside a container config
+      # into
       # a clean array of unquoted, non-empty strings. Returns [] when absent.
       # `[\s\S]` is used instead of `.` so arrays may span multiple lines.
       private def self.extract_string_array(inner : String, key : String) : Array(String)
-        if match = inner.match(/#{key}:\s*\[([\s\S]*?)\]/)
+        if match = inner.match(/#{key}\s*[:=]\s*\[([\s\S]*?)\]/)
           match[1].split(',').map { |s| s.strip.delete('"') }.reject(&.empty?)
         else
           [] of String
@@ -737,6 +738,10 @@ module ACD
       end
 
       private def self.extract_container_from_raw(lines : Array(String)) : CawfileContainer?
+        if inner = extract_container_block(lines)
+          return container_from_inner(inner)
+        end
+
         # The annotation may span multiple lines, so match against the whole blob
         # rather than line-by-line. `[\s\S]*?` crosses newlines up to the first `)]`.
         blob = lines.join('\n')
@@ -745,14 +750,42 @@ module ACD
 
         inner = container_match[1]?
         return CawfileContainer.new(mode: ContainerMode::Static) unless inner
+        container_from_inner(inner)
+      end
 
-        # Check for packages: @[Container(packages: ["git", "curl"])]
+      private def self.extract_container_block(lines : Array(String)) : String?
+        start_idx = nil.as(Int32?)
+        lines.each_with_index do |line, idx|
+          if line.strip.match(/^\s*container\s+do\s*$/)
+            start_idx = idx
+            break
+          end
+        end
+        return nil unless start_idx
+
+        body = [] of String
+        depth = 1
+        lines[(start_idx + 1)..].each do |line|
+          stripped = line.strip
+          depth += 1 if stripped.match(/\bdo\s*$/)
+          if stripped == "end"
+            depth -= 1
+            break if depth == 0
+          end
+          body << line if depth > 0
+        end
+
+        body.join('\n')
+      end
+
+      private def self.container_from_inner(inner : String) : CawfileContainer
+        # Check for packages: packages = ["git", "curl"]
         packages = extract_string_array(inner, "packages")
-        # Check for files: @[Container(files: ["script.sh", "config.json"])]
+        # Check for files: files = ["script.sh", "config.json"]
         files = extract_string_array(inner, "files")
-        # Check for image: @[Container(image: "alpine:latest")]
+        # Check for image: image = "alpine:latest" (legacy-compatible)
         image = nil.as(String?)
-        if img_match = inner.match(/image:\s*"([^"]+)"/)
+        if img_match = inner.match(/image\s*[:=]\s*"([^"]+)"/)
           image = img_match[1]
         end
         # `mode:` is deprecated and no longer authoritative; presence of an
@@ -942,6 +975,8 @@ module ACD
 
         in_settings = false
         settings_depth = 0
+        in_container = false
+        container_depth = 0
         in_workflow = false
         workflow_depth = 0
 
@@ -963,6 +998,27 @@ module ACD
               settings_depth -= 1
               if settings_depth <= 0
                 in_settings = false
+              end
+              next
+            end
+            next
+          end
+
+          # Track container block
+          if stripped.match(/^\s*container\s+do\s*$/)
+            in_container = true
+            container_depth = 1
+            next
+          end
+          if in_container
+            if stripped.match(/^do/) || stripped.match(/\bdo\s*$/)
+              container_depth += 1
+              next
+            end
+            if stripped.match(/^end/)
+              container_depth -= 1
+              if container_depth <= 0
+                in_container = false
               end
               next
             end

@@ -14,6 +14,11 @@ settings do
   port = 4111
 end
 
+container do
+  packages = ["codex-acp"]
+  files = ["."]
+end
+
 struct Input
   include Api::Federation::Inbox
   include Api::ACP::Agent
@@ -24,7 +29,6 @@ struct Output
   include Api::ACP::Agent
 end
 
-@[Container(packages: ["codex-acp"])]
 @[Validate(Input, Output)]
 workflow "10-acp-agent" do
   exec "codex", runtime: {"acp"}

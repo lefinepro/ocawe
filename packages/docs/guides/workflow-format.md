@@ -82,32 +82,30 @@ workflow "workspace-flow" do
 end
 ```
 
-### `@[Container(...)]` Annotation
+### `container do` Block
 
-`@[Container(...)]` declares how the workflow is packaged into a container image
-when you run `ocawe build` / `ocawe up`. All fields are optional:
+`container do` declares how the Cawfile bundle is packaged into a container image
+when you run `ocawe build` / `ocawe up`. The same container config applies to
+every workflow in the Cawfile, including `@[Service]` workflows.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `image` | `String` | Base image for the final stage. Omit for a minimal `scratch`-based static image. |
-| `packages` | `String[]` | System packages installed via Nix (`pkgsStatic`) and copied into the image. |
-| `files` | `String[]` | Extra files copied into the build context. Omit to copy every file in the workflow directory at build time. |
+| `packages` | `String[]` | Nix package names plus flake/path refs such as `github:owner/tool` or `./local-tool`. |
+| `files` | `String[]` | Optional files/directories copied into the build context. Omit to copy bundle entries at build time, excluding ignored build/cache directories. |
 
 ```crystal
-@[Container(
-  image: "docker.io/library/debian",
-  packages: ["git", "curl", "jq"],
-  files: ["script.sh", "config.json"]
-)]
+container do
+  packages = ["git", "curl", "jq", "github:owner/tool"]
+  files = ["agents", "skills", "tools"]
+end
+
 workflow "container-workflow" do
   agent "analyzer"
 end
 ```
 
-> **Deprecated:** the earlier `mode: "static" | "nix"` field is no longer
-> authoritative. The base is now selected by the presence of `image` (custom
-> base) or its absence (`scratch`); `packages` implies a Nix build stage. The
-> field is still parsed for backward compatibility but should be removed.
+> **Legacy-compatible:** `@[Container(...)]` is still parsed, but new Cawfiles
+> should use the root `container do` block.
 
 ### `@[Service]` Annotation
 
@@ -218,7 +216,7 @@ end
 |-----------|-------------|
 | `@[Logger(...)]` | Configure workflow/node logging metadata and runtime log level/shape |
 | `@[Workspace(...)]` | Configure workflow-level or next-node workspace metadata |
-| `@[Container(...)]` | Configure container packaging (`image`, `packages`, `files`) for `ocawe build`/`up` |
+| `container do` | Configure bundle-level container packaging (`packages`, optional `files`) for `ocawe build`/`up` |
 | `@[Service]` | Start workflow automatically with the runtime |
 | `agent "..."` | Define agent node |
 | `skill "..."` | Define skill node |

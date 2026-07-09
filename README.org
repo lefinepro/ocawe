@@ -246,7 +246,7 @@ caws/                      # workflow bundle examples
   03-control-flow/         # if/else, parallel, while, until
   04-rag-assistant/        # retrieval-augmented generation
   05-voice-pipeline/       # voice transcription + synthesis
-  06-full-suite/           # all features combined
+  06-full-suite/           # all features combined, including container and service workflows
   07-unified-resources/    # resource management patterns
   08-model-override/       # per-agent model override
   09-custom-agent/         # how to write custom agents
@@ -271,7 +271,7 @@ Each example demonstrates a specific feature:
 - *03-control-flow* — =unless=, =if/else=, =parallel=, =while=, =until=
 - *04-rag-assistant* — RAG with vector store
 - *05-voice-pipeline* — voice transcription and synthesis
-- *06-full-suite* — all features combined
+- *06-full-suite* — all features combined, including container packaging and multiple =@[Service]= workflows
 - *07-unified-resources* — shared resources with =@[Model]= and =@[Resources]=
 - *08-model-override* — per-agent model configuration
 - *09-custom-agent* — writing custom agents with external binaries
@@ -291,6 +291,11 @@ Example =Cawfile=:
 settings do
   port = 4111
   datasets.adapter = "sqlite"
+end
+
+container do
+  packages = ["git", "curl"]
+  files = ["agents", "skills", "tools"]
 end
 
 # Federation is enabled by including Api::Federation types
@@ -332,7 +337,7 @@ end
 - =settings do ... end= — runtime config (port, datasets adapter, federation)
 - =@[Service]= — workflow starts with =ocawe up= and restarts on runtime reload
 - =@[Model("provider")]= — default model for the workflow
-- =@[Container(image: "...", packages: ["pkg1"], files: ["a.sh"])]= — container packaging: optional base =image= (omit for a =scratch= static build), Nix =packages=, and extra =files= to copy (the deprecated =mode:= field is ignored)
+- =container do ... end= — bundle-level container packaging; =packages= accepts Nix package names, flake refs, and path refs, while optional =files= selects what to copy into =/app=
 - =@[Validate(Input, Output)]= — input/output type validation
 - =exec "...", runtime: {acp: {...}}= — run an external ACP-compatible agent
 - =exec "github.com/org/repo/path", runtime: {"git+https"}= — clone or fast-forward pull a remote Cawfile reference over HTTPS, compile it into a cached single =ocawecore= binary, then run the selected workflow through that binary

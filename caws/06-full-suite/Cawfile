@@ -1,11 +1,17 @@
 # 06 - Full Suite
 #
-# Complete feature demonstration: multiple agents, skills, tools, voice,
-# RAG, external execution, and suspend for human-in-the-loop approval.
+# Complete feature demonstration: multiple workflows, service workflows,
+# agents, skills, tools, voice, RAG, external execution, and suspend for
+# human-in-the-loop approval.
 
 settings do
   data.adapter = "memory"
   port = 4111
+end
+
+container do
+  packages = ["git", "curl", "jq"]
+  files = ["agents", "skills", "tools"]
 end
 
 struct FullSuiteInput
@@ -21,7 +27,6 @@ struct FullSuiteOutput
   getter status : String?
 end
 
-@[Container(packages: ["git", "curl", "jq"])]
 @[Validate(FullSuiteInput, FullSuiteOutput)]
 workflow "06-full-suite" do
   # Primary agent with schema validation
@@ -45,4 +50,18 @@ workflow "06-full-suite" do
 
   # Human-in-the-loop approval
   suspend "manual-approval", reason: "Confirm run output"
+end
+
+@[Service]
+@[Validate(FullSuiteInput, FullSuiteOutput)]
+workflow "06-full-suite-daemon" do
+  # Service workflow starts with `ocawe up` and can host a tunnel, daemon, or watcher.
+  exec "tools/echo-json.sh", runtime: {shell: "bash"}
+end
+
+@[Service]
+@[Validate(FullSuiteInput, FullSuiteOutput)]
+workflow "06-full-suite-watch" do
+  # Second service workflow demonstrates multiple runtime-started helpers in one bundle.
+  exec "tools/echo-json.sh", runtime: {shell: "bash"}
 end

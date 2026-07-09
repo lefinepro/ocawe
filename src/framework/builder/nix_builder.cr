@@ -39,7 +39,7 @@ module Ocawe
         effective_files = if files.empty?
                             Dir.children(context_dir).select do |f|
                               path = File.join(context_dir, f)
-                              File.file?(path) && !f.starts_with?('.') && f != "build"
+                              File.exists?(path) && !f.starts_with?('.') && !ignored_context_entry?(f)
                             end
                           else
                             files
@@ -91,8 +91,14 @@ module Ocawe
                                (runtime_packages + packages).uniq
                              end
 
-        if !effective_packages.empty?
-          lines << "RUN nix-env -iA #{effective_packages.map { |pkg| "#{package_prefix}.#{pkg}" }.join(" ")}"
+        attr_packages, installable_packages = effective_packages.partition { |pkg| nixpkgs_attr?(pkg) }
+
+        if !attr_packages.empty?
+          lines << "RUN nix-env -iA #{attr_packages.map { |pkg| "#{package_prefix}.#{pkg}" }.join(" ")}"
+        end
+
+        if !installable_packages.empty?
+          lines << "RUN nix profile install --extra-experimental-features 'nix-command flakes' #{installable_packages.map { |pkg| shell_escape(pkg) }.join(" ")}"
         end
 
         if final_image == "scratch" && !effective_packages.empty?
@@ -169,6 +175,14 @@ module Ocawe
 
       private def ignored_context_entry?(name : String) : Bool
         [".git", ".turbo", ".next", "build", "dist", "coverage", "node_modules"].includes?(name)
+      end
+
+      private def nixpkgs_attr?(pkg : String) : Bool
+        !pkg.includes?(":") && !pkg.starts_with?("./") && !pkg.starts_with?("../") && !pkg.starts_with?("/")
+      end
+
+      private def shell_escape(value : String) : String
+        "'" + value.gsub("'", "'\"'\"'") + "'"
       end
     end
   end

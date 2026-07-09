@@ -29,7 +29,10 @@ end
 
 @[Validate(InputCodex, OutputCodex)]
 @[Load(["AGENTS.md"])]
-@[Container(packages: ["git", "curl"])]
+container do
+  packages = ["git", "curl"]
+end
+
 workflow "codex" do
   follow ["@searcher@lefine.pro", "@coder@lefine.pro"]
   agent_codex

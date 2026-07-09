@@ -23,16 +23,16 @@ Spec.after_suite { Spec::GlobalContext.cleanup }
 module ACD::Discovery
   describe CawfileLoader do
     describe "#load" do
-      it "parses container with image, packages, and files" do
+      it "parses root container block with packages and files" do
         dir = File.tempname("cawfile_test")
         Dir.mkdir_p(dir)
         begin
           File.write(File.join(dir, "Cawfile"), <<-RCL)
-@[Container(
-  image: "docker.io/library/debian",
-  packages: ["git", "curl", "jq"],
-  files: ["script.sh", "config.json"]
-)]
+container do
+  packages = ["git", "curl", "jq", "github:owner/tool", "./local-tool"]
+  files = ["script.sh", "config.json"]
+end
+
 workflow "container-test" do
   agent "analyzer"
 end
@@ -41,20 +41,24 @@ RCL
           bundle.should_not be_nil
           container = bundle.not_nil!.container
           container.should_not be_nil
-          container.not_nil!.image.should eq("docker.io/library/debian")
-          container.not_nil!.packages.should eq(["git", "curl", "jq"])
+          container.not_nil!.image.should be_nil
+          container.not_nil!.mode.should eq(ContainerMode::Nix)
+          container.not_nil!.packages.should eq(["git", "curl", "jq", "github:owner/tool", "./local-tool"])
           container.not_nil!.files.should eq(["script.sh", "config.json"])
         ensure
           FileUtils.rm_rf(dir)
         end
       end
 
-      it "defaults files to all files in directory when not specified" do
+      it "keeps files optional in root container blocks" do
         dir = File.tempname("cawfile_test")
         Dir.mkdir_p(dir)
         begin
           File.write(File.join(dir, "Cawfile"), <<-RCL)
-@[Container(packages: ["nginx"])]
+container do
+  packages = ["nginx"]
+end
+
 workflow "files-default-test" do
   agent "analyzer"
 end
@@ -64,7 +68,33 @@ RCL
           container = bundle.not_nil!.container
           container.should_not be_nil
           container.not_nil!.files.should be_empty
-          # Note: actual file resolution happens at build time
+          # Empty files means actual file resolution happens at build time.
+        ensure
+          FileUtils.rm_rf(dir)
+        end
+      end
+
+      it "keeps legacy container annotations compatible" do
+        dir = File.tempname("cawfile_test")
+        Dir.mkdir_p(dir)
+        begin
+          File.write(File.join(dir, "Cawfile"), <<-RCL)
+@[Container(
+  image: "docker.io/library/debian",
+  packages: ["git", "curl", "jq"],
+  files: ["script.sh", "config.json"]
+)]
+workflow "legacy-container-test" do
+  agent "analyzer"
+end
+RCL
+          bundle = CawfileLoader.load(dir, "legacy-container-test")
+          bundle.should_not be_nil
+          container = bundle.not_nil!.container
+          container.should_not be_nil
+          container.not_nil!.image.should eq("docker.io/library/debian")
+          container.not_nil!.packages.should eq(["git", "curl", "jq"])
+          container.not_nil!.files.should eq(["script.sh", "config.json"])
         ensure
           FileUtils.rm_rf(dir)
         end
@@ -133,7 +163,7 @@ RCL
         end
       end
 
-      it "returns nil container when no @[Container] annotation" do
+      it "returns nil container when no container configuration exists" do
         dir = File.tempname("cawfile_test")
         Dir.mkdir_p(dir)
         begin
@@ -147,6 +177,26 @@ RCL
           bundle.not_nil!.container.should be_nil
         ensure
           FileUtils.rm_rf(dir)
+        end
+      end
+
+      it "loads the full-suite example with container config and service workflows" do
+        bundles = CawfileLoader.load_all("caws/06-full-suite")
+        bundles.map(&.id).should eq([
+          "06-full-suite",
+          "06-full-suite-daemon",
+          "06-full-suite-watch",
+        ])
+
+        service_ids = bundles.select(&.service).map(&.id)
+        service_ids.should eq(["06-full-suite-daemon", "06-full-suite-watch"])
+
+        bundles.each do |bundle|
+          container = bundle.container
+          container.should_not be_nil
+          container.not_nil!.packages.should eq(["git", "curl", "jq"])
+          container.not_nil!.files.should eq(["agents", "skills", "tools"])
+          container.not_nil!.mode.should eq(ContainerMode::Nix)
         end
       end
     end
@@ -218,6 +268,18 @@ module Ocawe::Builder
         dockerfile.should contain("ripgrep")
       end
 
+      it "installs nix flake and path package refs without nixpkgs prefix" do
+        builder = NixBuilder.new
+        dockerfile = builder.generate_dockerfile(
+          image: nil,
+          packages: ["git", "github:owner/tool", "./local-tool", "/opt/tool"],
+          files: [] of String
+        )
+        dockerfile.should contain("nix-env -iA pkgsStatic.git")
+        dockerfile.should contain("nix profile install --extra-experimental-features 'nix-command flakes' 'github:owner/tool' './local-tool' '/opt/tool'")
+        dockerfile.should_not contain("pkgsStatic.github:owner/tool")
+      end
+
       it "generates find-based COPY for nix store closure" do
         builder = NixBuilder.new
         dockerfile = builder.generate_dockerfile(
@@ -246,6 +308,8 @@ module Ocawe::Builder
           File.write(bin_path, "fake binary")
           File.write(File.join(dir, "script.sh"), "#!/bin/bash\necho hello")
           File.write(File.join(dir, "data.json"), "{}")
+          Dir.mkdir_p(File.join(dir, "agents"))
+          File.write(File.join(dir, "agents", "assistant.md"), "---\nname: Assistant\n---\n")
 
           # Use a test subclass to skip docker invocation
           test_builder = TestNixBuilder.new
@@ -263,6 +327,7 @@ module Ocawe::Builder
           File.file?(File.join(context, "ocawecore")).should be_true
           File.file?(File.join(context, "script.sh")).should be_true
           File.file?(File.join(context, "data.json")).should be_true
+          File.file?(File.join(context, "agents", "assistant.md")).should be_true
         ensure
           FileUtils.rm_rf(dir)
         end

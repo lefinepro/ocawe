@@ -209,12 +209,15 @@ RCL
       end
     end
 
-    it "extracts container from @[Container(packages: [...])] annotation" do
+    it "extracts container from root container block" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)
       begin
         File.write(File.join(dir, "Cawfile"), <<-RCL)
-@[Container(packages: ["git", "curl", "jq"])]
+container do
+  packages = ["git", "curl", "jq"]
+end
+
 workflow "container-test" do
   agent "analyzer"
 end
@@ -230,12 +233,35 @@ RCL
       end
     end
 
+    it "keeps legacy @[Container(...)] annotation compatible" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+@[Container(packages: ["git"])]
+workflow "legacy-container-test" do
+  agent "analyzer"
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "legacy-container-test")
+        bundle.should_not be_nil
+        container = bundle.not_nil!.container
+        container.should_not be_nil
+        container.not_nil!.mode.should eq(ACD::Discovery::ContainerMode::Nix)
+        container.not_nil!.packages.should eq(["git"])
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it "defaults container to static when no packages specified" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)
       begin
         File.write(File.join(dir, "Cawfile"), <<-RCL)
-@[Container]
+container do
+end
+
 workflow "static-test" do
   agent "analyzer"
 end

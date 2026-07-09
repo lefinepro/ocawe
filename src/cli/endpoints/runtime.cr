@@ -279,7 +279,7 @@ module OcaweCore
 
         cawfile_bundle = ACD::Discovery::CawfileLoader.load(workflows_root, "root")
         unless cawfile_bundle && cawfile_bundle.container
-          STDERR.puts "Error: Cawfile at #{cawfile} has no @[Container] configuration"
+          STDERR.puts "Error: Cawfile at #{cawfile} has no `container do` configuration"
           exit(1)
         end
 

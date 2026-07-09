@@ -43,7 +43,7 @@ module OcaweCore
           Commands:
             build [--release] [--static] [--output PATH]
                 Build runtime binary.
-                Auto-builds container from @[Container] in Cawfile if present.
+                Auto-builds container from `container do` in Cawfile if present.
             up [PATH] [-d] [--port N] [--log-level LEVEL]
                 Auto-build release runtime binary and start server.
                 PATH: optional workflow directory (default: current directory)
@@ -61,10 +61,10 @@ module OcaweCore
                 Show this help.
 
           Container configuration in Cawfile:
-            @[Container]                    # Static minimal container
-            @[Container(mode: "nix")]       # NixOS with packages
-            @[Container(packages: ["git"])] # NixOS with git package
-            @[Container(mode: "nix", packages: ["git", "curl"])]
+            container do
+              packages = ["git", "curl", "github:owner/tool"]
+              files = ["agents", "skills", "tools"]
+            end
 
           Remote Cawfile references:
             ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent

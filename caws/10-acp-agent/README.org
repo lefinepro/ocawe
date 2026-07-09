@@ -41,14 +41,17 @@ struct Output
   include Api::ACP::Agent
 end
 
-@[Container(packages: ["codex-acp"])]
+container do
+  packages = ["codex-acp"]
+end
+
 @[Validate(Input, Output)]
 workflow "acp-example" do
   exec "codex", runtime: {"acp"}
 end
 #+end_src
 
-The =@[Container]= annotation ensures the =codex-acp= package is available in the NixOS container.
+The =container do= block ensures the =codex-acp= package is available in the NixOS container.
 
 ** Exposing Workflow as ACP Agent
 
@@ -106,17 +109,20 @@ The ACP executor returns:
 
 * Example Agents
 
-- *codex*: Anthropic's code agent (via =@[Container]=)
-- *claude*: Claude Code agent (via =@[Container]=)
-- *qwen-code*: Qwen Code agent (via =@[Container]=)
+- *codex*: Anthropic's code agent (via =container do=)
+- *claude*: Claude Code agent (via =container do=)
+- *qwen-code*: Qwen Code agent (via =container do=)
 - *custom*: Any binary implementing ACP stdio transport
 
 * Container Installation
 
-Packages are installed automatically via the =@[Container]= annotation:
+Packages are installed automatically via the =container do= block:
 
 #+begin_src crystal
-@[Container(packages: ["codex-acp"])]
+container do
+  packages = ["codex-acp"]
+end
+
 @[Validate(Input, Output)]
 workflow "acp-example" do
   exec "codex", runtime: {"acp"}
