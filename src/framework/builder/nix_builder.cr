@@ -1,13 +1,11 @@
-require "./builder"
 require "file_utils"
+require "./builder"
 
 module Ocawe
   module Builder
-    # Unified NixBuilder — always builds through a nix multi-stage Dockerfile.
-    # The final image is scratch by default, with a copied Nix store closure.
+    # Fast workflow image builder. Historical name is kept because Cawfile
+    # package-backed containers still resolve to ContainerMode::Nix.
     class NixBuilder < Builder
-      NIX_IMAGE = "nixos/nix:2.24.9"
-
       def initialize
         super("nix")
       end
@@ -19,23 +17,28 @@ module Ocawe
         runtime : String = "docker",
         image : String? = nil,
         packages : Array(String) = [] of String,
-        files : Array(String) = [] of String
+        files : Array(String) = [] of String,
       ) : Bool
         unless File.file?(binary_path)
           STDERR.puts "Error: binary not found: #{binary_path}"
           return false
         end
 
-        dockerfile = generate_dockerfile(image: image, packages: packages, files: files)
-        context = File.join(context_dir, "build")
+        context = File.join(context_dir, "build", "container")
         FileUtils.rm_rf(context)
         Dir.mkdir_p(context)
+        rootfs = File.join(context, "rootfs")
+        Dir.mkdir_p(rootfs)
+
+        dockerfile = generate_dockerfile(image: image, packages: packages, files: files)
         File.write(File.join(context, "Dockerfile"), dockerfile)
 
-        # Копируем бинарник
-        copy_binary(binary_path, File.join(context, "ocawecore"))
+        copy_executable(binary_path, File.join(rootfs, "app", "ocawecore"))
+        copy_binary_closure(binary_path, rootfs)
+        copy_package_tools(packages, rootfs)
+        copy_default_tools(rootfs)
+        copy_workflow_cawfile(context_dir, rootfs)
 
-        # Разрешаем файлы: явный список или все файлы в директории
         effective_files = if files.empty?
                             Dir.children(context_dir).select do |f|
                               path = File.join(context_dir, f)
@@ -49,7 +52,7 @@ module Ocawe
         effective_files.each do |file|
           src = File.join(context_dir, file)
           if File.exists?(src)
-            dst = File.join(context, file)
+            dst = File.join(rootfs, "app", file)
             Dir.mkdir_p(File.dirname(dst))
             if File.directory?(src)
               copy_dir(src, dst)
@@ -73,102 +76,162 @@ module Ocawe
       def generate_dockerfile(
         image : String? = nil,
         packages : Array(String) = [] of String,
-        files : Array(String) = [] of String
+        files : Array(String) = [] of String,
       ) : String
         final_image = image || "scratch"
 
         lines = [
-          "# Stage 1: nix build environment",
-          "FROM #{NIX_IMAGE} AS nix-build",
-          "RUN nix-channel --add https://nixos.org/channels/nixos-26.05 nixpkgs && nix-channel --update",
+          "FROM #{final_image}",
+          "COPY rootfs/ /",
+          "ENV PATH=\"/usr/bin:/bin:/app/tools:${PATH}\"",
+          "WORKDIR /app",
+          "EXPOSE 4111",
+          "ENTRYPOINT [\"/app/ocawecore\"]",
+          "CMD [\"--port\", \"4111\"]",
         ]
-
-        runtime_packages = ["glibc", "zlib", "openssl", "libyaml", "pcre2", "libevent", "zstd", "sqlite", "gcc.cc.lib", "patchelf"]
-        package_prefix = final_image == "scratch" ? "pkgsStatic" : "nixpkgs"
-        effective_packages = if final_image == "scratch"
-                               packages
-                             else
-                               (runtime_packages + packages).uniq
-                             end
-
-        attr_packages, installable_packages = effective_packages.partition { |pkg| nixpkgs_attr?(pkg) }
-
-        if !attr_packages.empty?
-          lines << "RUN nix-env -iA #{attr_packages.map { |pkg| "#{package_prefix}.#{pkg}" }.join(" ")}"
-        end
-
-        if !installable_packages.empty?
-          lines << "RUN nix profile install --extra-experimental-features 'nix-command flakes' #{installable_packages.map { |pkg| shell_escape(pkg) }.join(" ")}"
-        end
-
-        if final_image == "scratch" && !effective_packages.empty?
-          lines << "RUN mkdir -p /nix-export && \\"
-          lines << "  nix-store -q --requisites $(readlink -f /nix/var/nix/profiles/default) | \\"
-          lines << "  xargs -I {} cp -r --parents {} /nix-export/ && \\"
-          lines << "  cp -r --parents /nix/var /nix-export/ && \\"
-          lines << "  mkdir -p /nix-export/lib64 && \\"
-          lines << "  loader=$(find /nix-export/nix/store -path '*/lib/ld-linux-x86-64.so.2' | head -n1) && \\"
-          lines << "  ln -s ${loader#/nix-export} /nix-export/lib64/ld-linux-x86-64.so.2 && \\"
-          lines << "  mkdir -p /nix-export/lib && \\"
-          lines << "  find /nix-export/nix/store -path '*/lib/*.so*' -exec sh -c 'for f do ln -sf ${f#/nix-export} /nix-export/lib/$(basename \"$f\"); done' sh {} +"
-        end
-
-        lines << ""
-        lines << "# Stage 2: final image"
-        lines << "FROM #{final_image}"
-
-        if final_image == "scratch"
-          lines << "COPY --from=nix-build /nix-export/nix /nix"
-          lines << "COPY --from=nix-build /nix-export/lib64 /lib64"
-          lines << "COPY --from=nix-build /nix-export/lib /lib"
-        end
-        lines << "ENV PATH=\"/nix/var/nix/profiles/default/bin:/nix/store:${PATH}\""
-        lines << "ENV LD_LIBRARY_PATH=\"/nix/var/nix/profiles/default/lib:/nix/var/nix/profiles/default/lib64\""
-
-        lines << "WORKDIR /app"
-        lines << "COPY ocawecore /app/ocawecore"
-        if final_image != "scratch"
-          rpath = [
-            "/nix/var/nix/profiles/default/lib",
-            "/nix/store/8kvxvr3pmsypxiypq4g8zy13glnfr7nx-glibc-2.42-67/lib",
-            "/nix/store/dbz6pb9g67kpgpl95k8d85kzpxm1c32p-zlib-1.3.2/lib",
-            "/nix/store/l0vl4dali2mvbpi30a8da1f71jl85myg-openssl-3.6.2/lib",
-            "/nix/store/iswwp0p9sa9iyiar387r423qhqpwpi4p-libyaml-0.2.5/lib",
-            "/nix/store/x2zjc47pkhcwxr4iyv5xj3hdqfzfnyd9-pcre2-10.46/lib",
-            "/nix/store/4c9lbyb7payh9akmia87v38bi82vdidb-libevent-2.1.12/lib",
-            "/nix/store/fsvb5zrsm1n7m5wshm570imspffi7i8f-zstd-1.5.7/lib",
-            "/nix/store/7nww4d4yl7jzf66qllvyn61xb21vp7ry-gcc-15.2.0-libgcc/lib",
-          ].join(":")
-          lines << "RUN sqlite_lib_dir=$(dirname $(find /nix/store -name libsqlite3.so.0 | head -n 1)) && patchelf --set-interpreter /nix/store/8kvxvr3pmsypxiypq4g8zy13glnfr7nx-glibc-2.42-67/lib64/ld-linux-x86-64.so.2 --set-rpath #{rpath}:$sqlite_lib_dir /app/ocawecore"
-        end
-
-        files.each do |file|
-          lines << "COPY #{file} /app/#{file}"
-        end
-
-        lines << "EXPOSE 4111"
-        lines << "ENTRYPOINT [\"/app/ocawecore\"]"
-        lines << "CMD [\"--port\", \"4111\"]"
-
         lines.join("\n")
       end
 
-      private def copy_dir(src : String, dst : String) : Nil
+      private def copy_binary_closure(binary : String, rootfs : String) : Nil
+        collect_shared_libraries(binary).each do |library|
+          copy_absolute_file(library, rootfs)
+        end
+      end
+
+      private def copy_package_tools(packages : Array(String), rootfs : String) : Nil
+        packages.each do |package|
+          copy_nix_package(package, rootfs)
+        end
+      end
+
+      private def copy_default_tools(rootfs : String) : Nil
+        ["bash", "sh", "env"].each do |tool|
+          if executable = find_executable(tool)
+            copy_tool(executable, tool, rootfs)
+          end
+        end
+      end
+
+      private def copy_workflow_cawfile(context_dir : String, rootfs : String) : Nil
+        cawfile = File.join(context_dir, "Cawfile")
+        return unless File.file?(cawfile)
+        copy_file(cawfile, File.join(rootfs, "app", "Cawfile"), File.info(cawfile).permissions.value)
+      end
+
+      private def copy_tool(executable : String, name : String, rootfs : String) : Nil
+        destination = File.join(rootfs, "usr", "bin", name)
+        copy_executable(executable, destination)
+        collect_shared_libraries(executable).each do |library|
+          copy_absolute_file(library, rootfs)
+        end
+      end
+
+      private def copy_nix_package(package : String, rootfs : String) : Nil
+        ref = nix_package_ref(package)
+        output = IO::Memory.new
+        status = Process.run(
+          "nix",
+          args: ["build", "--no-link", "--print-out-paths", ref],
+          output: output,
+          error: Process::Redirect::Inherit
+        )
+        raise "nix package '#{package}' could not be built from #{ref}" unless status.success?
+
+        package_paths = output.to_s.lines.map(&.strip).reject(&.empty?)
+        raise "nix package '#{package}' produced no output paths" if package_paths.empty?
+
+        package_paths.each do |path|
+          copy_nix_closure(path, rootfs)
+          link_package_bins(path, rootfs)
+        end
+      end
+
+      private def nix_package_ref(package : String) : String
+        nixpkgs_attr?(package) ? "nixpkgs##{package}" : package
+      end
+
+      private def copy_nix_closure(path : String, rootfs : String) : Nil
+        output = IO::Memory.new
+        status = Process.run("nix-store", args: ["-qR", path], output: output, error: Process::Redirect::Inherit)
+        raise "could not query nix closure for #{path}" unless status.success?
+
+        output.to_s.lines.map(&.strip).reject(&.empty?).sort.each do |store_path|
+          copy_absolute_path(store_path, rootfs)
+        end
+      end
+
+      private def link_package_bins(package_path : String, rootfs : String) : Nil
+        bin_dir = File.join(package_path, "bin")
+        return unless Dir.exists?(bin_dir)
+
+        Dir.children(bin_dir).sort.each do |name|
+          src = File.join(bin_dir, name)
+          next unless File.exists?(src)
+
+          dst = File.join(rootfs, "usr", "bin", name)
+          Dir.mkdir_p(File.dirname(dst))
+          File.delete(dst) if File.exists?(dst) || File.symlink?(dst)
+          File.symlink(src, dst)
+        end
+      end
+
+      private def collect_shared_libraries(binary : String) : Array(String)
+        output = IO::Memory.new
+        status = Process.run("ldd", args: [binary], output: output, error: Process::Redirect::Close)
+        return [] of String unless status.success?
+
+        libraries = Set(String).new
+        output.to_s.each_line do |line|
+          if match = line.match(/=>\s+(\/\S+)/)
+            libraries << match[1]
+          elsif match = line.match(/^\s*(\/\S+)/)
+            libraries << match[1]
+          end
+        end
+        libraries.reject { |path| path.includes?("linux-vdso") || !File.file?(path) }.to_a.sort
+      end
+
+      private def copy_absolute_file(path : String, rootfs : String) : Nil
+        destination = File.join(rootfs, path)
+        return if File.exists?(destination)
+        Dir.mkdir_p(File.dirname(destination))
+        copy_file(path, destination, File.info(path).permissions.value)
+      end
+
+      private def copy_absolute_path(path : String, rootfs : String) : Nil
+        destination = File.join(rootfs, path)
+        return if File.exists?(destination)
+        Dir.mkdir_p(File.dirname(destination))
+        if File.directory?(path)
+          copy_dir(path, destination, ignore_context_entries: false)
+        else
+          copy_file(path, destination, File.info(path).permissions.value)
+        end
+      end
+
+      private def find_executable(name : String) : String?
+        output = IO::Memory.new
+        status = Process.run("sh", args: ["-c", "command -v #{shell_escape(name)}"], output: output, error: Process::Redirect::Close)
+        return nil unless status.success?
+        path = output.to_s.lines.first?.try(&.strip)
+        path.presence
+      end
+
+      private def nixpkgs_attr?(package : String) : Bool
+        !package.includes?(":") && !package.starts_with?("./") && !package.starts_with?("../") && !package.starts_with?("/")
+      end
+
+      private def copy_dir(src : String, dst : String, ignore_context_entries : Bool = true) : Nil
         Dir.mkdir_p(dst)
         Dir.children(src).each do |child|
-          next if ignored_context_entry?(child)
+          next if ignore_context_entries && ignored_context_entry?(child)
 
           child_src = File.join(src, child)
           child_dst = File.join(dst, child)
           if File.directory?(child_src)
-            copy_dir(child_src, child_dst)
+            copy_dir(child_src, child_dst, ignore_context_entries: ignore_context_entries)
           else
-            File.open(child_src, "r") do |input|
-              File.open(child_dst, "w") do |output|
-                  IO.copy(input, output)
-                end
-                File.chmod(child_dst, File.info(child_src).permissions.value)
-            end
+            copy_file(child_src, child_dst, File.info(child_src).permissions.value)
           end
         end
       end
@@ -177,12 +240,22 @@ module Ocawe
         [".git", ".turbo", ".next", "build", "dist", "coverage", "node_modules"].includes?(name)
       end
 
-      private def nixpkgs_attr?(pkg : String) : Bool
-        !pkg.includes?(":") && !pkg.starts_with?("./") && !pkg.starts_with?("../") && !pkg.starts_with?("/")
-      end
-
       private def shell_escape(value : String) : String
         "'" + value.gsub("'", "'\"'\"'") + "'"
+      end
+
+      private def copy_executable(src : String, dst : String) : Nil
+        copy_file(src, dst, 0o755)
+      end
+
+      private def copy_file(src : String, dst : String, mode : Int32) : Nil
+        Dir.mkdir_p(File.dirname(dst))
+        File.open(src, "r") do |input|
+          File.open(dst, "w") do |output|
+            IO.copy(input, output)
+          end
+        end
+        File.chmod(dst, mode)
       end
     end
   end

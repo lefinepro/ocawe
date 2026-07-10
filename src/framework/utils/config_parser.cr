@@ -80,12 +80,10 @@ module OcaweCore
         if cawfile_bundle = ACD::Discovery::CawfileLoader.load_root
           start = cawfile_bundle.start_settings
           port = int32_or_nil(start["port"]?)
-          workflows_root = string_or_nil(start["workflows_root"]?)
           log_level_str = string_or_nil(start["log_level"]?)
           log_level = log_level_str ? Ocawe::Config::LogLevel.parse(log_level_str) : default_settings.log_level
           return Ocawe::Config::StartSettings.new(
             port: port || default_settings.port,
-            workflows_root: workflows_root || default_settings.workflows_root,
             log_level: log_level
           )
         end

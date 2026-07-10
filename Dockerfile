@@ -14,6 +14,7 @@ RUN shards update --production
 
 COPY . .
 RUN shards build ocawe --release --no-debug
+RUN cc -Os -s src/tools/rootfs_tar.c -o /ocawe/bin/rootfs_tar
 RUN chmod +x /ocawe/entrypoint.sh
 
 EXPOSE 4111

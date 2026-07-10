@@ -24,10 +24,9 @@ module Ocawe
 
     struct StartSettings
       getter port : Int32
-      getter workflows_root : String
       getter log_level : LogLevel
 
-      def initialize(@port : Int32 = 4111, @workflows_root : String = "./workflows", @log_level : LogLevel = LogLevel::Warning)
+      def initialize(@port : Int32 = 4111, @log_level : LogLevel = LogLevel::Warning)
       end
     end
 
@@ -69,7 +68,7 @@ module Ocawe
         @signatures_required : Bool = true,
         @local_actor : String = "http://127.0.0.1:4111/actors/server",
         @local_key_id : String = "http://127.0.0.1:4111/actors/server#main-key",
-        @local_private_key_path : String = "./.ocawe/federation-private.pem"
+        @local_private_key_path : String = "./.ocawe/federation-private.pem",
       )
       end
     end
@@ -122,7 +121,7 @@ module Ocawe
         @functions : Hash(String, Ocawe::Workflow::FunctionHandler) = {} of String => Ocawe::Workflow::FunctionHandler,
         @workspace_bootstrap : Proc(Nil)? = nil,
         @mcp : MCPSettings = MCPSettings.new,
-        @log_settings : LogSettings = LogSettings.new
+        @log_settings : LogSettings = LogSettings.new,
       )
       end
 
@@ -172,7 +171,7 @@ module Ocawe
         @env : Hash(String, String) = {} of String => String,
         @url : String? = nil,
         @bearer_token : String? = nil,
-        @enabled : Bool = true
+        @enabled : Bool = true,
       )
       end
     end
@@ -204,7 +203,7 @@ module Ocawe
         @servers : Array(MCPServerSettings) = [] of MCPServerSettings,
         @http_server : MCPHTTPServerSettings = MCPHTTPServerSettings.new,
         @defaults : MCPDefaultsSettings = MCPDefaultsSettings.new,
-        @dynamic_store_path : String = ".meta/mcp_servers.json"
+        @dynamic_store_path : String = ".meta/mcp_servers.json",
       )
       end
     end

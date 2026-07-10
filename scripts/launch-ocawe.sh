@@ -169,7 +169,7 @@ run_container() {
     --rm
     -p "${port}:4111"
     -e "OCAWE_PORT=4111"
-    -e "OCAWE_WORKFLOWS_ROOT=/ocawe/workflows"
+    -e "OCAWE_WORKDIR=/ocawe/workflows"
     -v "${project_root}:/ocawe"
   )
 

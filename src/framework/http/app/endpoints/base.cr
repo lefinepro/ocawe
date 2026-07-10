@@ -9,12 +9,9 @@ module ACD
 
       def initialize(
         @port : Int32,
-        workflows_root : String? = nil,
-        @settings : Ocawe::Config::Settings = Ocawe::Config::Settings.default
+        @settings : Ocawe::Config::Settings = Ocawe::Config::Settings.default,
       )
-        config = @settings.workflows
-        preferred_root = workflows_root || config.preferred_workflows_root
-        @locator = Discovery::WorkflowLocator.new(preferred_root)
+        @locator = Discovery::WorkflowLocator.new(Dir.current)
         @agent_loader = Agents::Loader.new
         @skill_loader = Skills::Loader.new
         @workflow_engine = Ocawe::Workflow::Engine.new
@@ -79,9 +76,9 @@ module ACD
           mount_run_endpoints
           mount_hitl_endpoints
           mount_compat_endpoints
-		  mount_models_endpoints
-		  mount_environments_endpoints
-		  mount_trigger_endpoints
+          mount_models_endpoints
+          mount_environments_endpoints
+          mount_trigger_endpoints
           mount_mcp_endpoints
           mount_mcp_server_endpoint
           mount_keys_endpoints
@@ -247,7 +244,7 @@ module ACD
           spawn do
             run_id = "service-#{workflow_id}"
             input_data = {
-              "service" => JSON.parse(true.to_json),
+              "service"     => JSON.parse(true.to_json),
               "workflow_id" => JSON.parse(workflow_id.to_json),
             } of String => JSON::Any
 
@@ -309,7 +306,7 @@ module ACD
 
       private def merge_agents(
         global_agents : Array(ACD::Agents::LoadedAgent),
-        local_agents : Array(ACD::Agents::LoadedAgent)
+        local_agents : Array(ACD::Agents::LoadedAgent),
       ) : Array(ACD::Agents::LoadedAgent)
         merged = {} of String => ACD::Agents::LoadedAgent
         global_agents.each { |agent| merged[agent.id] = agent }

@@ -18,7 +18,8 @@ module OcaweCore
           parser.on("--output PATH", "Output binary path") { |v| output = v }
         end
 
-        abort_unless_success(build_runtime(release: release, static: static, output: output))
+        abort_unless_success(build_runtime(release: release, static: static, output: output, force: true))
+        build_rootfs_packer
 
         # Detect container configuration from Cawfile in current directory
         cawfile = ACD::Discovery::CawfileLoader.find_cawfile(Dir.current)
@@ -37,7 +38,7 @@ module OcaweCore
             abort_unless_success(build_container(
               binary_path: output,
               base: base,
-              runtime: detect_runtime,
+              runtime: detect_runtime(allow_missing: true),
               tag: container_tag,
               image: container_config.image,
               packages: container_config.packages,
@@ -47,14 +48,21 @@ module OcaweCore
         end
       end
 
-      private def detect_runtime : String
+      private def detect_runtime(allow_missing : Bool = false) : String
         ["docker", "podman", "nerdctl"].each do |rt|
           if Process.run("sh", args: ["-c", "command -v #{rt} > /dev/null 2>&1"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
             return rt
           end
         end
+        return "docker" if allow_missing
         STDERR.puts "Error: no container runtime found (docker, podman, nerdctl)"
         exit(1)
+      end
+
+      private def container_runtime_available? : Bool
+        ["docker", "podman", "nerdctl"].any? do |rt|
+          Process.run("sh", args: ["-c", "command -v #{rt} > /dev/null 2>&1"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
+        end
       end
 
       private def build_container(
@@ -62,15 +70,16 @@ module OcaweCore
         base : String,
         runtime : String,
         tag : String,
+        context_dir : String = Dir.current,
         image : String? = nil,
         packages : Array(String) = [] of String,
-        files : Array(String) = [] of String
+        files : Array(String) = [] of String,
       ) : Bool
         builder = Ocawe::Builder.builder_registry.resolve(base)
         builder.build(
           binary_path,
           tag: tag,
-          context_dir: Dir.current,
+          context_dir: context_dir,
           runtime: runtime,
           image: image,
           packages: packages,
@@ -93,6 +102,7 @@ module OcaweCore
         end
 
         workflows_root = resolve_workflows_root(args.first?)
+        runtime_bin = RUNTIME_BIN
 
         port ||= read_port_from_cawfile(workflows_root)
 
@@ -105,7 +115,7 @@ module OcaweCore
           container_config = cawfile_bundle.container if cawfile_bundle
         end
 
-        abort_unless_success(build_runtime(release: true, output: RUNTIME_BIN))
+        abort_unless_success(ensure_runtime_binary(runtime_bin))
 
         container_tag = nil.as(String?)
 
@@ -120,10 +130,11 @@ module OcaweCore
                  end
 
           abort_unless_success(build_container(
-            binary_path: RUNTIME_BIN,
+            binary_path: runtime_bin,
             base: base,
-            runtime: detect_runtime,
+            runtime: detect_runtime(allow_missing: true),
             tag: container_tag.not_nil!,
+            context_dir: workflows_root,
             image: container_config.image,
             packages: container_config.packages,
             files: container_config.files
@@ -132,21 +143,30 @@ module OcaweCore
 
         effective_port = (port || DEFAULT_PORT).not_nil!
         runtime_args = ["--port", "#{effective_port}"]
+        runtime_command = nil.as(String?)
         if image = container_tag
-          runtime_args << "--workflows-root=#{container_workflows_root(workflows_root)}"
+          unless container_runtime_available?
+            puts "[ocawe] no container runtime available; image archive was built, runtime not started"
+            return
+          end
           runtime_args << "--log-level=#{log_level}" if log_level
-          command = container_run_command(detect_runtime, image, container_name_for_bundle(cawfile_bundle.not_nil!), effective_port, runtime_args)
+          runtime_command = container_run_command(
+            detect_runtime(allow_missing: true),
+            image,
+            container_name_for_bundle(cawfile_bundle.not_nil!),
+            effective_port,
+            container_workflows_root(workflows_root),
+            runtime_args
+          )
         else
-          runtime_args << "--workflows-root=#{workflows_root}"
           runtime_args << "--log-level=#{log_level}" if log_level
-          command = ([RUNTIME_BIN] + runtime_args).map { |part| shell_quote(part) }.join(" ")
         end
 
         if detached
           # Spawn the runtime as an independent background process. Previously this
           # used the now-unsupported `Process.fork`; spawning directly avoids the
           # deprecation and records the actual runtime PID (so `kill <pid>` works).
-          runtime = spawn_cmd(command)
+          runtime = spawn_runtime(runtime_command, runtime_bin, runtime_args, workflows_root)
           pid = runtime.pid
 
           pid_file = File.join(workflows_root, ".ocawe.pid")
@@ -156,7 +176,7 @@ module OcaweCore
           puts "[ocawe] logs: ocawe up --follow"
           puts "[ocawe] stop: kill #{pid}"
         else
-          runtime = spawn_cmd(command)
+          runtime = spawn_runtime(runtime_command, runtime_bin, runtime_args, workflows_root)
           Signal::INT.trap do
             terminate(runtime)
             exit(0)
@@ -291,9 +311,9 @@ module OcaweCore
         "ocawe-#{raw_name.gsub(/[^a-zA-Z0-9_.-]/, "-")}"
       end
 
-      private def container_run_command(runtime : String, image : String, container_name : String, port : Int32, runtime_args : Array(String)) : String
+      private def container_run_command(runtime : String, image : String, container_name : String, port : Int32, workdir : String, runtime_args : Array(String)) : String
         cleanup = [runtime, "rm", "-f", container_name].map { |part| shell_quote(part) }.join(" ")
-        command = [runtime, "run", "--name", container_name, "--rm", "-w", "/app", "-p", "#{port}:#{port}", image, "/app/ocawecore"]
+        command = [runtime, "run", "--name", container_name, "--rm", "-w", workdir, "-p", "#{port}:#{port}", image, "/app/ocawecore"]
         command.concat(runtime_args)
         "#{cleanup} >/dev/null 2>&1 || true; #{command.map { |part| shell_quote(part) }.join(" ")}"
       end
@@ -310,25 +330,79 @@ module OcaweCore
         "'" + value.gsub("'", "'\"'\"'") + "'"
       end
 
-      private def build_runtime(release : Bool, static : Bool = false, output : String = RUNTIME_BIN) : Bool
-        # Check if crystal is available
-        unless system("command -v crystal > /dev/null 2>&1")
-          STDERR.puts "Error: crystal compiler not found in PATH"
-          STDERR.puts "Please install Crystal: https://crystal-lang.org/install/"
-          return false
-        end
-
+      private def build_runtime(release : Bool, static : Bool = false, output : String = RUNTIME_BIN, force : Bool = false) : Bool
         flags = [] of String
         flags << "--release" if release
         flags << "--static" if static
         flags << "--no-debug" if release
         flag_str = flags.empty? ? "" : flags.join(" ") + " "
         entrypoint = build_runtime_entrypoint
+        unless force
+          sources = runtime_source_paths(entrypoint)
+          if runtime_current?(output, sources)
+            puts "[ocawe] using existing runtime: #{output}"
+            return true
+          end
+        end
+
+        # Check if crystal is available only when a rebuild is actually needed.
+        unless system("command -v crystal > /dev/null 2>&1")
+          STDERR.puts "Error: crystal compiler not found in PATH"
+          STDERR.puts "Please install Crystal: https://crystal-lang.org/install/"
+          return false
+        end
         main_flag = entrypoint == RUNTIME_ENTRY ? "-D ocawe_runtime_main " : ""
 
         # Build from project root to ensure shard dependencies are found
         Dir.cd(PROJECT_ROOT) do
           run_cmd("mkdir -p build && crystal build #{entrypoint} #{main_flag}#{flag_str}-o #{output}")
+        end
+      end
+
+      private def build_rootfs_packer : Bool
+        source = File.join(PROJECT_ROOT, "src", "tools", "rootfs_tar.c")
+        output = File.join(PROJECT_ROOT, "build", "rootfs_tar")
+        return true unless File.file?(source)
+        return true if File.file?(output) && File.info(output).modification_time >= File.info(source).modification_time
+        return true unless system("command -v cc > /dev/null 2>&1")
+
+        Dir.cd(PROJECT_ROOT) do
+          run_cmd("mkdir -p build && cc -Os -s -o #{shell_quote(output)} #{shell_quote(source)}")
+        end
+      end
+
+      private def runtime_current?(output : String, sources : Array(String)) : Bool
+        return false unless File.file?(output)
+        output_mtime = File.info(output).modification_time
+        sources.all? do |source|
+          File.exists?(source) && File.info(source).modification_time <= output_mtime
+        end
+      end
+
+      private def runtime_source_paths(entrypoint : String) : Array(String)
+        sources = Dir.glob(File.join(PROJECT_ROOT, "src", "**", "*.cr")).reject do |path|
+          relative = Path[File.expand_path(path)].relative_to(Path[PROJECT_ROOT]).to_s
+          relative.starts_with?("src/cli/") || relative.starts_with?("src/framework/builder/")
+        end
+        sources.concat(Dir.glob(File.join(PROJECT_ROOT, "shard.*")))
+        sources << entrypoint
+        if cawfile = ACD::Discovery::CawfileLoader.find_cawfile(Dir.current)
+          sources << cawfile
+        end
+        sources.uniq
+      end
+
+      private def ensure_runtime_binary(output : String) : Bool
+        return true if File.file?(output)
+
+        unless system("command -v crystal > /dev/null 2>&1")
+          STDERR.puts "Error: runtime binary not found: #{output}"
+          STDERR.puts "Run `ocawe build --release` in an environment with Crystal, or install the packaged ocawe binary."
+          return false
+        end
+
+        Dir.cd(PROJECT_ROOT) do
+          run_cmd("mkdir -p build && crystal build #{RUNTIME_ENTRY} -D ocawe_runtime_main --release --no-debug -o #{output}")
         end
       end
 
@@ -342,7 +416,7 @@ module OcaweCore
         entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
         Dir.mkdir_p(File.dirname(entrypoint))
         entrypoint_dir = File.dirname(entrypoint)
-        File.write(entrypoint, String.build do |io|
+        content = String.build do |io|
           io << "require " << require_path(entrypoint_dir, RUNTIME_ENTRY).to_json << "\n"
           cawfile_code.each do |line|
             io << line << "\n"
@@ -351,8 +425,14 @@ module OcaweCore
             io << "require " << require_path(entrypoint_dir, registry_file).to_json << "\n"
           end
           io << "\nOcaweCore.run\n"
-        end)
+        end
+        write_file_if_changed(entrypoint, content)
         entrypoint
+      end
+
+      private def write_file_if_changed(path : String, content : String) : Nil
+        return if File.exists?(path) && File.read(path) == content
+        File.write(path, content)
       end
 
       private def require_path(from_dir : String, target : String) : String
@@ -367,6 +447,14 @@ module OcaweCore
 
       private def spawn_cmd(command : String) : Process
         Process.new("bash", args: ["-lc", command], input: Process::Redirect::Close, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
+      end
+
+      private def spawn_runtime(command : String?, binary : String, args : Array(String), chdir : String) : Process
+        if command
+          spawn_cmd(command)
+        else
+          Process.new(binary, args: args, chdir: chdir, input: Process::Redirect::Close, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
+        end
       end
 
       private def run_cmd(command : String) : Bool

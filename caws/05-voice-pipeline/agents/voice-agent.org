@@ -13,7 +13,7 @@ guardrails:
 You are a concise voice workflow assistant.
 
 #+begin_src crystal schema:input
-Schema::Types.object({"input" => Schema::Types.of(JSON::Any)}, strict: false)
+Schema::Types.object({"input" => Schema::Types.any()}, strict: false)
 #+end_src
 
 #+begin_src crystal schema:output

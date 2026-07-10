@@ -1,12 +1,12 @@
 module OcaweCore
   module CLI
     class Main
-      private DEFAULT_PORT             = 4111
-      private PROJECT_ROOT             = File.expand_path("../../..", __DIR__)
-      private RUNTIME_ENTRY            = "#{PROJECT_ROOT}/src/ocawe.cr"
-      private RUNTIME_BIN              = "#{PROJECT_ROOT}/build/ocawecore"
-      private WORKFLOWS_PATH           = "#{PROJECT_ROOT}/src/workflows"
-      private CORE_COMMANDS            = Set{"build", "up", "shell", "exec", "pull", "-v", "--version", "-h", "--help"}
+      private DEFAULT_PORT   = 4111
+      private PROJECT_ROOT   = File.expand_path("../../..", __DIR__)
+      private RUNTIME_ENTRY  = "#{PROJECT_ROOT}/src/ocawe.cr"
+      private RUNTIME_BIN    = "#{PROJECT_ROOT}/build/ocawecore"
+      private WORKFLOWS_PATH = "#{PROJECT_ROOT}/src/workflows"
+      private CORE_COMMANDS  = Set{"build", "up", "shell", "exec", "pull", "-v", "--version", "-h", "--help"}
 
       def initialize
       end
@@ -65,6 +65,7 @@ module OcaweCore
               packages = ["git", "curl", "github:owner/tool"]
               files = ["agents", "skills", "tools"]
             end
+            rootfs_tar --build PATH IMAGE_TAG  # low-memory rebuild from prepared build/container/rootfs
 
           Remote Cawfile references:
             ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent

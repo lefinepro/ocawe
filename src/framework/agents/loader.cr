@@ -27,7 +27,7 @@ module ACD
         @guardrails_config : Hash(String, JSON::Any)? = nil,
         @input_schema_dsl : String? = nil,
         @output_schema_dsl : String? = nil,
-        @resume_schema_dsl : String? = nil
+        @resume_schema_dsl : String? = nil,
       )
       end
     end
@@ -36,9 +36,15 @@ module ACD
       def load_dir(path : String) : Array(LoadedAgent)
         return [] of LoadedAgent unless Dir.exists?(path)
 
-        Dir.glob(File.join(path, "*.md")).sort.map do |file|
+        agents = [] of LoadedAgent
+        agent_files(path).each do |file|
           content = File.read(file)
-          parsed = Frontmatter.parse_markdown(content, file)
+          parsed = begin
+            Frontmatter.parse_markdown(content, file)
+          rescue ex : Frontmatter::ParseError
+            next if File.extname(file) == ".org" && ex.message.to_s.includes?("missing YAML frontmatter")
+            raise ex
+          end
 
           description = parsed.data["description"]?.try(&.as_s?)
           raise "#{file}: agent frontmatter requires 'description'" unless description
@@ -49,8 +55,8 @@ module ACD
           guardrails_config = parse_hash_frontmatter(parsed.data["guardrails"]?, file, "guardrails")
           validate_guardrails_config(file, guardrails_config)
 
-          LoadedAgent.new(
-            id: File.basename(file, ".md"),
+          agents << LoadedAgent.new(
+            id: File.basename(file, File.extname(file)),
             file_path: file,
             description: description,
             frontmatter: parsed.data,
@@ -63,6 +69,11 @@ module ACD
             resume_schema_dsl: schema_blocks[:resume_schema_dsl],
           )
         end
+        agents
+      end
+
+      private def agent_files(path : String) : Array(String)
+        (Dir.glob(File.join(path, "*.md")) + Dir.glob(File.join(path, "*.org"))).sort
       end
 
       private def parse_hash_frontmatter(value : YAML::Any?, file : String, key : String) : Hash(String, JSON::Any)?
@@ -94,6 +105,8 @@ module ACD
 
         in_schema_block = false
         schema_kind = nil.as(String?)
+        schema_end = nil.as(String?)
+        schema_opener = nil.as(String?)
         buffer = [] of String
 
         body.each_line do |line|
@@ -101,6 +114,17 @@ module ACD
             if match = line.match(/^\s*```crystal\s+schema:(input|output|resume)\s*$/)
               in_schema_block = true
               schema_kind = match[1]
+              schema_end = "```"
+              schema_opener = line
+              buffer.clear
+              next
+            end
+
+            if match = line.match(/^\s*#\+begin_src\s+crystal\s+schema:(input|output|resume)\s*$/)
+              in_schema_block = true
+              schema_kind = match[1]
+              schema_end = "#+end_src"
+              schema_opener = line
               buffer.clear
               next
             end
@@ -109,7 +133,7 @@ module ACD
             next
           end
 
-          if line.strip == "```"
+          if line.strip == schema_end
             snippet = buffer.join.strip
             unless snippet.empty?
               if schema_kind == "input" && input_schema_dsl.nil?
@@ -123,6 +147,8 @@ module ACD
 
             in_schema_block = false
             schema_kind = nil
+            schema_end = nil
+            schema_opener = nil
             buffer.clear
             next
           end
@@ -131,13 +157,13 @@ module ACD
         end
 
         if in_schema_block
-          prompt_lines << "```crystal schema:#{schema_kind}\n"
+          prompt_lines << "#{schema_opener}\n"
           prompt_lines.concat(buffer)
         end
 
         {
-          prompt: prompt_lines.join.strip,
-          input_schema_dsl: input_schema_dsl,
+          prompt:            prompt_lines.join.strip,
+          input_schema_dsl:  input_schema_dsl,
           output_schema_dsl: output_schema_dsl,
           resume_schema_dsl: resume_schema_dsl,
         }

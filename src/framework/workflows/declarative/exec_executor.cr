@@ -67,18 +67,18 @@ module Ocawe
                        end
 
         {
-          "transport" => JSON.parse(pulled.transport.to_json),
-          "ref"        => JSON.parse(pulled.ref.to_json),
-          "repo"       => JSON.parse(pulled.repo_slug.to_json),
-          "repo_url"   => JSON.parse(pulled.repo_url.to_json),
-          "repo_dir"   => JSON.parse(pulled.repo_dir.to_json),
-          "local_path" => JSON.parse(pulled.local_path.to_json),
+          "transport"   => JSON.parse(pulled.transport.to_json),
+          "ref"         => JSON.parse(pulled.ref.to_json),
+          "repo"        => JSON.parse(pulled.repo_slug.to_json),
+          "repo_url"    => JSON.parse(pulled.repo_url.to_json),
+          "repo_dir"    => JSON.parse(pulled.repo_dir.to_json),
+          "local_path"  => JSON.parse(pulled.local_path.to_json),
           "workflow_id" => JSON.parse(workflow_id.to_json),
-          "cawfile"    => JSON.parse(cawfile_path.to_json),
-          "binary"     => JSON.parse(binary.to_json),
-          "run"        => JSON.parse(run.to_json),
-          "cloned"     => JSON.parse(pulled.cloned.to_json),
-          "pulled"     => JSON.parse(pulled.pulled.to_json),
+          "cawfile"     => JSON.parse(cawfile_path.to_json),
+          "binary"      => JSON.parse(binary.to_json),
+          "run"         => JSON.parse(run.to_json),
+          "cloned"      => JSON.parse(pulled.cloned.to_json),
+          "pulled"      => JSON.parse(pulled.pulled.to_json),
         } of String => JSON::Any
       end
 
@@ -147,7 +147,8 @@ module Ocawe
         port = 20000 + Random.rand(20000)
         process = Process.new(
           binary,
-          args: ["--port=#{port}", "--workflows-root=#{workflows_root}"],
+          args: ["--port=#{port}"],
+          chdir: workflows_root,
           input: Process::Redirect::Close,
           output: Process::Redirect::Inherit,
           error: Process::Redirect::Inherit

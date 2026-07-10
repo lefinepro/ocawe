@@ -56,6 +56,7 @@
 
             nativeBuildInputs = [
               pkgs.cacert
+              pkgs.stdenv.cc
               pkgs.makeWrapper
               pkgs.pkg-config
               pkgs.shards
@@ -84,6 +85,8 @@
 
               install -Dm755 ocawe "$out/bin/ocawe"
               install -Dm755 ocawecore "$out/bin/ocawecore"
+              cc -Os -s src/tools/rootfs_tar.c -o rootfs_tar
+              install -Dm755 rootfs_tar "$out/bin/rootfs_tar"
 
               mkdir -p "$out/share/ocawe"
               ${lib.concatMapStringsSep "\n" (path: ''
@@ -147,17 +150,15 @@
             config = {
               Env = [
                 "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-                "OCAWE_WORKFLOWS_ROOT=/workflows"
               ];
+              WorkingDir = "/workflows";
               ExposedPorts = {
                 "4111/tcp" = {};
               };
-              Entrypoint = [ "${ocawe}/bin/ocawe" ];
+              Entrypoint = [ "${ocawe}/bin/ocawecore" ];
               Cmd = [
                 "--port"
                 "4111"
-                "--workflows-root"
-                "/workflows"
               ];
             };
           };
@@ -265,14 +266,13 @@
               serviceConfig = {
                 DynamicUser = true;
                 StateDirectory = "ocawe";
-                WorkingDirectory = "/var/lib/ocawe";
+                WorkingDirectory = cfg.workflowsRoot;
                 Restart = "on-failure";
                 RestartSec = "5s";
               };
               script = ''
                 exec ${cfg.package}/bin/ocawecore \
                   --port=${toString cfg.port} \
-                  --workflows-root=${lib.escapeShellArg cfg.workflowsRoot} \
                   --log-level=${lib.escapeShellArg cfg.logLevel} \
                   ${lib.escapeShellArgs cfg.extraArgs}
               '';

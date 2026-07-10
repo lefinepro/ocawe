@@ -212,36 +212,32 @@ module Ocawe::Builder
 
   describe NixBuilder do
     describe "#generate_dockerfile" do
-      it "generates multi-stage nix build with scratch final by default" do
+      it "generates a fast rootfs image with scratch final by default" do
         builder = NixBuilder.new
         dockerfile = builder.generate_dockerfile(
           image: nil,
           packages: ["git", "curl"],
           files: ["script.sh", "data.json"]
         )
-        dockerfile.should contain("FROM nixos/nix")
         dockerfile.should contain("FROM scratch")
-        dockerfile.should contain("pkgsStatic")
-        dockerfile.should contain("git")
-        dockerfile.should contain("curl")
-        dockerfile.should contain("COPY script.sh")
-        dockerfile.should contain("COPY data.json")
-        dockerfile.should contain("COPY ocawecore")
+        dockerfile.should contain("COPY rootfs/ /")
+        dockerfile.should contain("WORKDIR /app")
         dockerfile.should contain("ENTRYPOINT [\"/app/ocawecore\"]")
-        dockerfile.should contain("COPY --from=nix-build")
+        dockerfile.should_not contain("nix-channel")
+        dockerfile.should_not contain("nix-env")
       end
 
-      it "generates multi-stage nix build with custom image final" do
+      it "generates a fast rootfs image with custom image final" do
         builder = NixBuilder.new
         dockerfile = builder.generate_dockerfile(
           image: "docker.io/library/debian",
           packages: ["jq"],
           files: ["data.csv"]
         )
-        dockerfile.should contain("FROM nixos/nix")
         dockerfile.should contain("FROM docker.io/library/debian")
-        dockerfile.should contain("COPY data.csv")
+        dockerfile.should contain("COPY rootfs/ /")
         dockerfile.should_not contain("FROM scratch")
+        dockerfile.should_not contain("nix-channel")
       end
 
       it "generates no packages when packages is empty" do
@@ -251,44 +247,47 @@ module Ocawe::Builder
           packages: [] of String,
           files: [] of String
         )
-        dockerfile.should contain("FROM nixos/nix")
         dockerfile.should contain("FROM scratch")
+        dockerfile.should contain("COPY rootfs/ /")
         dockerfile.should_not contain("nix-env")
       end
 
-      it "generates nix expression with pkgsStatic for static builds" do
+      it "does not install packages during docker build" do
         builder = NixBuilder.new
         dockerfile = builder.generate_dockerfile(
           image: nil,
           packages: ["htop", "ripgrep"],
           files: [] of String
         )
-        dockerfile.should contain("pkgsStatic")
-        dockerfile.should contain("htop")
-        dockerfile.should contain("ripgrep")
+        dockerfile.should_not contain("pkgsStatic")
+        dockerfile.should_not contain("htop")
+        dockerfile.should_not contain("ripgrep")
+        dockerfile.should_not contain("nix profile install")
       end
 
-      it "installs nix flake and path package refs without nixpkgs prefix" do
+      it "keeps flake and path package refs out of dockerfile commands" do
         builder = NixBuilder.new
         dockerfile = builder.generate_dockerfile(
           image: nil,
           packages: ["git", "github:owner/tool", "./local-tool", "/opt/tool"],
           files: [] of String
         )
-        dockerfile.should contain("nix-env -iA pkgsStatic.git")
-        dockerfile.should contain("nix profile install --extra-experimental-features 'nix-command flakes' 'github:owner/tool' './local-tool' '/opt/tool'")
-        dockerfile.should_not contain("pkgsStatic.github:owner/tool")
+        dockerfile.should_not contain("github:owner/tool")
+        dockerfile.should_not contain("./local-tool")
+        dockerfile.should_not contain("/opt/tool")
+        dockerfile.should_not contain("nix profile install")
       end
 
-      it "generates find-based COPY for nix store closure" do
+      it "copies a prepared rootfs instead of generating nix store commands" do
         builder = NixBuilder.new
         dockerfile = builder.generate_dockerfile(
           image: nil,
           packages: ["git"],
           files: ["script.sh"]
         )
-        dockerfile.should contain("nix-store -q --requisites")
-        dockerfile.should contain("xargs -I {} cp -r")
+        dockerfile.should contain("COPY rootfs/ /")
+        dockerfile.should_not contain("nix-store -q --requisites")
+        dockerfile.should_not contain("xargs -I {} cp -r")
       end
     end
 
@@ -323,11 +322,11 @@ module Ocawe::Builder
             files: [] of String
           )
 
-          context = File.join(dir, "build")
-          File.file?(File.join(context, "ocawecore")).should be_true
-          File.file?(File.join(context, "script.sh")).should be_true
-          File.file?(File.join(context, "data.json")).should be_true
-          File.file?(File.join(context, "agents", "assistant.md")).should be_true
+          context = File.join(dir, "build", "container")
+          File.file?(File.join(context, "rootfs", "app", "ocawecore")).should be_true
+          File.file?(File.join(context, "rootfs", "app", "script.sh")).should be_true
+          File.file?(File.join(context, "rootfs", "app", "data.json")).should be_true
+          File.file?(File.join(context, "rootfs", "app", "agents", "assistant.md")).should be_true
         ensure
           FileUtils.rm_rf(dir)
         end

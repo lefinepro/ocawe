@@ -9,7 +9,7 @@ voice:
 Summarize the task and prepare it for the agent pipeline.
 
 #+begin_src crystal schema:input
-Schema::Types.object({"input" => Schema::Types.of(JSON::Any)})
+Schema::Types.object({"input" => Schema::Types.any()})
 #+end_src
 
 #+begin_src crystal schema:output
