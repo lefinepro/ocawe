@@ -155,7 +155,7 @@ module Ocawe
         status = Process.run("nix-store", args: ["-qR", path], output: output, error: Process::Redirect::Inherit)
         raise "could not query nix closure for #{path}" unless status.success?
 
-        output.to_s.lines.map(&.strip).reject(&.empty?).sort.each do |store_path|
+        output.to_s.lines.map(&.strip).reject(&.empty?).sort!.each do |store_path|
           copy_absolute_path(store_path, rootfs)
         end
       end
