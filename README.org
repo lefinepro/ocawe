@@ -55,6 +55,19 @@ The Nix package includes the CLI/runtime dependencies used by the distribution,
 including Crystal build inputs, Git, Node.js, Ruby, SQLite, and Lua 5.4. It also
 installs example Cawfiles and helper scripts under =share/ocawe=.
 
+Install from GitHub Releases:
+
+#+begin_src bash
+curl -fsSL https://github.com/lefinepro/ocawe/releases/latest/download/install.sh | bash
+ocawe --help
+#+end_src
+
+Install a specific release tag:
+
+#+begin_src bash
+curl -fsSL https://github.com/lefinepro/ocawe/releases/download/2026.07.00/install.sh | OCAWE_VERSION=2026.07.00 bash
+#+end_src
+
 Install with mise from GitHub Releases:
 
 #+begin_src bash

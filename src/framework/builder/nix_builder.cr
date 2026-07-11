@@ -182,9 +182,10 @@ module Ocawe
 
         libraries = Set(String).new
         output.to_s.each_line do |line|
-          if match = line.match(/=>\s+(\/\S+)/)
+          if match = line.match(/^\s*(\/\S+)/)
             libraries << match[1]
-          elsif match = line.match(/^\s*(\/\S+)/)
+          end
+          if match = line.match(/=>\s+(\/\S+)/)
             libraries << match[1]
           end
         end
@@ -195,6 +196,13 @@ module Ocawe
         destination = File.join(rootfs, path)
         return if File.exists?(destination)
         Dir.mkdir_p(File.dirname(destination))
+        if File.symlink?(path)
+          target = File.readlink(path)
+          target_path = target.starts_with?("/") ? target : File.expand_path(target, File.dirname(path))
+          copy_absolute_file(target_path, rootfs) if File.exists?(target_path)
+          File.symlink(target, destination)
+          return
+        end
         copy_file(path, destination, File.info(path).permissions.value)
       end
 

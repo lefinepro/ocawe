@@ -3,11 +3,11 @@ name: release-tag-assets
 on:
   push:
     tags:
-      - 'v*'
+      - '20*.*.*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag name to release (example: v1.0.0)'
+        description: 'Tag name to release (example: 2026.07.00)'
         required: true
         type: string
 
@@ -38,6 +38,12 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Check flake
+        run: nix flake check --print-build-logs
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -75,12 +81,13 @@ jobs:
           mkdir -p dist/ocawe/bin dist/ocawe/libexec dist/ocawe/share/ocawe/source dist/ocawe/share/doc/ocawe
           install -m 0755 build/ocawe dist/ocawe/libexec/ocawe
           install -m 0755 build/ocawecore dist/ocawe/libexec/ocawecore
-          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'export OCAWE_SOURCE_ROOT="${OCAWE_SOURCE_ROOT:-${root}/share/ocawe/source}"' 'exec "${root}/libexec/ocawe" "$@"' > dist/ocawe/bin/ocawe
-          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'export OCAWE_SOURCE_ROOT="${OCAWE_SOURCE_ROOT:-${root}/share/ocawe/source}"' 'exec "${root}/libexec/ocawecore" "$@"' > dist/ocawe/bin/ocawecore
+          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'export OCAWE_SOURCE_ROOT="${OCAWE_SOURCE_ROOT:-${root}/share/ocawe/source}"' 'export OCAWE_EXAMPLES="${OCAWE_EXAMPLES:-${root}/share/ocawe/caws}"' 'exec "${root}/libexec/ocawe" "$@"' > dist/ocawe/bin/ocawe
+          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'export OCAWE_SOURCE_ROOT="${OCAWE_SOURCE_ROOT:-${root}/share/ocawe/source}"' 'export OCAWE_EXAMPLES="${OCAWE_EXAMPLES:-${root}/share/ocawe/caws}"' 'exec "${root}/libexec/ocawecore" "$@"' > dist/ocawe/bin/ocawecore
           chmod 0755 dist/ocawe/bin/ocawe dist/ocawe/bin/ocawecore
           cp -R caws scripts dist/ocawe/share/ocawe/
           cp -R src lib shard.yml shard.lock shards.nix dist/ocawe/share/ocawe/source/
           install -m 0644 README.org dist/ocawe/share/doc/ocawe/README.org
+          install -m 0755 install.sh release/install.sh
           tar -czf release/ocawe-linux-x86_64.tar.gz -C dist/ocawe .
           tar -czf release/ocawecore-linux.tar.gz -C build ocawecore
           tar -czf release/ocawe-playground-dist.tar.gz -C packages/playground dist
@@ -94,6 +101,7 @@ jobs:
           path: |
             release/*.tar.gz
             release/SHA256SUMS
+            release/install.sh
 
   publish-release:
     needs: build-release-assets
@@ -116,4 +124,5 @@ jobs:
             release/ocawe-playground-dist.tar.gz
             release/ocawe-docs-dist.tar.gz
             release/SHA256SUMS
+            release/install.sh
           generate_release_notes: true

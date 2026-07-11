@@ -26,6 +26,16 @@ module ACD
         get "/actors/:identifier/outbox" do |env|
           write_aptok_response(federation, env)
         end
+        get "/actors/:identifier/followers" do |env|
+          identifier = env.params.url["identifier"]
+          env.response.content_type = "application/activity+json"
+          aptok_follow_collection(identifier, "followers").to_json
+        end
+        get "/actors/:identifier/following" do |env|
+          identifier = env.params.url["identifier"]
+          env.response.content_type = "application/activity+json"
+          aptok_follow_collection(identifier, "following").to_json
+        end
         post "/actors/:identifier/outbox" do |env|
           write_aptok_response(federation, env)
         end
@@ -76,6 +86,16 @@ module ACD
 
         raw = env.request.body.try(&.gets_to_end).to_s
         activity = JSON.parse(raw).as_h
+        if response = activitypub_follow_response(activity)
+          env.response.status_code = 202
+          env.response.content_type = "application/activity+json"
+          return response.to_json
+        end
+        if activitypub_accept_response(activity)
+          env.response.status_code = 202
+          env.response.content_type = "application/json"
+          return {"handled" => true, "status" => "accepted"}.to_json
+        end
         handled = process_registered_aptok_inbox_activity(activity)
 
         env.response.status_code = handled ? 202 : 204
@@ -172,7 +192,7 @@ module ACD
         federation.outbox "/actors/{identifier}/outbox", ->(_ctx : Aptok::Context, identifier : String) { list_aptok_outbox(identifier) }
 
         federation.handles do |_ctx, username|
-          workflow_ids.includes?(username) ? username : nil
+          workflow_ids.includes?(username) || username == configured_local_actor_identifier ? username : nil
         end
 
         federation.nodeinfo do |_ctx|
@@ -216,7 +236,7 @@ module ACD
 
       private def local_workflow_actor_document(ctx : Aptok::Context, workflow_id : String) : Aptok::JsonMap
         return Aptok::JsonMap.new if workflow_id.strip.empty?
-        return Aptok::JsonMap.new unless workflow_ids.includes?(workflow_id)
+        return Aptok::JsonMap.new unless workflow_ids.includes?(workflow_id) || workflow_id == configured_local_actor_identifier
 
         actor_uri = ctx.get_actor_uri(workflow_id)
         key = local_actor_key_pair(actor_uri)
@@ -232,6 +252,12 @@ module ACD
           shared_inbox: "#{ctx.origin}/inbox",
           public_key: public_key
         )
+      end
+
+      private def configured_local_actor_identifier : String
+        actor = @settings.federation.local_actor
+        tail = actor.split('/').reject(&.empty?).last?.to_s
+        tail.empty? ? "server" : tail
       end
 
       private def local_actor_key_pair(actor_uri : String) : Aptok::ActorKeyPair?
@@ -285,6 +311,75 @@ module ACD
         @federation_kv.list("ocawe:federation:outbox:#{identifier}:").compact_map do |entry|
           JSON.parse(entry.value).as_h?
         end
+      end
+
+      private def aptok_follow_collection(identifier : String, collection : String) : Hash(String, JSON::Any)
+        actor = aptok_federation.create_context.get_actor_uri(identifier)
+        prefix = collection == "following" ? "ocawe:federation:follow:" : "ocawe:federation:follower:#{actor}:"
+        items = @federation_kv.list(prefix).compact_map do |entry|
+          record = JSON.parse(entry.value).as_h?
+          next unless record
+          if collection == "following"
+            next unless record["local_actor"]?.try(&.as_s?) == actor || record["local_actor"]?.try(&.as_s?) == @settings.federation.local_actor
+            record["remote_actor"]?.try(&.as_s?)
+          else
+            record["remote_actor"]?.try(&.as_s?)
+          end
+        end.reject(&.empty?).uniq
+        {
+          "@context" => JSON.parse(Aptok::ACTIVITYSTREAMS_CONTEXT.to_json),
+          "type" => JSON.parse("OrderedCollection".to_json),
+          "id" => JSON.parse("#{actor}/#{collection}".to_json),
+          "totalItems" => JSON.parse(items.size.to_json),
+          "orderedItems" => JSON.parse(items.to_json),
+        }
+      end
+
+      private def activitypub_follow_response(activity : Hash(String, JSON::Any)) : Hash(String, JSON::Any)?
+        return nil unless activity["type"]?.try(&.as_s?).to_s == "Follow"
+        remote_actor = activity["actor"]?.try(&.as_s?).to_s
+        local_actor = aptok_activity_reference(activity["object"]?)
+        local_actor = @settings.federation.local_actor if local_actor.empty?
+        return nil if remote_actor.empty?
+
+        now = Aptok.now
+        record = JSON.parse({
+          "id" => "#{local_actor}|#{remote_actor}",
+          "status" => "active",
+          "local_actor" => local_actor,
+          "remote_actor" => remote_actor,
+          "created_at" => now,
+          "updated_at" => now,
+        }.to_json).as_h
+        @federation_kv.set("ocawe:federation:follower:#{local_actor}:#{remote_actor}", record.to_json)
+
+        accept = JSON.parse({
+          "@context" => Aptok::ACTIVITYSTREAMS_CONTEXT,
+          "type" => "Accept",
+          "id" => "#{local_actor}/activities/accept-#{Random::Secure.hex(12)}",
+          "actor" => local_actor,
+          "object" => activity,
+          "to" => [remote_actor],
+          "published" => now,
+        }.to_json).as_h
+        append_aptok_outbox_event(local_actor, accept, "outbox-accept-#{Random::Secure.hex(12)}")
+        accept
+      end
+
+      private def activitypub_accept_response(activity : Hash(String, JSON::Any)) : Bool
+        return false unless activity["type"]?.try(&.as_s?).to_s == "Accept"
+        remote_actor = activity["actor"]?.try(&.as_s?).to_s
+        return false if remote_actor.empty?
+        update_aptok_follow_state(remote_actor, status: "active", error: "")
+        true
+      end
+
+      private def aptok_activity_reference(value : JSON::Any?) : String
+        return "" unless value
+        if hash = value.as_h?
+          return hash["id"]?.try(&.as_s?).to_s
+        end
+        value.as_s? || ""
       end
 
       private def append_aptok_outbox_event(workflow_actor : String, activity : Hash(String, JSON::Any), event_id : String) : Nil

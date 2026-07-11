@@ -1,3 +1,3 @@
 module OcaweCore
-  VERSION = "0.1.0"
+  VERSION = "2026.07.00"
 end

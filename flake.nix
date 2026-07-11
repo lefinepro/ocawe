@@ -36,9 +36,22 @@
         let
           pkgs = import nixpkgs { inherit system; };
 
+          runtimeDeps = [
+            pkgs.bash
+            pkgs.cacert
+            pkgs.coreutils
+            pkgs.curl
+            pkgs.git
+            pkgs.lua5_4
+            pkgs.nodejs_22
+            pkgs.openssh
+            pkgs.ruby
+            pkgs.sqlite
+          ];
+
           ocawe = pkgs.crystal.buildCrystalPackage {
             pname = "ocawe";
-            version = "26.06.0";
+            version = "2026.07.00";
             src = self;
             format = "crystal";
             shardsFile = ./shards.nix;
@@ -104,10 +117,12 @@
 
               wrapProgram "$out/bin/ocawe" \
                 --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source" \
-                --set OCAWE_EXAMPLES "$out/share/ocawe/caws"
+                --set OCAWE_EXAMPLES "$out/share/ocawe/caws" \
+                --prefix PATH : ${lib.makeBinPath runtimeDeps}
               wrapProgram "$out/bin/ocawecore" \
                 --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source" \
-                --set OCAWE_EXAMPLES "$out/share/ocawe/caws"
+                --set OCAWE_EXAMPLES "$out/share/ocawe/caws" \
+                --prefix PATH : ${lib.makeBinPath runtimeDeps}
 
               runHook postInstall
             '';
@@ -121,26 +136,23 @@
               test -f "$out/share/ocawe/caws/12-api-nodes/Cawfile"
               test -f "$out/share/ocawe/source/src/ocawe.cr"
               test -f "$out/share/doc/ocawe/README.org"
+              PATH="$out/bin:$PATH" command -v git > /dev/null
 
               runHook postInstallCheck
             '';
+
+            meta = {
+              description = "Crystal-first framework and runtime for Cawfile workflow bundles";
+              homepage = "https://github.com/lefinepro/ocawe";
+              license = lib.licenses.bsd0;
+              mainProgram = "ocawe";
+              platforms = supportedSystems;
+            };
           };
 
           runtimeRoot = pkgs.buildEnv {
             name = "ocawe-runtime-root";
-            paths = [
-              ocawe
-              pkgs.bash
-              pkgs.cacert
-              pkgs.coreutils
-              pkgs.curl
-              pkgs.git
-              pkgs.lua5_4
-              pkgs.nodejs_22
-              pkgs.openssh
-              pkgs.ruby
-              pkgs.sqlite
-            ];
+            paths = [ ocawe ] ++ runtimeDeps;
           };
 
           ociImage = pkgs.dockerTools.buildLayeredImage {

@@ -5,6 +5,18 @@ module ACD
 
       private def mount_compat_endpoints
         post "/v1/responses" { |env| not_implemented(env, "responses endpoint pending Kemal integration") }
+        post "/v1/chat/completions" do |env|
+          body = json_body(env)
+          begin
+            completion = build_chat_completion(body)
+            write_chat_completion_response(env, completion, stream_requested?(body))
+          rescue ex
+            env.response.status_code = completion_error_status(ex)
+            env.response.content_type = "application/json"
+            {error: {type: "completion_error", message: ex.message || "chat completion failed"}}.to_json
+          end
+        end
+
         get "/v1/chat/completions/:completion_id" do |env|
           completion_id = env.params.url["completion_id"]
           if completion = retrieve_chat_completion(completion_id)
@@ -21,18 +33,6 @@ module ACD
               "message" => "chat completion not found: #{completion_id}",
             },
           }.to_json
-        end
-
-        post "/v1/chat/completions" do |env|
-          body = json_body(env)
-          begin
-            completion = build_chat_completion(body)
-            write_chat_completion_response(env, completion, stream_requested?(body))
-          rescue ex
-            env.response.status_code = completion_error_status(ex)
-            env.response.content_type = "application/json"
-            {error: {type: "completion_error", message: ex.message || "chat completion failed"}}.to_json
-          end
         end
 
         post "/v1/chat/completions/tasks" do |env|
@@ -91,6 +91,50 @@ module ACD
         # Check if model is a workflow reference (e.g. "workflow/orator")
         if model.starts_with?("workflow/")
           workflow_id = model.sub("workflow/", "")
+          if workflow_id == "orator" && Ocawe::Workflow.function_registry.registered?("orator_handle_request")
+            input_data = {
+              "input" => JSON.parse(prompt.to_json),
+              "prompt" => JSON.parse(prompt.to_json),
+              "messages" => JSON.parse(messages.to_json),
+            } of String => JSON::Any
+            input_data["system"] = JSON.parse(system_message.to_json) if system_message
+
+            ctx = Ocawe::Workflow::NodeContext.new(
+              workflow_id: "orator",
+              run_id: "chatcmpl_#{Random::Secure.hex(8)}",
+              node_id: "orator_handle_request",
+              input_data: input_data,
+              state: input_data,
+            )
+            result = Ocawe::Workflow.function_registry.call("orator_handle_request", ctx)
+            output_text = result["text"]?.try(&.as_s?) ||
+              result["content"]?.try(&.as_s?) ||
+              result.to_json
+            now = Time.utc.to_unix
+
+            return JSON.parse({
+              "id" => "chatcmpl_orator_#{Random::Secure.hex(12)}",
+              "object" => "chat.completion",
+              "created" => now,
+              "model" => model,
+              "choices" => [
+                {
+                  "index" => 0,
+                  "message" => {
+                    "role" => "assistant",
+                    "content" => output_text,
+                  },
+                  "finish_reason" => "stop",
+                },
+              ],
+              "usage" => {
+                "prompt_tokens" => 0,
+                "completion_tokens" => 0,
+                "total_tokens" => 0,
+              },
+            }.to_json).as_h
+          end
+
           workflow = workflow_by_id(workflow_id)
 
           unless workflow
