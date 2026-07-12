@@ -10,7 +10,7 @@ end
 describe OcaweCore::CLI::Main do
   it "prints version on --version" do
     output = CliWorkflowCommandSpec.cli_output("--version")
-    output.includes?("0.1.0").should eq(true)
+    output.strip.should eq(OcaweCore::VERSION)
   end
 
   it "prints help on --help" do
