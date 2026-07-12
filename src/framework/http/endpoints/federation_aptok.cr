@@ -325,7 +325,7 @@ module ACD
           else
             record["remote_actor"]?.try(&.as_s?)
           end
-        end.reject(&.empty?).uniq
+        end.reject(&.empty?).uniq!
         {
           "@context" => JSON.parse(Aptok::ACTIVITYSTREAMS_CONTEXT.to_json),
           "type" => JSON.parse("OrderedCollection".to_json),
