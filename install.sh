@@ -57,6 +57,13 @@ if [ ! -x "$install_dir/bin/ocawe" ]; then
   exit 1
 fi
 
+if [ ! -x "$install_dir/bin/ocawecore" ]; then
+  echo "install failed: $install_dir/bin/ocawecore was not created" >&2
+  exit 1
+fi
+
+"$install_dir/bin/ocawe" --help >/dev/null
+
 echo "Installed: $install_dir/bin/ocawe" >&2
 if ! command -v ocawe >/dev/null 2>&1; then
   echo "Add $install_dir/bin to PATH to run ocawe from any directory." >&2

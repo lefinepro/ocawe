@@ -5,29 +5,54 @@ agents, tools, and the Crystal-native runtime.
 
 ## Prerequisites
 
-- Crystal (>= 1.9.0)
-- Node.js and pnpm (for playground and docs)
+- Nix, or `curl`/`wget` for GitHub Releases installation
+- Crystal (>= 1.9.0) only when building from source
+- Node.js and pnpm only for playground and docs development
 
 ## Installation
 
-Clone the repository and build the runtime:
+Install with Nix:
+
+```bash
+nix profile install github:lefinepro/ocawe
+ocawe --help
+```
+
+Or install from GitHub Releases:
+
+```bash
+curl -fsSL https://github.com/lefinepro/ocawe/releases/latest/download/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+ocawe --help
+```
+
+For source development:
 
 ```bash
 git clone https://github.com/lefinepro/ocawe.git
 cd ocawe
+nix develop
 crystal build src/cli/main.cr -o build/ocawe
 ```
 
 ## Start the Runtime
 
-Start the Ocawe runtime server:
+Start a packaged example workflow:
 
 ```bash
-./build/ocawe up
+pkg="$(dirname "$(dirname "$(readlink -f "$(command -v ocawe)")")")"
+tmp="$(mktemp -d)"
+cp -R "$pkg/share/ocawe/caws/12-api-nodes" "$tmp/"
+chmod -R u+w "$tmp/12-api-nodes"
+
+ocawe up -d "$tmp/12-api-nodes" --port 4119
+curl -fsS http://127.0.0.1:4119/v1/workflows
+kill "$(cat "$tmp/12-api-nodes/.ocawe.pid")"
 ```
 
-The runtime reads settings and workflows from the root `Cawfile`. With the
-example below, it listens on `http://localhost:4111`.
+The runtime reads settings and workflows from the selected `Cawfile`. Packaged
+examples are copied to a writable temporary directory because detached mode
+writes `.ocawe.pid` next to the workflow.
 
 ## Start the Playground (Optional)
 

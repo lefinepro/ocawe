@@ -104,7 +104,7 @@ module Ocawe
         source_root = ocawe_source_root
         runtime_entry = File.join(source_root, "src", "ocawe.cr")
         unless File.file?(runtime_entry)
-          raise "remote Cawfile exec requires Ocawe source at #{source_root}; set OCAWE_SOURCE_ROOT"
+          raise "remote Cawfile exec requires Ocawe source at #{source_root}"
         end
         unless command_available?("crystal")
           raise "remote Cawfile exec requires crystal compiler in PATH"
@@ -191,7 +191,12 @@ module Ocawe
       end
 
       private def ocawe_source_root : String
-        ENV["OCAWE_SOURCE_ROOT"]? || File.expand_path("../../../..", __DIR__)
+        if executable = Process.executable_path
+          source = File.expand_path("../share/ocawe/source", File.dirname(executable))
+          return source if File.file?(File.join(source, "src", "ocawe.cr"))
+        end
+
+        File.expand_path("../../../..", __DIR__)
       end
 
       private def require_path(from_dir : String, target : String) : String

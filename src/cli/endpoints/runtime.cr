@@ -9,7 +9,7 @@ module OcaweCore
       private def build(args : Array(String)) : Nil
         release = true
         static = false
-        output = RUNTIME_BIN
+        output = runtime_bin
 
         OptionParser.parse(args) do |parser|
           parser.on("--release", "Build release binary (default)") { release = true }
@@ -102,7 +102,7 @@ module OcaweCore
         end
 
         workflows_root = resolve_workflows_root(args.first?)
-        runtime_bin = RUNTIME_BIN
+        runtime_bin = runtime_bin()
 
         port ||= read_port_from_cawfile(workflows_root)
 
@@ -279,9 +279,19 @@ module OcaweCore
 
       private def resolve_workflows_root(workflow_path : String?) : String
         if workflow_path
-          expanded = File.expand_path(workflow_path, PROJECT_ROOT)
-          if ACD::Discovery::CawfileLoader.find_cawfile(expanded)
-            expanded
+          candidates = [] of String
+          candidates << File.expand_path(workflow_path, project_root)
+          candidates << File.expand_path(workflow_path, Dir.current)
+
+          if examples_root = examples_root()
+            candidates << File.expand_path(workflow_path, examples_root)
+            if workflow_path.starts_with?("caws/")
+              candidates << File.expand_path(workflow_path.sub("caws/", ""), examples_root)
+            end
+          end
+
+          if resolved = candidates.find { |path| ACD::Discovery::CawfileLoader.find_cawfile(path) }
+            resolved
           else
             File.join(File.expand_path(Dir.current), workflow_path)
           end
@@ -330,7 +340,8 @@ module OcaweCore
         "'" + value.gsub("'", "'\"'\"'") + "'"
       end
 
-      private def build_runtime(release : Bool, static : Bool = false, output : String = RUNTIME_BIN, force : Bool = false) : Bool
+      private def build_runtime(release : Bool, static : Bool = false, output : String? = nil, force : Bool = false) : Bool
+        output ||= runtime_bin
         flags = [] of String
         flags << "--release" if release
         flags << "--static" if static
@@ -351,22 +362,22 @@ module OcaweCore
           STDERR.puts "Please install Crystal: https://crystal-lang.org/install/"
           return false
         end
-        main_flag = entrypoint == RUNTIME_ENTRY ? "-D ocawe_runtime_main " : ""
+        main_flag = entrypoint == runtime_entry ? "-D ocawe_runtime_main " : ""
 
         # Build from project root to ensure shard dependencies are found
-        Dir.cd(PROJECT_ROOT) do
+        Dir.cd(project_root) do
           run_cmd("mkdir -p build && crystal build #{entrypoint} #{main_flag}#{flag_str}-o #{output}")
         end
       end
 
       private def build_rootfs_packer : Bool
-        source = File.join(PROJECT_ROOT, "src", "tools", "rootfs_tar.c")
-        output = File.join(PROJECT_ROOT, "build", "rootfs_tar")
+        source = File.join(project_root, "src", "tools", "rootfs_tar.c")
+        output = File.join(project_root, "build", "rootfs_tar")
         return true unless File.file?(source)
         return true if File.file?(output) && File.info(output).modification_time >= File.info(source).modification_time
         return true unless system("command -v cc > /dev/null 2>&1")
 
-        Dir.cd(PROJECT_ROOT) do
+        Dir.cd(project_root) do
           run_cmd("mkdir -p build && cc -Os -s -o #{shell_quote(output)} #{shell_quote(source)}")
         end
       end
@@ -380,11 +391,11 @@ module OcaweCore
       end
 
       private def runtime_source_paths(entrypoint : String) : Array(String)
-        sources = Dir.glob(File.join(PROJECT_ROOT, "src", "**", "*.cr")).reject do |path|
-          relative = Path[File.expand_path(path)].relative_to(Path[PROJECT_ROOT]).to_s
+        sources = Dir.glob(File.join(project_root, "src", "**", "*.cr")).reject do |path|
+          relative = Path[File.expand_path(path)].relative_to(Path[project_root]).to_s
           relative.starts_with?("src/cli/") || relative.starts_with?("src/framework/builder/")
         end
-        sources.concat(Dir.glob(File.join(PROJECT_ROOT, "shard.*")))
+        sources.concat(Dir.glob(File.join(project_root, "shard.*")))
         sources << entrypoint
         if cawfile = ACD::Discovery::CawfileLoader.find_cawfile(Dir.current)
           sources << cawfile
@@ -401,8 +412,8 @@ module OcaweCore
           return false
         end
 
-        Dir.cd(PROJECT_ROOT) do
-          run_cmd("mkdir -p build && crystal build #{RUNTIME_ENTRY} -D ocawe_runtime_main --release --no-debug -o #{output}")
+        Dir.cd(project_root) do
+          run_cmd("mkdir -p build && crystal build #{runtime_entry} -D ocawe_runtime_main --release --no-debug -o #{output}")
         end
       end
 
@@ -411,13 +422,13 @@ module OcaweCore
         crystal_loader = cawfile_bundle.try(&.crystal_loader)
         cawfile_code = crystal_loader.try(&.code) || [] of String
         registry_files = crystal_loader.try(&.registry_files) || [] of String
-        return RUNTIME_ENTRY if cawfile_code.empty? && registry_files.empty?
+        return runtime_entry if cawfile_code.empty? && registry_files.empty?
 
         entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
         Dir.mkdir_p(File.dirname(entrypoint))
         entrypoint_dir = File.dirname(entrypoint)
         content = String.build do |io|
-          io << "require " << require_path(entrypoint_dir, RUNTIME_ENTRY).to_json << "\n"
+          io << "require " << require_path(entrypoint_dir, runtime_entry).to_json << "\n"
           cawfile_code.each do |line|
             io << line << "\n"
           end

@@ -10,6 +10,9 @@ and this project adheres to [[https://semver.org/spec/v2.0.0.html][Semantic Vers
 * [Unreleased]
 
 ** Fixed
+- Installed CLI commands now find the packaged =ocawecore= binary automatically,
+  so =ocawe up= works after Nix and =install.sh= installs without trying to
+  rebuild the runtime from source.
 - =@[Container(...)]= parsing now reads =image= and =files= (previously =image= was
   never parsed and =files= was unavailable), and supports multi-line annotations.
 - Restored compilation of the spec suite (=crystal spec=), which was broken by a
@@ -22,6 +25,7 @@ and this project adheres to [[https://semver.org/spec/v2.0.0.html][Semantic Vers
   presence/absence of =image=, and =packages= implies a Nix build stage.
 
 ** Documentation
+- Added install verification steps for Nix and =install.sh= installs.
 - Documented the =@[Container(...)]= annotation (=image=/=packages=/=files=) in the
   workflow format guide and README.
 

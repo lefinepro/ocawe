@@ -47,19 +47,36 @@ Install with Nix:
 nix profile install github:lefinepro/ocawe
 ocawe --help
 
-OCAWE_EXAMPLES="$(nix path-info github:lefinepro/ocawe#ocawe)/share/ocawe/caws"
-ocawe up "$OCAWE_EXAMPLES/01-simple"
+pkg="$(dirname "$(dirname "$(readlink -f "$(command -v ocawe)")")")"
+tmp="$(mktemp -d)"
+cp -R "$pkg/share/ocawe/caws/12-api-nodes" "$tmp/"
+chmod -R u+w "$tmp/12-api-nodes"
+
+ocawe up -d "$tmp/12-api-nodes" --port 4119
+curl -fsS http://127.0.0.1:4119/v1/workflows
+kill "$(cat "$tmp/12-api-nodes/.ocawe.pid")"
 #+end_src
 
 The Nix package includes the CLI/runtime dependencies used by the distribution,
 including Crystal build inputs, Git, Node.js, Ruby, SQLite, and Lua 5.4. It also
-installs example Cawfiles and helper scripts under =share/ocawe=.
+installs example Cawfiles and helper scripts under =share/ocawe=. Installed
+commands use the packaged source, examples, and runtime binary automatically.
 
 Install from GitHub Releases:
 
 #+begin_src bash
 curl -fsSL https://github.com/lefinepro/ocawe/releases/latest/download/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
 ocawe --help
+
+pkg="$(dirname "$(dirname "$(readlink -f "$(command -v ocawe)")")")"
+tmp="$(mktemp -d)"
+cp -R "$pkg/share/ocawe/caws/12-api-nodes" "$tmp/"
+chmod -R u+w "$tmp/12-api-nodes"
+
+ocawe up -d "$tmp/12-api-nodes" --port 4119
+curl -fsS http://127.0.0.1:4119/v1/workflows
+kill "$(cat "$tmp/12-api-nodes/.ocawe.pid")"
 #+end_src
 
 Install a specific release tag:
@@ -67,6 +84,10 @@ Install a specific release tag:
 #+begin_src bash
 curl -fsSL https://github.com/lefinepro/ocawe/releases/download/2026.07.00/install.sh | OCAWE_VERSION=2026.07.00 bash
 #+end_src
+
+The installer downloads =ocawe-linux-x86_64.tar.gz= into
+=OCAWE_INSTALL_DIR= (default =~/.local=), verifies both =bin/ocawe= and
+=bin/ocawecore=, and runs =ocawe --help=.
 
 Install with mise from GitHub Releases:
 

@@ -81,8 +81,8 @@ jobs:
           mkdir -p dist/ocawe/bin dist/ocawe/libexec dist/ocawe/share/ocawe/source dist/ocawe/share/doc/ocawe
           install -m 0755 build/ocawe dist/ocawe/libexec/ocawe
           install -m 0755 build/ocawecore dist/ocawe/libexec/ocawecore
-          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'export OCAWE_SOURCE_ROOT="${OCAWE_SOURCE_ROOT:-${root}/share/ocawe/source}"' 'export OCAWE_EXAMPLES="${OCAWE_EXAMPLES:-${root}/share/ocawe/caws}"' 'exec "${root}/libexec/ocawe" "$@"' > dist/ocawe/bin/ocawe
-          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'export OCAWE_SOURCE_ROOT="${OCAWE_SOURCE_ROOT:-${root}/share/ocawe/source}"' 'export OCAWE_EXAMPLES="${OCAWE_EXAMPLES:-${root}/share/ocawe/caws}"' 'exec "${root}/libexec/ocawecore" "$@"' > dist/ocawe/bin/ocawecore
+          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'exec "${root}/libexec/ocawe" "$@"' > dist/ocawe/bin/ocawe
+          printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"' 'exec "${root}/libexec/ocawecore" "$@"' > dist/ocawe/bin/ocawecore
           chmod 0755 dist/ocawe/bin/ocawe dist/ocawe/bin/ocawecore
           cp -R caws scripts dist/ocawe/share/ocawe/
           cp -R src lib shard.yml shard.lock shards.nix dist/ocawe/share/ocawe/source/

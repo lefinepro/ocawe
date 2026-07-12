@@ -116,12 +116,8 @@
               '') docAssets}
 
               wrapProgram "$out/bin/ocawe" \
-                --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source" \
-                --set OCAWE_EXAMPLES "$out/share/ocawe/caws" \
                 --prefix PATH : ${lib.makeBinPath runtimeDeps}
               wrapProgram "$out/bin/ocawecore" \
-                --set OCAWE_SOURCE_ROOT "$out/share/ocawe/source" \
-                --set OCAWE_EXAMPLES "$out/share/ocawe/caws" \
                 --prefix PATH : ${lib.makeBinPath runtimeDeps}
 
               runHook postInstall

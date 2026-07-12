@@ -1,12 +1,11 @@
 module OcaweCore
   module CLI
     class Main
-      private DEFAULT_PORT   = 4111
-      private PROJECT_ROOT   = File.expand_path("../../..", __DIR__)
-      private RUNTIME_ENTRY  = "#{PROJECT_ROOT}/src/ocawe.cr"
-      private RUNTIME_BIN    = "#{PROJECT_ROOT}/build/ocawecore"
-      private WORKFLOWS_PATH = "#{PROJECT_ROOT}/src/workflows"
-      private CORE_COMMANDS  = Set{"build", "up", "shell", "exec", "pull", "-v", "--version", "-h", "--help"}
+      @project_root : String?
+      @runtime_bin : String?
+
+      private DEFAULT_PORT  = 4111
+      private CORE_COMMANDS = Set{"build", "up", "shell", "exec", "pull", "-v", "--version", "-h", "--help"}
 
       def initialize
       end
@@ -77,6 +76,50 @@ module OcaweCore
 
       private def builtin_command?(command : String) : Bool
         CORE_COMMANDS.includes?(command)
+      end
+
+      private def project_root : String
+        @project_root ||= begin
+          root = installed_source_root || File.expand_path("../../..", __DIR__)
+          File.expand_path(root)
+        end
+      end
+
+      private def runtime_entry : String
+        File.join(project_root, "src", "ocawe.cr")
+      end
+
+      private def runtime_bin : String
+        @runtime_bin ||= begin
+          candidates = [] of String
+          if executable = Process.executable_path
+            dir = File.dirname(executable)
+            candidates << File.join(dir, "ocawecore")
+            candidates << File.join(dir, ".ocawecore-wrapped")
+            candidates << File.expand_path("../libexec/ocawecore", dir)
+          end
+          candidates << File.join(project_root, "build", "ocawecore")
+          candidates.find { |path| executable_file?(path) } || candidates.last
+        end
+      end
+
+      private def examples_root : String?
+        candidates = [
+          File.join(project_root, "caws"),
+          File.expand_path("../caws", project_root),
+        ]
+        candidates.find { |path| Dir.exists?(path) }
+      end
+
+      private def installed_source_root : String?
+        return nil unless executable = Process.executable_path
+
+        source = File.expand_path("../share/ocawe/source", File.dirname(executable))
+        File.file?(File.join(source, "src", "ocawe.cr")) ? source : nil
+      end
+
+      private def executable_file?(path : String) : Bool
+        File.file?(path)
       end
     end
   end

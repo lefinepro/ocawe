@@ -155,8 +155,9 @@ module ACD
         )
         Aptok::Transport.new.deliver!(delivery, follow, local_actor_key_pair(local_actor))
       rescue ex
-        update_aptok_follow_state(remote_actor, status: "pending", error: ex.message || ex.class.name) unless remote_actor.empty?
-        STDERR.puts "[federation] follow delivery failed for #{remote_actor}: #{ex.message || ex.class.name}"
+        remote_actor_for_error = remote_actor || ""
+        update_aptok_follow_state(remote_actor_for_error, status: "pending", error: ex.message || ex.class.name) unless remote_actor_for_error.empty?
+        STDERR.puts "[federation] follow delivery failed for #{remote_actor_for_error}: #{ex.message || ex.class.name}"
       end
 
     end
