@@ -27,11 +27,10 @@ module ACD
         remote_actor = actor_doc["id"]?.try(&.as_s?) || target.remote_actor
         remote_outbox = actor_doc["outbox"]?.try(&.as_s?).to_s
         remote_inbox = actor_doc["inbox"]?.try(&.as_s?).to_s
-        remote_inbox = target.remote_inbox if remote_inbox.empty?
 
         record = JSON.parse({
           "id" => "#{@settings.federation.local_actor}|#{remote_actor}",
-          "status" => "active",
+          "status" => remote_inbox.empty? ? "pending" : "following",
           "local_actor" => @settings.federation.local_actor,
           "remote_actor" => remote_actor,
           "remote_inbox" => remote_inbox,
@@ -45,6 +44,7 @@ module ACD
           "updated_at" => Aptok.now,
         }.to_json).as_h
         @federation_kv.set("ocawe:federation:follow:#{remote_actor}", record.to_json)
+        send_aptok_follow(record) unless remote_inbox.empty?
         record
       end
 
@@ -52,26 +52,17 @@ module ACD
         normalized = value.strip
         raise "subscription target is required" if normalized.empty?
 
-        actor_part, inbox_part = split_aptok_subscription_target(normalized)
-
-        if actor_part.starts_with?("http://") || actor_part.starts_with?("https://")
-          return AptokSubscriptionTarget.new(actor_part, actor_part, inbox_part, infer_queue_from_actor(actor_part))
+        if normalized.includes?("|")
+          raise "subscription target must be an actor IRI or handle; inbox is discovered through ActivityPub Follow"
         end
 
-        actor, domain = parse_aptok_subscription_handle(actor_part)
+        if normalized.starts_with?("http://") || normalized.starts_with?("https://")
+          return AptokSubscriptionTarget.new(normalized, normalized, infer_queue_from_actor(normalized))
+        end
+
+        actor, domain = parse_aptok_subscription_handle(normalized)
         resolved_actor = actor.empty? ? "order-queue" : actor
-        AptokSubscriptionTarget.new(normalized, "https://#{domain}/actors/#{resolved_actor}", inbox_part, resolved_actor)
-      end
-
-      private def split_aptok_subscription_target(value : String) : Tuple(String, String)
-        actor, inbox = value.split('|', 2)
-        actor = actor.to_s.strip
-        inbox = inbox.to_s.strip
-        raise "subscription target actor is required" if actor.empty?
-        if !inbox.empty? && !(inbox.starts_with?("http://") || inbox.starts_with?("https://"))
-          raise "subscription target inbox must be an absolute http or https URL"
-        end
-        {actor, inbox}
+        AptokSubscriptionTarget.new(normalized, "https://#{domain}/actors/#{resolved_actor}", resolved_actor)
       end
 
       private def parse_aptok_subscription_handle(value : String) : Tuple(String, String)
@@ -140,6 +131,32 @@ module ACD
         record["error"] = Aptok.json(error) if error
         record["updated_at"] = Aptok.json(Aptok.now)
         @federation_kv.set(key, record.to_json)
+      end
+
+      private def send_aptok_follow(record : Hash(String, JSON::Any)) : Nil
+        local_actor = record["local_actor"]?.try(&.as_s?).to_s
+        remote_actor = record["remote_actor"]?.try(&.as_s?).to_s
+        remote_inbox = record["remote_inbox"]?.try(&.as_s?).to_s
+        return if local_actor.empty? || remote_actor.empty? || remote_inbox.empty?
+
+        follow = Aptok.follow(
+          "#{local_actor}/activities/follow-#{Random::Secure.hex(12)}",
+          local_actor,
+          remote_actor,
+          to: [remote_actor],
+          target: remote_actor
+        )
+        append_aptok_outbox_event(local_actor, follow, "outbox-follow-#{Random::Secure.hex(12)}")
+        delivery = Aptok::DeliveryConfig.new(
+          inbox: remote_inbox,
+          actor: local_actor,
+          target: remote_actor,
+          actor_ids: [remote_actor]
+        )
+        Aptok::Transport.new.deliver!(delivery, follow, local_actor_key_pair(local_actor))
+      rescue ex
+        update_aptok_follow_state(remote_actor, status: "pending", error: ex.message || ex.class.name) unless remote_actor.empty?
+        STDERR.puts "[federation] follow delivery failed for #{remote_actor}: #{ex.message || ex.class.name}"
       end
 
     end

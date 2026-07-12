@@ -8,7 +8,7 @@ module ACD
       FEP_ID_PATTERN              = /[Ff][Ee][Pp]-[0-9a-z]{2,}/
       FEP_FILE_ID_PATTERN         = /fep-([0-9a-z]{2,})\.md$/i
 
-      private record AptokSubscriptionTarget, name : String, remote_actor : String, remote_inbox : String, queue : String
+      private record AptokSubscriptionTarget, name : String, remote_actor : String, queue : String
 
       private def mount_federation_endpoints
         federation = aptok_federation
@@ -424,7 +424,7 @@ module ACD
         @federation_kv.list("ocawe:federation:follow:").each do |entry|
           follow = JSON.parse(entry.value).as_h
           status = follow["status"]?.try(&.as_s?).to_s
-          next unless status.empty? || status == "active"
+          next unless status.empty? || status == "active" || status == "following"
 
           inbox = follow["remote_inbox"]?.try(&.as_s?).to_s
           remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
