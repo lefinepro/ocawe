@@ -107,6 +107,7 @@ module ACD
               state: input_data,
             )
             result = Ocawe::Workflow.function_registry.call("orator_handle_request", ctx)
+            publish_outbound_federation_output("orator", result)
             output_text = result["text"]?.try(&.as_s?) ||
               result["content"]?.try(&.as_s?) ||
               result.to_json
@@ -149,6 +150,7 @@ module ACD
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
 
           run_result = @workflow_service.start_run(workflow_id, input_data: input_data)
+          publish_outbound_federation_output(workflow_id, run_result.output || {} of String => JSON::Any)
           snapshot = @workflow_service.load_snapshot(workflow_id, run_result.run_id)
           output_text = if snap = snapshot
                           workflow_chat_output(snap)

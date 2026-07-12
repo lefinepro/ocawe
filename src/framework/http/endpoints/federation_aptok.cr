@@ -8,7 +8,7 @@ module ACD
       FEP_ID_PATTERN              = /[Ff][Ee][Pp]-[0-9a-z]{2,}/
       FEP_FILE_ID_PATTERN         = /fep-([0-9a-z]{2,})\.md$/i
 
-      private record AptokSubscriptionTarget, name : String, remote_actor : String, queue : String
+      private record AptokSubscriptionTarget, name : String, remote_actor : String, remote_inbox : String, queue : String
 
       private def mount_federation_endpoints
         federation = aptok_federation
@@ -386,6 +386,73 @@ module ACD
         workflow_id = workflow_id_from_actor(workflow_actor)
         workflow_id = "server" if workflow_id.empty?
         @federation_kv.set("ocawe:federation:outbox:#{workflow_id}:#{event_id}", activity.to_json)
+      end
+
+      private def publish_outbound_federation_output(workflow_id : String, output : Hash(String, JSON::Any)) : Nil
+        return unless federation_api_enabled?
+
+        activity = extract_federation_result_activity(output)
+        return unless activity
+
+        normalized = normalize_outbound_federation_activity(workflow_id, activity)
+        actor = normalized["actor"]?.try(&.as_s?).to_s
+        event_id = "outbox-dispatch-#{Random::Secure.hex(12)}"
+        append_aptok_outbox_event(actor, normalized, event_id)
+        deliver_outbound_federation_activity(normalized)
+      rescue ex
+        STDERR.puts "[federation] outbound publication failed for #{workflow_id}: #{ex.message || ex.class.name}"
+      end
+
+      private def normalize_outbound_federation_activity(workflow_id : String, source : Hash(String, JSON::Any)) : Hash(String, JSON::Any)
+        activity = JSON.parse(source.to_json).as_h
+        local_actor = @settings.federation.local_actor
+        local_actor = "#{federation_origin}/actors/#{workflow_id}" if local_actor.empty?
+        actor = activity["actor"]?.try(&.as_s?).to_s
+        actor = local_actor if actor.empty?
+        activity["@context"] = JSON.parse(Aptok::ACTIVITYSTREAMS_CONTEXT.to_json) unless activity.has_key?("@context")
+        activity["actor"] = JSON.parse(actor.to_json)
+        activity["id"] = JSON.parse("#{actor}/activities/#{Random::Secure.hex(16)}".to_json) unless activity["id"]?.try(&.as_s?)
+        activity
+      end
+
+      private def deliver_outbound_federation_activity(activity : Hash(String, JSON::Any)) : Nil
+        actor = activity["actor"]?.try(&.as_s?).to_s
+        return if actor.empty?
+
+        transport = Aptok::Transport.new
+        key_pair = local_actor_key_pair(actor)
+        @federation_kv.list("ocawe:federation:follow:").each do |entry|
+          follow = JSON.parse(entry.value).as_h
+          status = follow["status"]?.try(&.as_s?).to_s
+          next unless status.empty? || status == "active"
+
+          inbox = follow["remote_inbox"]?.try(&.as_s?).to_s
+          remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
+          next if inbox.empty? || remote_actor.empty?
+
+          deliver_activity_to_inbox(transport, activity, actor, remote_actor, inbox, key_pair)
+        rescue ex
+          STDERR.puts "[federation] outbound delivery record failed: #{ex.message || ex.class.name}"
+        end
+      end
+
+      private def deliver_activity_to_inbox(
+        transport : Aptok::Transport,
+        activity : Hash(String, JSON::Any),
+        actor : String,
+        remote_actor : String,
+        inbox : String,
+        key_pair : Aptok::ActorKeyPair?
+      ) : Nil
+        delivery = Aptok::DeliveryConfig.new(
+          inbox: inbox,
+          actor: actor,
+          target: remote_actor,
+          actor_ids: [remote_actor]
+        )
+        transport.deliver!(delivery, JSON.parse(activity.to_json).as_h, key_pair)
+      rescue ex
+        STDERR.puts "[federation] outbound delivery failed to #{inbox}: #{ex.message || ex.class.name}"
       end
 
     end

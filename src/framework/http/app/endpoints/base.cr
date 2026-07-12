@@ -94,6 +94,7 @@ module ACD
 
       private def federation_api_enabled? : Bool
         @settings.api.enable?("federation") ||
+          !@settings.federation.auto_subscribe.empty? ||
           Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
       end
 

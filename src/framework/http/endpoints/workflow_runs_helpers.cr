@@ -31,6 +31,7 @@ module ACD
         return result_or_error if result_or_error.is_a?(String)
 
         run_result = result_or_error.as(Ocawe::Workflow::WorkflowRunResult)
+        publish_outbound_federation_output(workflow_id, run_result.output || {} of String => JSON::Any)
         env.response.status_code = 201
         env.response.content_type = "application/json"
         @workflow_service.load_snapshot(workflow_id, run_result.run_id).try(&.to_json) || run_result.to_json

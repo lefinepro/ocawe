@@ -27,6 +27,7 @@ module ACD
         remote_actor = actor_doc["id"]?.try(&.as_s?) || target.remote_actor
         remote_outbox = actor_doc["outbox"]?.try(&.as_s?).to_s
         remote_inbox = actor_doc["inbox"]?.try(&.as_s?).to_s
+        remote_inbox = target.remote_inbox if remote_inbox.empty?
 
         record = JSON.parse({
           "id" => "#{@settings.federation.local_actor}|#{remote_actor}",
@@ -51,13 +52,26 @@ module ACD
         normalized = value.strip
         raise "subscription target is required" if normalized.empty?
 
-        if normalized.starts_with?("http://") || normalized.starts_with?("https://")
-          return AptokSubscriptionTarget.new(normalized, normalized, infer_queue_from_actor(normalized))
+        actor_part, inbox_part = split_aptok_subscription_target(normalized)
+
+        if actor_part.starts_with?("http://") || actor_part.starts_with?("https://")
+          return AptokSubscriptionTarget.new(actor_part, actor_part, inbox_part, infer_queue_from_actor(actor_part))
         end
 
-        actor, domain = parse_aptok_subscription_handle(normalized)
+        actor, domain = parse_aptok_subscription_handle(actor_part)
         resolved_actor = actor.empty? ? "order-queue" : actor
-        AptokSubscriptionTarget.new(normalized, "https://#{domain}/actors/#{resolved_actor}", resolved_actor)
+        AptokSubscriptionTarget.new(normalized, "https://#{domain}/actors/#{resolved_actor}", inbox_part, resolved_actor)
+      end
+
+      private def split_aptok_subscription_target(value : String) : Tuple(String, String)
+        actor, inbox = value.split('|', 2)
+        actor = actor.to_s.strip
+        inbox = inbox.to_s.strip
+        raise "subscription target actor is required" if actor.empty?
+        if !inbox.empty? && !(inbox.starts_with?("http://") || inbox.starts_with?("https://"))
+          raise "subscription target inbox must be an absolute http or https URL"
+        end
+        {actor, inbox}
       end
 
       private def parse_aptok_subscription_handle(value : String) : Tuple(String, String)
