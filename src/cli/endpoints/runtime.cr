@@ -145,19 +145,20 @@ module OcaweCore
         runtime_args = ["--port", "#{effective_port}"]
         runtime_command = nil.as(String?)
         if image = container_tag
-          unless container_runtime_available?
-            puts "[ocawe] no container runtime available; image archive was built, runtime not started"
-            return
+          if container_runtime_available?
+            runtime_args << "--log-level=#{log_level}" if log_level
+            runtime_command = container_run_command(
+              detect_runtime(allow_missing: true),
+              image,
+              container_name_for_bundle(cawfile_bundle.not_nil!),
+              effective_port,
+              container_workflows_root(workflows_root),
+              runtime_args
+            )
+          else
+            puts "[ocawe] no container runtime available; starting local runtime instead"
+            runtime_args << "--log-level=#{log_level}" if log_level
           end
-          runtime_args << "--log-level=#{log_level}" if log_level
-          runtime_command = container_run_command(
-            detect_runtime(allow_missing: true),
-            image,
-            container_name_for_bundle(cawfile_bundle.not_nil!),
-            effective_port,
-            container_workflows_root(workflows_root),
-            runtime_args
-          )
         else
           runtime_args << "--log-level=#{log_level}" if log_level
         end
