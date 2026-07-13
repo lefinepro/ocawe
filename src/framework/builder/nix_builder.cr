@@ -6,6 +6,8 @@ module Ocawe
     # Fast workflow image builder. Historical name is kept because Cawfile
     # package-backed containers still resolve to ContainerMode::Nix.
     class NixBuilder < Builder
+      IGNORED_CONTEXT_ENTRIES = [".git", ".turbo", ".next", "build", "dist", "coverage", "node_modules"]
+
       def initialize
         super("nix")
       end
@@ -37,7 +39,7 @@ module Ocawe
         copy_binary_closure(binary_path, rootfs)
         copy_package_tools(packages, rootfs)
         copy_default_tools(rootfs)
-        copy_workflow_cawfile(context_dir, rootfs)
+        copied_workflow_config = copy_workflow_cawfile(context_dir, rootfs)
 
         effective_files = if files.empty?
                             Dir.children(context_dir).select do |f|
@@ -50,6 +52,8 @@ module Ocawe
 
         # Копируем файлы в контекст сборки
         effective_files.each do |file|
+          next if file == copied_workflow_config
+
           src = File.join(context_dir, file)
           if File.exists?(src)
             dst = File.join(rootfs, "app", file)
@@ -57,12 +61,7 @@ module Ocawe
             if File.directory?(src)
               copy_dir(src, dst)
             else
-              File.open(src, "r") do |input|
-                File.open(dst, "w") do |output|
-                  IO.copy(input, output)
-                end
-                File.chmod(dst, File.info(src).permissions.value)
-              end
+              copy_file(src, dst, File.info(src).permissions.value)
             end
           else
             STDERR.puts "Warning: file not found for copy: #{src}"
@@ -112,10 +111,15 @@ module Ocawe
         end
       end
 
-      private def copy_workflow_cawfile(context_dir : String, rootfs : String) : Nil
-        cawfile = File.join(context_dir, "Cawfile")
-        return unless File.file?(cawfile)
-        copy_file(cawfile, File.join(rootfs, "app", "Cawfile"), File.info(cawfile).permissions.value)
+      private def copy_workflow_cawfile(context_dir : String, rootfs : String) : String?
+        ["Cawfile", ".caw"].each do |name|
+          cawfile = File.join(context_dir, name)
+          next unless File.file?(cawfile)
+
+          copy_file(cawfile, File.join(rootfs, "app", name), File.info(cawfile).permissions.value)
+          return name
+        end
+        nil
       end
 
       private def copy_tool(executable : String, name : String, rootfs : String) : Nil
@@ -245,7 +249,7 @@ module Ocawe
       end
 
       private def ignored_context_entry?(name : String) : Bool
-        [".git", ".turbo", ".next", "build", "dist", "coverage", "node_modules"].includes?(name)
+        IGNORED_CONTEXT_ENTRIES.includes?(name)
       end
 
       private def shell_escape(value : String) : String

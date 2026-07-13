@@ -33,14 +33,15 @@ module ACD
       def list_workflows : Array(WorkflowBundle)
         ids = Set(String).new
         bundles = [] of WorkflowBundle
+        root_bundles = root_cawfile_bundles
 
-        bundles.concat(root_cawfile_bundles)
+        bundles.concat(root_bundles)
 
         each_bundle_dir(@preferred_root) { |name| ids << name }
 
         ids.to_a.sort.each do |id|
           begin
-            if bundle = resolve?(id)
+            if bundle = resolve?(id, root_bundles)
               bundles << bundle
             end
           rescue
@@ -55,7 +56,11 @@ module ACD
       end
 
       def resolve?(id : String) : WorkflowBundle?
-        root_cawfile_bundles.each do |bundle|
+        resolve?(id, root_cawfile_bundles)
+      end
+
+      private def resolve?(id : String, root_bundles : Array(WorkflowBundle)) : WorkflowBundle?
+        root_bundles.each do |bundle|
           return bundle if bundle.id == id
         end
 

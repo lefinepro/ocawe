@@ -113,17 +113,18 @@ module ACD
       end
 
       private def start_reload_watcher
-        fingerprint = current_fingerprint
+        snapshot = current_fingerprint
+        fingerprint = snapshot[:fingerprint]
         spawn do
           loop do
             sleep RELOAD_INTERVAL_SECONDS.seconds
             current = current_fingerprint
-            next if current == fingerprint
+            next if current[:fingerprint] == fingerprint
 
             begin
-              reload_cache!
+              reload_cache!(current[:bundles])
               start_service_workflows
-              fingerprint = current
+              fingerprint = current[:fingerprint]
               puts "[ocawecore] workflow cache reloaded"
             rescue ex
               STDERR.puts "[ocawecore] workflow cache reload failed: #{ex.message}"
@@ -132,8 +133,8 @@ module ACD
         end
       end
 
-      private def reload_cache!
-        bundles = @locator.list_workflows
+      private def reload_cache!(bundles : Array(Discovery::WorkflowBundle)? = nil)
+        bundles ||= @locator.list_workflows
         @dataset_service.reset_dsl_sources!
         rebuilt_engine = Ocawe::Workflow::Engine.new
         ids = [] of String

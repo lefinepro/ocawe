@@ -1,8 +1,13 @@
 module ACD
   module Kemal
     class App
-      private def current_fingerprint : String
+      private def current_fingerprint : NamedTuple(fingerprint: String, bundles: Array(Discovery::WorkflowBundle))
         bundles = @locator.list_workflows
+        fingerprint = fingerprint_for(bundles)
+        {fingerprint: fingerprint, bundles: bundles}
+      end
+
+      private def fingerprint_for(bundles : Array(Discovery::WorkflowBundle)) : String
         file_count = 0
         latest_mtime = 0_i64
 
@@ -127,7 +132,7 @@ module ACD
         workflow : Ocawe::Workflow::WorkflowDefinition,
         bundle : Discovery::WorkflowBundle,
         cawfile : Discovery::CawfileBundle,
-        agent_index : Hash(String, Agents::LoadedAgent)
+        agent_index : Hash(String, Agents::LoadedAgent),
       )
         # Apply @[Model(...)] and @[Validate(...)] from CawfileLoader
         workflow.model(cawfile.model)
@@ -180,7 +185,7 @@ module ACD
           @workflow_file : String,
           @workflow_root : String,
           @lines : Array(String),
-          @dataset_service : Ocawe::Dataset::Service
+          @dataset_service : Ocawe::Dataset::Service,
         )
           @last_agent_id = nil
         end
