@@ -58,6 +58,8 @@ module ACD
       end
 
       def start
+        Ocawe::Telemetry.configure(@settings.telemetry)
+        start_telemetry_exporter
         @mcp_manager.configure(@settings.mcp)
         register_configured_functions!
         reload_cache!
@@ -65,6 +67,7 @@ module ACD
         start_reload_watcher
 
         ::Kemal.config.port = @port
+        ::Kemal.config.add_handler(Ocawe::Telemetry::HTTPHandler.new) if Ocawe::Telemetry.enabled?
         mount_health_endpoints
         mount_docs_endpoints
         unless @settings.api.federation_only?
@@ -96,6 +99,17 @@ module ACD
         @settings.api.enable?("federation") ||
           !@settings.federation.auto_subscribe.empty? ||
           Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
+      end
+
+      private def start_telemetry_exporter : Nil
+        return unless Ocawe::Telemetry.enabled?
+
+        spawn do
+          loop do
+            sleep 10.seconds
+            Ocawe::Telemetry.flush
+          end
+        end
       end
 
       private def start_reload_watcher

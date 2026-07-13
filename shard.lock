@@ -12,9 +12,17 @@ shards:
     git: https://github.com/sija/backtracer.cr.git
     version: 1.2.4
 
+  csuuid:
+    git: https://github.com/wyhaines/csuuid.cr.git
+    version: 1.0.2
+
   db:
     git: https://github.com/crystal-lang/crystal-db.git
     version: 0.13.1
+
+  debug:
+    git: https://github.com/sija/debug.cr.git
+    version: 2.0.4
 
   exception_page:
     git: https://github.com/crystal-loot/exception_page.git
@@ -24,9 +32,29 @@ shards:
     git: https://github.com/kemalcr/kemal.git
     version: 1.11.0
 
+  nbchannel:
+    git: https://github.com/wyhaines/nbchannel.cr.git
+    version: 0.1.0
+
+  opentelemetry-api:
+    git: https://github.com/wyhaines/opentelemetry-api.cr.git
+    version: 0.5.1
+
+  opentelemetry-sdk:
+    git: https://github.com/wyhaines/opentelemetry-sdk.cr.git
+    version: 0.6.2
+
+  parse_date:
+    git: https://github.com/wyhaines/parsedate.cr.git
+    version: 0.1.2
+
   pg:
     git: https://github.com/will/crystal-pg.git
     version: 0.29.0
+
+  protobuf:
+    git: https://github.com/jeromegn/protobuf.cr.git
+    version: 2.3.1
 
   radix:
     git: https://github.com/luislavena/radix.git
@@ -36,7 +64,19 @@ shards:
     git: https://github.com/cogniframework/rcl.cr.git
     version: 1.0.0+git.commit.3e02abdbd86feceaa310a249c19cfc099afcb660
 
+  retriable:
+    git: https://github.com/sija/retriable.cr.git
+    version: 0.2.5
+
+  splay_tree_map:
+    git: https://github.com/wyhaines/splay_tree_map.cr.git
+    version: 0.4.0
+
   sqlite3:
     git: https://github.com/crystal-lang/crystal-sqlite3.git
     version: 0.21.0
+
+  time-ext:
+    git: https://github.com/wyhaines/time-ext.cr.git
+    version: 1.0.1
 

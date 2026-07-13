@@ -101,6 +101,33 @@ module Ocawe
       end
     end
 
+    struct TelemetrySettings
+      getter enabled : Bool
+      getter service_name : String
+      getter service_version : String
+      getter endpoint : String?
+      getter headers : Hash(String, String)
+      getter traces_enabled : Bool
+      getter metrics_enabled : Bool
+      getter logs_enabled : Bool
+      getter exporter : String
+      getter sample_ratio : Float64
+
+      def initialize(
+        @enabled : Bool = false,
+        @service_name : String = "ocawe",
+        @service_version : String = "unknown",
+        @endpoint : String? = nil,
+        @headers : Hash(String, String) = {} of String => String,
+        @traces_enabled : Bool = true,
+        @metrics_enabled : Bool = true,
+        @logs_enabled : Bool = true,
+        @exporter : String = "otlp_http",
+        @sample_ratio : Float64 = 1.0,
+      )
+      end
+    end
+
     struct Settings
       getter workflows : WorkflowSettings
       getter node_kinds : NodeKindSettings
@@ -111,6 +138,7 @@ module Ocawe
       getter workspace_bootstrap : Proc(Nil)?
       getter mcp : MCPSettings
       getter log_settings : LogSettings
+      getter telemetry : TelemetrySettings
 
       def initialize(
         @workflows : WorkflowSettings,
@@ -122,6 +150,7 @@ module Ocawe
         @workspace_bootstrap : Proc(Nil)? = nil,
         @mcp : MCPSettings = MCPSettings.new,
         @log_settings : LogSettings = LogSettings.new,
+        @telemetry : TelemetrySettings = TelemetrySettings.new,
       )
       end
 
@@ -140,6 +169,7 @@ module Ocawe
           workspace_bootstrap: nil,
           mcp: MCPSettings.new,
           log_settings: LogSettings.new,
+          telemetry: TelemetrySettings.new,
         )
       end
     end

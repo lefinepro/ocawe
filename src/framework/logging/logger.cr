@@ -1,5 +1,6 @@
 require "json"
 require "set"
+require "../telemetry"
 
 module Ocawe
   module Logging
@@ -47,11 +48,11 @@ module Ocawe
         level = default_level unless LEVELS.includes?(level)
 
         payload = {
-          "timestamp" => JSON.parse(Time.utc.to_s.to_json),
+          "timestamp"   => JSON.parse(Time.utc.to_s.to_json),
           "workflow_id" => JSON.parse(@workflow_id.to_json),
-          "run_id" => JSON.parse(@run_id.to_json),
-          "event" => JSON.parse(event.to_json),
-          "message" => JSON.parse(message.to_json),
+          "run_id"      => JSON.parse(@run_id.to_json),
+          "event"       => JSON.parse(event.to_json),
+          "message"     => JSON.parse(message.to_json),
         } of String => JSON::Any
 
         if name = active["name"]?.try(&.as_s?)
@@ -61,6 +62,7 @@ module Ocawe
 
         apply_formatters!(payload, active["formatters"]?.try(&.as_h?), level)
         puts payload.to_json
+        emit_otel_log(level, event, message, node_id)
       end
 
       private def apply_formatters!(payload : Hash(String, JSON::Any), formatters : Hash(String, JSON::Any)?, level : String) : Nil
@@ -100,14 +102,25 @@ module Ocawe
         @warned_transport_targets << target
 
         warning = {
-          "timestamp" => JSON.parse(Time.utc.to_s.to_json),
+          "timestamp"   => JSON.parse(Time.utc.to_s.to_json),
           "workflow_id" => JSON.parse(@workflow_id.to_json),
-          "run_id" => JSON.parse(@run_id.to_json),
-          "level" => JSON.parse("warn".to_json),
-          "event" => JSON.parse("logger_transport_unsupported".to_json),
-          "message" => JSON.parse("unsupported logger transport '#{target}', console only".to_json),
+          "run_id"      => JSON.parse(@run_id.to_json),
+          "level"       => JSON.parse("warn".to_json),
+          "event"       => JSON.parse("logger_transport_unsupported".to_json),
+          "message"     => JSON.parse("unsupported logger transport '#{target}', console only".to_json),
         } of String => JSON::Any
         puts warning.to_json
+        emit_otel_log("warn", "logger_transport_unsupported", warning["message"].as_s, nil)
+      end
+
+      private def emit_otel_log(level : String, event : String, message : String, node_id : String?) : Nil
+        attrs = {
+          "event.name"      => event,
+          "workflow.id"     => @workflow_id,
+          "workflow.run_id" => @run_id,
+        } of String => Ocawe::Telemetry::AttributeValue
+        attrs["workflow.node_id"] = node_id if node_id
+        Ocawe::Telemetry.log(level, message, attrs)
       end
     end
   end

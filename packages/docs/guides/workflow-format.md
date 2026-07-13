@@ -10,6 +10,11 @@ Root `Cawfile` example:
 settings do
   port = 4111
   datasets.adapter = "sqlite"
+  telemetry do
+    enabled = true
+    service_name = "ocawe"
+    endpoint = "http://127.0.0.1:4318"
+  end
 end
 
 @[Service]
@@ -25,6 +30,25 @@ end
 A root `Cawfile` can define runtime settings, Crystal structs, annotations, and
 multiple `workflow` blocks. A bundle-local `Cawfile` is loaded before legacy
 `<id>.acd.cr` files.
+
+## OpenTelemetry
+
+Enable OTEL from `settings do` or standard `OTEL_*` environment variables:
+
+```crystal
+settings do
+  telemetry do
+    enabled = true
+    service_name = "ocawe-runtime"
+    endpoint = "http://127.0.0.1:4318"
+    tracesEnabled = true
+    metricsEnabled = true
+    logsEnabled = true
+  end
+end
+```
+
+Ocawe emits HTTP server spans, workflow run spans, node spans, outbound API/exec spans, workflow metrics, HTTP metrics, and OTEL log records mirrored from workflow logger events. `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`, and signal-specific exporter env vars override file settings.
 
 ## Agent Configuration
 

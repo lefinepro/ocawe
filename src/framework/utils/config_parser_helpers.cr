@@ -75,6 +75,46 @@ module OcaweCore
           end
         end
 
+        telemetry = base.telemetry
+        telemetry_raw = tree["telemetry"]? || tree["otel"]?
+        if tel = telemetry_raw.try(&.as?(Hash(String, RCL::Value)))
+          enabled = bool_or_nil(tel["enabled"]?)
+          service_name = string_or_nil(tel["service_name"]?) || string_or_nil(tel["serviceName"]?) || telemetry.service_name
+          service_version = string_or_nil(tel["service_version"]?) || string_or_nil(tel["serviceVersion"]?) || telemetry.service_version
+          endpoint = string_or_nil(tel["endpoint"]?) || telemetry.endpoint
+          headers = parse_header_map(tel["headers"]?) || telemetry.headers
+          traces_enabled = bool_or_nil(tel["traces_enabled"]?) || bool_or_nil(tel["tracesEnabled"]?)
+          metrics_enabled = bool_or_nil(tel["metrics_enabled"]?) || bool_or_nil(tel["metricsEnabled"]?)
+          logs_enabled = bool_or_nil(tel["logs_enabled"]?) || bool_or_nil(tel["logsEnabled"]?)
+          exporter = string_or_nil(tel["exporter"]?) || telemetry.exporter
+          sample_ratio = float64_or_nil(tel["sample_ratio"]?) || float64_or_nil(tel["sampleRatio"]?) || telemetry.sample_ratio
+          telemetry = Ocawe::Config::TelemetrySettings.new(
+            enabled: enabled.nil? ? telemetry.enabled : enabled.not_nil!,
+            service_name: service_name,
+            service_version: service_version,
+            endpoint: endpoint,
+            headers: headers,
+            traces_enabled: traces_enabled.nil? ? telemetry.traces_enabled : traces_enabled.not_nil!,
+            metrics_enabled: metrics_enabled.nil? ? telemetry.metrics_enabled : metrics_enabled.not_nil!,
+            logs_enabled: logs_enabled.nil? ? telemetry.logs_enabled : logs_enabled.not_nil!,
+            exporter: exporter,
+            sample_ratio: sample_ratio,
+          )
+        elsif enabled = bool_or_nil(telemetry_raw)
+          telemetry = Ocawe::Config::TelemetrySettings.new(
+            enabled: enabled,
+            service_name: telemetry.service_name,
+            service_version: telemetry.service_version,
+            endpoint: telemetry.endpoint,
+            headers: telemetry.headers,
+            traces_enabled: telemetry.traces_enabled,
+            metrics_enabled: telemetry.metrics_enabled,
+            logs_enabled: telemetry.logs_enabled,
+            exporter: telemetry.exporter,
+            sample_ratio: telemetry.sample_ratio,
+          )
+        end
+
         Ocawe::Config::Settings.new(
           workflows: workflows,
           node_kinds: base.node_kinds,
@@ -85,6 +125,7 @@ module OcaweCore
           workspace_bootstrap: base.workspace_bootstrap,
           mcp: base.mcp,
           log_settings: log_settings,
+          telemetry: telemetry,
         )
       end
 
@@ -104,6 +145,7 @@ module OcaweCore
         tree["functions"] = bundle.config_functions unless bundle.config_functions.empty?
         tree["mcp"] = bundle.config_mcp unless bundle.config_mcp.empty?
         tree["log"] = bundle.config_log unless bundle.config_log.empty?
+        tree["telemetry"] = bundle.config_telemetry unless bundle.config_telemetry.empty?
 
         # Auto-enable federation API when Api::Federation types are used in Cawfile
         if bundle.enable_federation
@@ -254,6 +296,46 @@ module OcaweCore
         else
           nil
         end
+      end
+
+      private def self.float64_or_nil(value : RCL::Value?) : Float64?
+        case value
+        when Float64
+          value
+        when Float32
+          value.to_f64
+        when Int32
+          value.to_f64
+        when Int64
+          value.to_f64
+        when String
+          value.to_f64?
+        else
+          nil
+        end
+      end
+
+      private def self.parse_header_map(value : RCL::Value?) : Hash(String, String)?
+        if raw = value.as?(Hash(String, RCL::Value))
+          headers = {} of String => String
+          raw.each do |key, header_value|
+            if str = string_or_nil(header_value)
+              headers[key] = str
+            end
+          end
+          return headers
+        end
+
+        if raw = string_or_nil(value)
+          headers = {} of String => String
+          raw.split(",").each do |entry|
+            key, val = parse_assignment(entry)
+            headers[key] = val if key && !key.empty?
+          end
+          return headers
+        end
+
+        nil
       end
 
       private def self.parse_api_value(value : RCL::Value) : Array(String)

@@ -329,6 +329,11 @@ Example =Cawfile=:
 settings do
   port = 4111
   datasets.adapter = "sqlite"
+  telemetry do
+    enabled = true
+    service_name = "ocawe"
+    endpoint = "http://127.0.0.1:4318"
+  end
 end
 
 container do
@@ -372,7 +377,7 @@ end
 #+end_src
 
 *Key directives:*
-- =settings do ... end= — runtime config (port, datasets adapter, federation)
+- =settings do ... end= — runtime config (port, datasets adapter, federation, telemetry)
 - =@[Service]= — workflow starts with =ocawe up= and restarts on runtime reload
 - =@[Model("provider")]= — default model for the workflow
 - =container do ... end= — bundle-level container packaging; =packages= accepts Nix package names, flake refs, and path refs, while optional =files= selects what to copy into =/app=
@@ -385,6 +390,13 @@ end
 *API types:*
 - ="federation"= — ForgeFed-only mode (enabled when =Api::Federation::Inbox= or =Api::Federation::Outbox= is included)
 - ="classic"= — default runtime APIs (=/v1/*=)
+
+*OpenTelemetry:*
+Set =telemetry.enabled = true= or a nested =telemetry do ... end= block to emit
+HTTP server spans, workflow run spans, node spans, outbound API/exec spans,
+workflow/HTTP metrics, and OTEL log records mirrored from workflow logger
+events. =OTEL_EXPORTER_OTLP_ENDPOINT=, =OTEL_EXPORTER_OTLP_HEADERS=,
+=OTEL_SERVICE_NAME=, and signal exporter env vars override Cawfile settings.
 
 * Writing Custom Agents
 

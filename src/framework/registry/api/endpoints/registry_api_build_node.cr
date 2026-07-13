@@ -1,4 +1,5 @@
 require "http/client"
+require "../../../telemetry"
 
 module Ocawe
   module RegistryApi
@@ -25,7 +26,7 @@ module Ocawe
       node_kind_attributes : AnyHash? = nil,
       workspace : AnyHash? = nil,
       input_schema : Validator? = nil,
-      output_schema : Validator? = nil
+      output_schema : Validator? = nil,
     ) : WorkflowNode
       normalized = type.strip.downcase
 
@@ -167,7 +168,6 @@ module Ocawe
             "resume_data" => JSON.parse(resume.to_json),
           })
         end
-
       when "node_kind"
         kind_name = node_kind_name || id
         kind_attributes = node_kind_attributes || ({} of String => JSON::Any)
@@ -188,7 +188,6 @@ module Ocawe
             raise "unsupported node kind result for #{kind_name}"
           end
         end
-
       when "follow"
         resolved_config = config || ({} of String => JSON::Any)
         actors = resolved_config["actors"]?.try(&.as_a?) || [] of JSON::Any
@@ -214,27 +213,26 @@ module Ocawe
 
           actor_strings.each do |remote_actor|
             follow_record = {
-              "local_actor" => JSON.parse(local_actor_url.to_json),
+              "local_actor"    => JSON.parse(local_actor_url.to_json),
               "local_actor_id" => JSON.parse(local_actor_id.to_json),
-              "remote_actor" => JSON.parse(remote_actor.to_json),
-              "status" => JSON.parse("pending".to_json),
-              "created_at" => JSON.parse(Time.utc.to_rfc3339.to_json),
+              "remote_actor"   => JSON.parse(remote_actor.to_json),
+              "status"         => JSON.parse("pending".to_json),
+              "created_at"     => JSON.parse(Time.utc.to_rfc3339.to_json),
             } of String => JSON::Any
 
             follow_records << follow_record
           end
 
           result = {
-            "follow_actors" => JSON.parse(actor_strings.to_json),
-            "follow_records" => JSON.parse(follow_records.to_json),
-            "follow_status" => JSON.parse("registered".to_json),
-            "local_actor_id" => JSON.parse(local_actor_id.to_json),
+            "follow_actors"   => JSON.parse(actor_strings.to_json),
+            "follow_records"  => JSON.parse(follow_records.to_json),
+            "follow_status"   => JSON.parse("registered".to_json),
+            "local_actor_id"  => JSON.parse(local_actor_id.to_json),
             "local_actor_url" => JSON.parse(local_actor_url.to_json),
           } of String => JSON::Any
 
           WorkflowNodeResult.continue(result)
         end
-
       else
         raise "unknown registry node type: #{type}"
       end
@@ -268,13 +266,38 @@ module Ocawe
       timeout_seconds = config["timeout"]?.try(&.as_f?) || config["timeout"]?.try(&.as_i?).try(&.to_f) || 30.0
       timeout = timeout_seconds.seconds
       allow_non_2xx = config["allow_non_2xx"]?.try(&.as_bool?) || false
-
-      response = HTTP::Client.new(uri) do |client|
-        client.connect_timeout = timeout
-        client.read_timeout = timeout
-        client.write_timeout = timeout
-        client.exec(method.upcase, uri.request_target, headers: headers, body: request_body)
+      if traceparent = Ocawe::Telemetry.traceparent
+        headers["traceparent"] = traceparent
       end
+      span = Ocawe::Telemetry.start_span(
+        "HTTP #{method.upcase}",
+        {
+          "http.request.method" => method.upcase,
+          "url.full"            => uri.to_s,
+          "workflow.id"         => ctx.workflow_id,
+          "workflow.run_id"     => ctx.run_id,
+          "workflow.node_id"    => ctx.node_id,
+        } of String => Ocawe::Telemetry::AttributeValue,
+        "client"
+      )
+
+      response = begin
+        HTTP::Client.new(uri) do |client|
+          client.connect_timeout = timeout
+          client.read_timeout = timeout
+          client.write_timeout = timeout
+          client.exec(method.upcase, uri.request_target, headers: headers, body: request_body)
+        end
+      rescue ex
+        Ocawe::Telemetry.finish_span(span, status: "error", error: ex.message)
+        raise ex
+      end
+      Ocawe::Telemetry.finish_span(
+        span,
+        status: response.status_code < 500 ? "success" : "error",
+        error: response.status_code >= 500 ? "HTTP #{response.status_code}" : nil,
+        attributes: {"http.response.status_code" => response.status_code} of String => Ocawe::Telemetry::AttributeValue
+      )
 
       unless allow_non_2xx || (200..299).includes?(response.status_code)
         raise "API #{method.upcase} #{uri} returned HTTP #{response.status_code}: #{response.body[0, Math.min(response.body.size, 500)]}"

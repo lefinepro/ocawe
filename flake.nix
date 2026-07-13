@@ -77,6 +77,7 @@
 
             buildInputs = [
               pkgs.boehmgc
+              pkgs.gmp
               pkgs.libevent
               pkgs.libxml2
               pkgs.libyaml

@@ -47,6 +47,7 @@ module ACD
       getter config_functions : Hash(String, RCL::Value)
       getter config_mcp : Hash(String, RCL::Value)
       getter config_log : Hash(String, RCL::Value)
+      getter config_telemetry : Hash(String, RCL::Value)
       getter start_settings : Hash(String, RCL::Value)
       # Raw .acd.cr-style DSL source lines inside the workflow block
       getter dsl_source : Array(String)?
@@ -79,6 +80,7 @@ module ACD
         @config_functions : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_mcp : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_log : Hash(String, RCL::Value) = {} of String => RCL::Value,
+        @config_telemetry : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @start_settings : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
@@ -152,6 +154,7 @@ module ACD
             config_functions: root_config.config_functions,
             config_mcp: root_config.config_mcp,
             config_log: root_config.config_log,
+            config_telemetry: root_config.config_telemetry,
             start_settings: root_config.start_settings,
             follow: extract_follow_from_raw(slice.dsl_source),
             container: container,
@@ -204,6 +207,7 @@ module ACD
               config_functions: root_config.config_functions,
               config_mcp: root_config.config_mcp,
               config_log: root_config.config_log,
+              config_telemetry: root_config.config_telemetry,
               start_settings: root_config.start_settings,
               follow: follow,
               container: container,
@@ -234,6 +238,7 @@ module ACD
           nk = {} of String => RCL::Value
           fn = {} of String => RCL::Value
           mcp = {} of String => RCL::Value
+          telemetry = {} of String => RCL::Value
           start = {} of String => RCL::Value
 
           in_settings = false
@@ -278,6 +283,8 @@ module ACD
                       ds[prop_name] = parse_value(value_raw)
                     when "workflows"
                       wf[prop_name] = parse_value(value_raw)
+                    when "telemetry", "otel"
+                      telemetry[prop_name] = parse_value(value_raw)
                     end
                   end
                 end
@@ -306,6 +313,7 @@ module ACD
             config_functions: fn,
             config_mcp: mcp,
             config_log: {} of String => RCL::Value,
+            config_telemetry: telemetry,
             start_settings: start,
             follow: follow,
             container: container,
@@ -351,6 +359,7 @@ module ACD
               config_functions: root_config.config_functions,
               config_mcp: root_config.config_mcp,
               config_log: root_config.config_log,
+              config_telemetry: root_config.config_telemetry,
               start_settings: root_config.start_settings,
               follow: follow,
               container: container,
@@ -374,6 +383,7 @@ module ACD
           nk = {} of String => RCL::Value
           fn = {} of String => RCL::Value
           mcp = {} of String => RCL::Value
+          telemetry = {} of String => RCL::Value
           start = {} of String => RCL::Value
 
           in_settings = false
@@ -417,6 +427,8 @@ module ACD
                       ds[prop_name] = parse_value(value_raw)
                     when "workflows"
                       wf[prop_name] = parse_value(value_raw)
+                    when "telemetry", "otel"
+                      telemetry[prop_name] = parse_value(value_raw)
                     end
                   end
                 end
@@ -445,6 +457,7 @@ module ACD
             config_functions: fn,
             config_mcp: mcp,
             config_log: {} of String => RCL::Value,
+            config_telemetry: telemetry,
             start_settings: start,
             follow: follow,
             container: container,
@@ -472,6 +485,7 @@ module ACD
         nk = {} of String => RCL::Value
         fn = {} of String => RCL::Value
         mcp = {} of String => RCL::Value
+        telemetry = {} of String => RCL::Value
         start = {} of String => RCL::Value
 
         in_settings = false
@@ -515,6 +529,8 @@ module ACD
                     ds[prop_name] = parse_value(value_raw)
                   when "workflows"
                     wf[prop_name] = parse_value(value_raw)
+                  when "telemetry", "otel"
+                    telemetry[prop_name] = parse_value(value_raw)
                   end
                 end
               end
@@ -530,6 +546,7 @@ module ACD
           config_node_kinds: nk,
           config_functions: fn,
           config_mcp: mcp,
+          config_telemetry: telemetry,
           start_settings: start,
         )
       end
@@ -551,6 +568,7 @@ module ACD
         fn = {} of String => RCL::Value
         mcp = {} of String => RCL::Value
         log = {} of String => RCL::Value
+        telemetry = {} of String => RCL::Value
         start = {} of String => RCL::Value
 
         # Parse properties in settings block
@@ -573,6 +591,8 @@ module ACD
                 ds[prop_name] = ast_node_to_value(value)
               when "workflows"
                 wf[prop_name] = ast_node_to_value(value)
+              when "telemetry", "otel"
+                telemetry[prop_name] = ast_node_to_value(value)
               end
             end
           end
@@ -595,6 +615,8 @@ module ACD
             mcp.merge!(block_to_rcl_value_h(child))
           when "log"
             log.merge!(block_to_rcl_value_h(child))
+          when "telemetry", "otel"
+            telemetry.merge!(block_to_rcl_value_h(child))
           end
         end
 
@@ -607,6 +629,7 @@ module ACD
           config_functions: fn,
           config_mcp: mcp,
           config_log: log,
+          config_telemetry: telemetry,
           start_settings: start
         )
       end

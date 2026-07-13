@@ -4,32 +4,57 @@ require "uri"
 require "../../mcp/manager"
 require "../../discovery/cawfile_loader"
 require "../../discovery/git_https_puller"
+require "../../telemetry"
 require "./acp_executor"
 
 module Ocawe
   module Workflow
     class ExecExecutor
       def exec(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil) : AnyHash
-        if runtime.nil? && ref.starts_with?("mcp:")
-          return exec_mcp_tool(ref, ctx)
+        started = Time.monotonic
+        status = "success"
+        span = Ocawe::Telemetry.start_span(
+          "workflow.exec",
+          {
+            "workflow.id"      => ctx.workflow_id,
+            "workflow.run_id"  => ctx.run_id,
+            "workflow.node_id" => ctx.node_id,
+            "exec.ref"         => ref,
+          } of String => Ocawe::Telemetry::AttributeValue
+        )
+        begin
+          if runtime.nil? && ref.starts_with?("mcp:")
+            return exec_mcp_tool(ref, ctx)
+          end
+
+          raise "exec requires runtime for non-mcp refs: #{ref}" unless runtime
+
+          # Check for ACP runtime
+          if acp_config = runtime["acp"]?
+            return exec_acp(ref, ctx, acp_config, env, workflow_root)
+          end
+
+          if runtime.has_key?("git+https")
+            return exec_git(ref, ctx, "git+https")
+          end
+
+          if runtime.has_key?("git+ssh")
+            return exec_git(ref, ctx, "git+ssh")
+          end
+
+          exec_external(ref, ctx, runtime, env, workflow_root)
+        rescue ex
+          status = "error"
+          raise ex
+        ensure
+          duration_ms = (Time.monotonic - started).total_milliseconds
+          attrs = {
+            "exec.ref"                  => ref,
+            "workflow.status"           => status,
+            "workflow.exec.duration_ms" => duration_ms,
+          } of String => Ocawe::Telemetry::AttributeValue
+          Ocawe::Telemetry.finish_span(span, status: status, error: status == "error" ? "exec failed" : nil, attributes: attrs)
         end
-
-        raise "exec requires runtime for non-mcp refs: #{ref}" unless runtime
-
-        # Check for ACP runtime
-        if acp_config = runtime["acp"]?
-          return exec_acp(ref, ctx, acp_config, env, workflow_root)
-        end
-
-        if runtime.has_key?("git+https")
-          return exec_git(ref, ctx, "git+https")
-        end
-
-        if runtime.has_key?("git+ssh")
-          return exec_git(ref, ctx, "git+ssh")
-        end
-
-        exec_external(ref, ctx, runtime, env, workflow_root)
       end
 
       private def exec_acp(ref : String, ctx : NodeContext, acp_config : JSON::Any, env : AnyHash?, workflow_root : String?) : AnyHash
@@ -158,6 +183,9 @@ module Ocawe
           input_data = ctx.state.empty? ? ctx.input_data : ctx.state
           payload = {"input_data" => JSON.parse(input_data.to_json)} of String => JSON::Any
           headers = HTTP::Headers{"Content-Type" => "application/json"}
+          if traceparent = Ocawe::Telemetry.traceparent
+            headers["traceparent"] = traceparent
+          end
           path = "/v1/workflows/#{URI.encode_path_segment(workflow_id)}/runs"
           response = HTTP::Client.post("http://127.0.0.1:#{port}#{path}", headers: headers, body: payload.to_json)
           unless response.status_code >= 200 && response.status_code < 300
