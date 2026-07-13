@@ -90,7 +90,15 @@ module OcaweCore
         false
       end
 
+      private def dev(args : Array(String)) : Nil
+        run_server(args, dev_mode: true)
+      end
+
       private def up(args : Array(String)) : Nil
+        run_server(args, dev_mode: false)
+      end
+
+      private def run_server(args : Array(String), dev_mode : Bool) : Nil
         port = nil
         detached = false
         log_level = nil.as(String?)
@@ -115,7 +123,13 @@ module OcaweCore
           container_config = cawfile_bundle.container if cawfile_bundle
         end
 
-        abort_unless_success(ensure_runtime_binary(runtime_bin))
+        if dev_mode
+          Dir.cd(workflows_root) do
+            abort_unless_success(build_runtime(release: false, output: runtime_bin))
+          end
+        else
+          abort_unless_success(ensure_runtime_binary(runtime_bin))
+        end
 
         container_tag = nil.as(String?)
 
@@ -152,8 +166,9 @@ module OcaweCore
               image,
               container_name_for_bundle(cawfile_bundle.not_nil!),
               effective_port,
-              container_workflows_root(workflows_root),
-              runtime_args
+              container_workdir(dev_mode),
+              runtime_args,
+              mount_workflows_root: dev_mode ? workflows_root : nil
             )
           else
             puts "[ocawe] no container runtime available; starting local runtime instead"
@@ -174,6 +189,7 @@ module OcaweCore
           File.open(pid_file, "w") { |f| f.puts pid }
 
           puts "[ocawe] started in background (PID #{pid}, port #{port || DEFAULT_PORT})"
+          puts "[ocawe] dev live reload enabled" if dev_mode
           puts "[ocawe] logs: ocawe up --follow"
           puts "[ocawe] stop: kill #{pid}"
         else
@@ -271,11 +287,8 @@ module OcaweCore
         nil
       end
 
-      private def container_workflows_root(workflows_root : String) : String
-        relative = Path[File.expand_path(workflows_root)].relative_to(Path[File.expand_path(Dir.current)]).to_s
-        File.join("/app", relative)
-      rescue
-        "/app"
+      private def container_workdir(dev_mode : Bool) : String
+        dev_mode ? "/workspace" : "/app"
       end
 
       private def resolve_workflows_root(workflow_path : String?) : String
@@ -322,9 +335,21 @@ module OcaweCore
         "ocawe-#{raw_name.gsub(/[^a-zA-Z0-9_.-]/, "-")}"
       end
 
-      private def container_run_command(runtime : String, image : String, container_name : String, port : Int32, workdir : String, runtime_args : Array(String)) : String
+      private def container_run_command(
+        runtime : String,
+        image : String,
+        container_name : String,
+        port : Int32,
+        workdir : String,
+        runtime_args : Array(String),
+        mount_workflows_root : String? = nil,
+      ) : String
         cleanup = [runtime, "rm", "-f", container_name].map { |part| shell_quote(part) }.join(" ")
-        command = [runtime, "run", "--name", container_name, "--rm", "-w", workdir, "-p", "#{port}:#{port}", image, "/app/ocawecore"]
+        command = [runtime, "run", "--name", container_name, "--rm"]
+        if mount = mount_workflows_root
+          command.concat(["-v", "#{File.expand_path(mount)}:#{workdir}"])
+        end
+        command.concat(["-w", workdir, "-p", "#{port}:#{port}", image, "/app/ocawecore"])
         command.concat(runtime_args)
         "#{cleanup} >/dev/null 2>&1 || true; #{command.map { |part| shell_quote(part) }.join(" ")}"
       end

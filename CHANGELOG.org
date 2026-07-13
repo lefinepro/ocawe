@@ -23,6 +23,9 @@ and this project adheres to [[https://semver.org/spec/v2.0.0.html][Semantic Vers
 ** Changed
 - =@[Container(...)]= =mode:= is ignored; =packages= is now the only Cawfile
   switch that selects the Nix container builder.
+- Added =ocawe dev= as the live-reload server command; container-backed dev runs
+  mount the workflow directory at =/workspace= so runtime reloads see host edits.
+- Removed container configuration details from the top-level CLI help output.
 
 ** Documentation
 - Added install verification steps for Nix and =install.sh= installs.

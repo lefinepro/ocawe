@@ -5,7 +5,7 @@ module OcaweCore
       @runtime_bin : String?
 
       private DEFAULT_PORT  = 4111
-      private CORE_COMMANDS = Set{"build", "up", "shell", "exec", "pull", "-v", "--version", "-h", "--help"}
+      private CORE_COMMANDS = Set{"build", "dev", "up", "shell", "exec", "pull", "-v", "--version", "-h", "--help"}
 
       def initialize
       end
@@ -16,6 +16,8 @@ module OcaweCore
         case command
         when "build"
           build(args)
+        when "dev"
+          dev(args)
         when "up"
           up(args)
         when "shell"
@@ -42,29 +44,24 @@ module OcaweCore
           Commands:
             build [--release] [--static] [--output PATH]
                 Build runtime binary.
-                Auto-builds container from `container do` in Cawfile if present.
+            dev [PATH] [-d] [--port N] [--log-level LEVEL]
+                Build a development runtime and start server with live reload.
+                PATH: optional workflow directory (default: current directory)
             up [PATH] [-d] [--port N] [--log-level LEVEL]
                 Auto-build release runtime binary and start server.
                 PATH: optional workflow directory (default: current directory)
                 -d/--detach: run in background
                 --log-level: debug, warning, or critical (default: warning)
             shell [PATH]
-                Open an interactive shell inside the running workflow container.
+                Open an interactive shell inside the running workflow environment.
             exec [PATH] -- COMMAND [ARG...]
-                Execute a command inside the running workflow container.
+                Execute a command inside the running workflow environment.
             pull REF
                 Clone or fast-forward pull a git Cawfile reference.
             -v, --version
                 Print version.
             -h, --help
                 Show this help.
-
-          Container configuration in Cawfile:
-            container do
-              packages = ["git", "curl", "github:owner/tool"]
-              files = ["agents", "skills", "tools"]
-            end
-            rootfs_tar --build PATH IMAGE_TAG  # low-memory rebuild from prepared build/container/rootfs
 
           Remote Cawfile references:
             ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent

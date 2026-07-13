@@ -17,6 +17,7 @@ describe OcaweCore::CLI::Main do
     output = CliWorkflowCommandSpec.cli_output("--help")
     output.includes?("Usage: ocawe").should eq(true)
     output.includes?("build").should eq(true)
+    output.includes?("dev").should eq(true)
     output.includes?("up").should eq(true)
     output.includes?("pull REF").should eq(true)
   end
@@ -26,9 +27,9 @@ describe OcaweCore::CLI::Main do
     output.includes?("Unknown command").should eq(true)
   end
 
-  it "mentions container build in help" do
+  it "does not mention container configuration in help" do
     output = CliWorkflowCommandSpec.cli_output("--help")
-    output.includes?("container").should eq(true)
-    output.includes?("container do").should eq(true)
+    output.includes?("container").should eq(false)
+    output.includes?("container do").should eq(false)
   end
 end
