@@ -142,12 +142,12 @@ RCL
         end
       end
 
-      it "does not parse deprecated mode parameter" do
+      it "ignores legacy mode parameter" do
         dir = File.tempname("cawfile_test")
         Dir.mkdir_p(dir)
         begin
           File.write(File.join(dir, "Cawfile"), <<-RCL)
-@[Container(mode: "nix", packages: ["git"])]
+@[Container(mode: "nix")]
 workflow "deprecated-mode-test" do
   agent "analyzer"
 end
@@ -156,8 +156,8 @@ RCL
           bundle.should_not be_nil
           container = bundle.not_nil!.container
           container.should_not be_nil
-          container.not_nil!.packages.should eq(["git"])
-          # mode is no longer a thing, should still parse other fields
+          container.not_nil!.mode.should eq(ContainerMode::Static)
+          container.not_nil!.packages.should be_empty
         ensure
           FileUtils.rm_rf(dir)
         end

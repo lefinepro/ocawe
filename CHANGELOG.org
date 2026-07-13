@@ -21,8 +21,8 @@ and this project adheres to [[https://semver.org/spec/v2.0.0.html][Semantic Vers
   spawn; the recorded PID now points at the runtime process so =kill <pid>= works.
 
 ** Changed
-- =@[Container(...)]= =mode:= field is deprecated; the base image is selected by the
-  presence/absence of =image=, and =packages= implies a Nix build stage.
+- =@[Container(...)]= =mode:= is ignored; =packages= is now the only Cawfile
+  switch that selects the Nix container builder.
 
 ** Documentation
 - Added install verification steps for Nix and =install.sh= installs.

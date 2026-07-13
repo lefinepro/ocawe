@@ -811,16 +811,7 @@ module ACD
         if img_match = inner.match(/image\s*[:=]\s*"([^"]+)"/)
           image = img_match[1]
         end
-        # `mode:` is deprecated and no longer authoritative; presence of an
-        # explicit image selects the base, otherwise packages imply a Nix build.
-        mode = ContainerMode::Static
-        if inner.includes?("mode:")
-          if md = inner.match(/mode:\s*"(\w+)"/)
-            mode = ContainerMode.parse(md[1])
-          end
-        elsif !packages.empty?
-          mode = ContainerMode::Nix
-        end
+        mode = packages.empty? ? ContainerMode::Static : ContainerMode::Nix
         CawfileContainer.new(mode: mode, packages: packages, image: image, files: files)
       end
 
