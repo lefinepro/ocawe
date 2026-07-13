@@ -41,7 +41,13 @@ module Ocawe
       end
 
       private def runtime_available?(runtime : String) : Bool
-        Process.run("sh", args: ["-c", "command -v #{shell_escape(runtime)} >/dev/null 2>&1"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
+        return false unless command_available?(runtime)
+
+        Process.run(runtime, args: ["info"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
+      end
+
+      private def command_available?(command : String) : Bool
+        Process.run("sh", args: ["-c", "command -v #{shell_escape(command)} >/dev/null 2>&1"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
       end
 
       private def build_rootfs_archive(context : String, tag : String) : Bool

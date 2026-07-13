@@ -23,6 +23,12 @@ module Ocawe
         status = Process.run(command[0], args: command[1..-1], output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
         status.success?
       end
+
+      protected def runtime_available? : Bool
+        Process.run(name, args: ["info"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
+      rescue
+        false
+      end
     end
 
     class DockerRuntime < Runtime
@@ -31,8 +37,8 @@ module Ocawe
       end
 
       def check_availability! : Nil
-        unless Process.run("sh", args: ["-c", "docker --version"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
-          STDERR.puts "Error: docker not found in PATH"
+        unless runtime_available?
+          STDERR.puts "Error: docker runtime unavailable"
           raise "docker runtime unavailable"
         end
       end
@@ -65,8 +71,8 @@ module Ocawe
       end
 
       def check_availability! : Nil
-        unless Process.run("sh", args: ["-c", "podman --version"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
-          STDERR.puts "Error: podman not found in PATH"
+        unless runtime_available?
+          STDERR.puts "Error: podman runtime unavailable"
           raise "podman runtime unavailable"
         end
       end
@@ -99,8 +105,8 @@ module Ocawe
       end
 
       def check_availability! : Nil
-        unless Process.run("sh", args: ["-c", "nerdctl --version"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
-          STDERR.puts "Error: nerdctl not found in PATH"
+        unless runtime_available?
+          STDERR.puts "Error: nerdctl runtime unavailable"
           raise "nerdctl runtime unavailable"
         end
       end

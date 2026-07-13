@@ -50,9 +50,7 @@ module OcaweCore
 
       private def detect_runtime(allow_missing : Bool = false) : String
         ["docker", "podman", "nerdctl"].each do |rt|
-          if Process.run("sh", args: ["-c", "command -v #{rt} > /dev/null 2>&1"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
-            return rt
-          end
+          return rt if runtime_available?(rt)
         end
         return "docker" if allow_missing
         STDERR.puts "Error: no container runtime found (docker, podman, nerdctl)"
@@ -60,9 +58,13 @@ module OcaweCore
       end
 
       private def container_runtime_available? : Bool
-        ["docker", "podman", "nerdctl"].any? do |rt|
-          Process.run("sh", args: ["-c", "command -v #{rt} > /dev/null 2>&1"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
-        end
+        ["docker", "podman", "nerdctl"].any? { |rt| runtime_available?(rt) }
+      end
+
+      private def runtime_available?(runtime : String) : Bool
+        return false unless system("command -v #{shell_quote(runtime)} > /dev/null 2>&1")
+
+        Process.run(runtime, args: ["info"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?
       end
 
       private def build_container(

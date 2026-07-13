@@ -331,6 +331,52 @@ module Ocawe::Builder
           FileUtils.rm_rf(dir)
         end
       end
+
+      it "falls back to a rootfs archive when runtime command is not usable" do
+        dir = File.tempname("nixbuilder_test")
+        fake_bin = File.tempname("nixbuilder_fake_runtime")
+        Dir.mkdir_p(dir)
+        Dir.mkdir_p(fake_bin)
+        old_path = ENV["PATH"]?
+        begin
+          bin_path = File.join(dir, "ocawecore")
+          File.write(bin_path, "fake binary")
+
+          runtime_path = File.join(fake_bin, "fake-runtime")
+          File.write(runtime_path, <<-SH)
+          #!/bin/sh
+          if [ "$1" = "info" ]; then
+            exit 1
+          fi
+          touch "#{File.join(dir, "runtime-used")}"
+          exit 0
+          SH
+          File.chmod(runtime_path, 0o755)
+          ENV["PATH"] = "#{fake_bin}:#{old_path}"
+
+          builder = NixBuilder.new
+          builder.build(
+            bin_path,
+            tag: "fallback:test",
+            context_dir: dir,
+            runtime: "fake-runtime",
+            image: nil,
+            packages: [] of String,
+            files: [] of String
+          ).should be_true
+
+          File.exists?(File.join(dir, "runtime-used")).should be_false
+          File.file?(File.join(dir, "build", "container", "fallback-test.rootfs.tar")).should be_true
+        ensure
+          if old = old_path
+            ENV["PATH"] = old
+          else
+            ENV.delete("PATH")
+          end
+          FileUtils.rm_rf(dir)
+          FileUtils.rm_rf(fake_bin)
+        end
+      end
     end
   end
 end
