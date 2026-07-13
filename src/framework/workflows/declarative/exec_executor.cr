@@ -85,7 +85,7 @@ module Ocawe
       private def exec_git(ref : String, ctx : NodeContext, transport : String) : AnyHash
         pulled = ACD::Discovery::GitHttpsPuller.new.pull(ref, transport)
         workflow_id, cawfile = resolve_remote_caw_workflow(pulled)
-        binary = compile_remote_caw_binary(pulled, cawfile)
+        binary = direct_remote_caw_runtime_binary(pulled, cawfile)
         run = run_remote_caw_binary(binary, pulled.local_path, workflow_id, ctx)
 
         cawfile_path = if Dir.exists?(pulled.local_path)
@@ -126,54 +126,30 @@ module Ocawe
         {cawfile.id, cawfile}
       end
 
-      private def compile_remote_caw_binary(pulled : ACD::Discovery::GitHttpsPullResult, cawfile : ACD::Discovery::CawfileBundle) : String
-        source_root = ocawe_source_root
-        runtime_entry = File.join(source_root, "src", "ocawe.cr")
-        unless File.file?(runtime_entry)
-          raise "remote Cawfile exec requires Ocawe source at #{source_root}"
-        end
-        unless command_available?("crystal")
-          raise "remote Cawfile exec requires crystal compiler in PATH"
-        end
+      private def direct_remote_caw_runtime_binary(pulled : ACD::Discovery::GitHttpsPullResult, cawfile : ACD::Discovery::CawfileBundle) : String
+        _ = pulled
+        _ = cawfile
+        binary = Process.executable_path
+        binary || ""
+      end
 
-        digest = Digest::SHA256.hexdigest("#{pulled.transport}:#{pulled.ref}:#{File.info(ACD::Discovery::CawfileLoader.find_cawfile(pulled.local_path) || pulled.local_path).modification_time.to_unix_ms}")[0, 16]
-        build_dir = File.join(pulled.repo_dir, ".ocawe", "binaries", digest)
-        binary = File.join(build_dir, "ocawecore")
-        return binary if File.file?(binary) && !pulled.pulled
+      private def executable_file?(path : String) : Bool
+        info = File.info(path)
+        File.file?(path) && (info.permissions.value & 0o111) != 0
+      rescue
+        false
+      end
 
-        entrypoint = File.join(build_dir, "entrypoint.cr")
-        Dir.mkdir_p(build_dir)
-        entrypoint_dir = File.dirname(entrypoint)
-        crystal_loader = cawfile.crystal_loader
-        cawfile_code = crystal_loader.try(&.code) || [] of String
-        registry_files = crystal_loader.try(&.registry_files) || [] of String
-
-        File.write(entrypoint, String.build do |io|
-          io << "require " << require_path(entrypoint_dir, runtime_entry).to_json << "\n"
-          cawfile_code.each { |line| io << line << "\n" }
-          registry_files.each do |registry_file|
-            io << "require " << require_path(entrypoint_dir, registry_file).to_json << "\n"
-          end
-          io << "\nOcaweCore.run\n"
-        end)
-
-        status = Process.run(
-          "crystal",
-          args: ["build", entrypoint, "--release", "--no-debug", "-Docawe_runtime_main", "-o", binary],
-          chdir: source_root,
-          input: Process::Redirect::Close,
-          output: Process::Redirect::Inherit,
-          error: Process::Redirect::Inherit
-        )
-        raise "remote Cawfile compile failed: #{pulled.ref}" unless status.success?
-        binary
+      private def shell_escape(value : String) : String
+        "'" + value.gsub("'", "'\"'\"'") + "'"
       end
 
       private def run_remote_caw_binary(binary : String, workflows_root : String, workflow_id : String, ctx : NodeContext) : AnyHash
         port = 20000 + Random.rand(20000)
+        command, args = remote_runtime_command(binary, workflows_root, port)
         process = Process.new(
-          binary,
-          args: ["--port=#{port}"],
+          command,
+          args: args,
           chdir: workflows_root,
           input: Process::Redirect::Close,
           output: Process::Redirect::Inherit,
@@ -200,6 +176,26 @@ module Ocawe
         end
       end
 
+      private def remote_runtime_command(binary : String, workflows_root : String, port : Int32) : {String, Array(String)}
+        if !binary.empty? && executable_file?(binary) && File.basename(binary).includes?("ocawecore")
+          return {binary, ["--port=#{port}"]}
+        end
+
+        if override = ENV["OCAWECORE_BINARY"]?
+          return {override, ["--port=#{port}"]} if executable_file?(override)
+        end
+
+        unless command_available?("crystal")
+          raise "remote Cawfile exec requires ocawecore or crystal in PATH"
+        end
+
+        source_root = ocawe_source_root
+        runtime_entry = File.join(source_root, "src", "ocawe.cr")
+        raise "remote Cawfile exec requires Ocawe source at #{source_root}" unless File.file?(runtime_entry)
+        command = "cd #{shell_escape(source_root)} && OCAWE_WORKFLOWS_ROOT=#{shell_escape(workflows_root)} crystal run #{shell_escape(runtime_entry)} -Docawe_runtime_main -- --port=#{port}"
+        {"sh", ["-c", command]}
+      end
+
       private def terminate_process(process : Process) : Nil
         process.terminate
         process.wait
@@ -207,7 +203,7 @@ module Ocawe
       end
 
       private def wait_for_remote_runtime!(port : Int32) : Nil
-        deadline = Ocawe::Utils::TimeCompat.monotonic + 15.seconds
+        deadline = Ocawe::Utils::TimeCompat.monotonic + 60.seconds
         loop do
           begin
             response = HTTP::Client.get("http://127.0.0.1:#{port}/health")

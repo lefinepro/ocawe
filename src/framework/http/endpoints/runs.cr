@@ -26,6 +26,12 @@ module ACD
           }.to_json
         end
 
+        get "/v1/workflows/:workflowId/scheduler" do |env|
+          workflow_id = env.params.url["workflowId"]
+          env.response.content_type = "application/json"
+          @scheduler.status(workflow_id).to_json
+        end
+
         get "/v1/workflows/:workflowId/runs/:runId" do |env|
           workflow_id = env.params.url["workflowId"]
           run_id = env.params.url["runId"]

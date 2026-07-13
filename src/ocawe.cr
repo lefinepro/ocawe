@@ -19,6 +19,10 @@ module OcaweCore
   DEFAULT_PORT = 4111
 
   def self.run
+    if workflows_root = ENV["OCAWE_WORKFLOWS_ROOT"]?
+      Dir.cd(File.expand_path(workflows_root))
+    end
+
     OcaweCore::Utils::ConfigParser.load_dotenv
     settings = Ocawe::Config::Settings.default
     start_settings = OcaweCore::Utils::ConfigParser.load_start_settings(Ocawe::Config::StartSettings.new)

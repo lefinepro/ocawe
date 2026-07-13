@@ -23,6 +23,30 @@ module OcaweCore
           end
         end
 
+        scheduler = base.scheduler
+        if scheduler_raw = tree["scheduler"]?
+          if scheduler_config = scheduler_raw.as?(Hash(String, RCL::Value))
+            enabled = bool_or_nil(scheduler_config["enabled"]?)
+            scheduler = Ocawe::Config::SchedulerSettings.new(
+              enabled: enabled.nil? ? scheduler.enabled : enabled.not_nil!,
+              min_workers: int32_or_nil(scheduler_config["min_workers"]?) || scheduler.min_workers,
+              max_workers: int32_or_nil(scheduler_config["max_workers"]?) || scheduler.max_workers,
+              target_queue_depth: int32_or_nil(scheduler_config["target_queue_depth"]?) || scheduler.target_queue_depth,
+              scale_up_cooldown_ms: int32_or_nil(scheduler_config["scale_up_cooldown_ms"]?) || scheduler.scale_up_cooldown_ms,
+              scale_down_cooldown_ms: int32_or_nil(scheduler_config["scale_down_cooldown_ms"]?) || scheduler.scale_down_cooldown_ms,
+            )
+          elsif enabled = bool_or_nil(scheduler_raw)
+            scheduler = Ocawe::Config::SchedulerSettings.new(
+              enabled: enabled,
+              min_workers: scheduler.min_workers,
+              max_workers: scheduler.max_workers,
+              target_queue_depth: scheduler.target_queue_depth,
+              scale_up_cooldown_ms: scheduler.scale_up_cooldown_ms,
+              scale_down_cooldown_ms: scheduler.scale_down_cooldown_ms,
+            )
+          end
+        end
+
         federation = base.federation
         if fed_raw = tree["federation"]?
           if fed = fed_raw.as?(Hash(String, RCL::Value))
@@ -121,6 +145,7 @@ module OcaweCore
           datasets: datasets,
           federation: federation,
           api: api,
+          scheduler: scheduler,
           functions: functions,
           workspace_bootstrap: base.workspace_bootstrap,
           mcp: base.mcp,
@@ -146,6 +171,7 @@ module OcaweCore
         tree["mcp"] = bundle.config_mcp unless bundle.config_mcp.empty?
         tree["log"] = bundle.config_log unless bundle.config_log.empty?
         tree["telemetry"] = bundle.config_telemetry unless bundle.config_telemetry.empty?
+        tree["scheduler"] = bundle.config_scheduler unless bundle.config_scheduler.empty?
 
         # Auto-enable federation API when Api::Federation types are used in Cawfile
         if bundle.enable_federation

@@ -4,7 +4,20 @@ module ACD
       CHAT_COMPLETION_TASKS_DATASET = "chat_completion_tasks"
 
       private def mount_compat_endpoints
-        post "/v1/responses" { |env| not_implemented(env, "responses endpoint pending Kemal integration") }
+        post "/v1/responses" do |env|
+          body = json_body(env)
+          begin
+            response = build_open_response(body)
+            env.response.status_code = 200
+            env.response.content_type = "application/json"
+            response.to_json
+          rescue ex
+            env.response.status_code = completion_error_status(ex)
+            env.response.content_type = "application/json"
+            {error: {type: "response_error", message: ex.message || "response failed"}}.to_json
+          end
+        end
+
         post "/v1/chat/completions" do |env|
           body = json_body(env)
           begin
@@ -87,6 +100,8 @@ module ACD
         base_url = body["base_url"]?.try(&.as_s?)
         tools = body["tools"]?.try(&.as_a?)
         raw_messages = body["messages"]?.try(&.as_a?)
+        files = resolve_file_resources(body)
+        metadata["files"] = JSON.parse(files.to_json) unless files.empty?
 
         # Check if model is a workflow reference (e.g. "workflow/orator")
         if model.starts_with?("workflow/")
@@ -98,6 +113,7 @@ module ACD
               "messages" => JSON.parse(messages.to_json),
             } of String => JSON::Any
             input_data["system"] = JSON.parse(system_message.to_json) if system_message
+            input_data["files"] = JSON.parse(files.to_json) unless files.empty?
 
             ctx = Ocawe::Workflow::NodeContext.new(
               workflow_id: "orator",
@@ -148,8 +164,10 @@ module ACD
             "messages" => JSON.parse(messages.to_json),
           } of String => JSON::Any
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
+          input_data["files"] = JSON.parse(files.to_json) unless files.empty?
+          resources = files.empty? ? nil : {"files" => JSON.parse(files.to_json)} of String => JSON::Any
 
-          run_result = @workflow_service.start_run(workflow_id, input_data: input_data)
+          run_result = @workflow_service.start_run(workflow_id, input_data: input_data, resources: resources)
           publish_outbound_federation_output(workflow_id, run_result.output || {} of String => JSON::Any)
           snapshot = @workflow_service.load_snapshot(workflow_id, run_result.run_id)
           output_text = if snap = snapshot
@@ -223,10 +241,133 @@ module ACD
         }.to_json).as_h
       end
 
+      private def build_open_response(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
+        chat_body = response_body_as_chat_completion(body)
+        completion = build_chat_completion(chat_body)
+        completion_json = JSON.parse(completion.to_json)
+        output_text = completion_json["choices"][0]["message"]["content"]?.try(&.as_s?) || ""
+        model = completion_json["model"]?.try(&.as_s?) || (body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
+        created = completion_json["created"]?.try(&.as_i64?) || Time.utc.to_unix
+
+        JSON.parse({
+          "id" => "resp_#{Random::Secure.hex(12)}",
+          "object" => "response",
+          "created_at" => created,
+          "status" => "completed",
+          "model" => model,
+          "output" => [
+            {
+              "type" => "message",
+              "role" => "assistant",
+              "content" => [
+                {
+                  "type" => "output_text",
+                  "text" => output_text,
+                },
+              ],
+            },
+          ],
+          "output_text" => output_text,
+        }.to_json).as_h
+      end
+
+      private def response_body_as_chat_completion(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
+        copy = JSON.parse(body.to_json).as_h
+        return copy if copy["messages"]?
+
+        messages = [] of Hash(String, JSON::Any)
+        if input = copy["input"]?
+          content = response_input_text(input)
+          messages << {
+            "role"    => JSON.parse("user".to_json),
+            "content" => JSON.parse(content.to_json),
+          } of String => JSON::Any unless content.empty?
+        elsif prompt = copy["prompt"]?.try(&.as_s?)
+          messages << {
+            "role"    => JSON.parse("user".to_json),
+            "content" => JSON.parse(prompt.to_json),
+          } of String => JSON::Any
+        end
+
+        copy["messages"] = JSON.parse(messages.to_json) unless messages.empty?
+        copy
+      end
+
+      private def response_input_text(input : JSON::Any) : String
+        if text = input.as_s?
+          return text
+        end
+        if array = input.as_a?
+          return array.compact_map do |entry|
+            if str = entry.as_s?
+              str
+            elsif hash = entry.as_h?
+              hash["content"]?.try(&.as_s?) || hash["text"]?.try(&.as_s?) || hash["input_text"]?.try(&.as_s?)
+            end
+          end.join("\n")
+        end
+        input.to_json
+      end
+
       private def completion_error_status(ex : Exception) : Int32
         message = ex.message || ""
         return 404 if message.includes?("not found") || message.includes?("unknown workflow")
         422
+      end
+
+      private def resolve_file_resources(body : Ocawe::Workflow::AnyHash) : Array(Ocawe::Files::AnyHash)
+        ids = [] of String
+        collect_file_ids(JSON.parse(body.to_json), ids)
+        ids.uniq!
+        ids.compact_map do |file_id|
+          resource = @file_service.resource(file_id)
+          raise "file not found: #{file_id}" unless resource
+          resource
+        end
+      end
+
+      private def collect_file_ids(value : JSON::Any, ids : Array(String)) : Nil
+        if hash = value.as_h?
+          hash.each do |key, child|
+            case key
+            when "file_id"
+              if file_id = child.as_s?
+                ids << file_id if file_id.starts_with?("file_")
+              end
+            when "file_ids"
+              collect_file_id_array(child, ids)
+            when "files"
+              collect_file_ref_array(child, ids)
+            else
+              collect_file_ids(child, ids)
+            end
+          end
+        elsif array = value.as_a?
+          array.each { |entry| collect_file_ids(entry, ids) }
+        end
+      end
+
+      private def collect_file_id_array(value : JSON::Any, ids : Array(String)) : Nil
+        return unless array = value.as_a?
+        array.each do |entry|
+          file_id = entry.as_s?
+          ids << file_id if file_id && file_id.starts_with?("file_")
+        end
+      end
+
+      private def collect_file_ref_array(value : JSON::Any, ids : Array(String)) : Nil
+        return unless array = value.as_a?
+        array.each do |entry|
+          if file_id = entry.as_s?
+            ids << file_id if file_id.starts_with?("file_")
+          elsif hash = entry.as_h?
+            if file_id = hash["file_id"]?.try(&.as_s?) || hash["id"]?.try(&.as_s?)
+              ids << file_id if file_id.starts_with?("file_")
+            else
+              collect_file_ids(entry, ids)
+            end
+          end
+        end
       end
 
       private def ensure_chat_completion_tasks_dataset : Nil

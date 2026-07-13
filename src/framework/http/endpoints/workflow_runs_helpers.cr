@@ -25,6 +25,29 @@ module ACD
         run_id = body["run_id"]?.try(&.as_s?)
         resource_id = body["resource_id"]?.try(&.as_s?)
 
+        if @scheduler.enabled?
+          queued_run_id = run_id || "run_#{Random::Secure.hex(12)}"
+          status = @scheduler.enqueue(
+            Ocawe::Workflow::Scheduler::Job.new(
+              workflow_id: workflow_id,
+              run_id: queued_run_id,
+              resource_id: resource_id,
+              input_data: input_data,
+              resources: resources,
+            )
+          )
+
+          env.response.status_code = 202
+          env.response.content_type = "application/json"
+          return {
+            "run_id"          => queued_run_id,
+            "workflow_id"     => workflow_id,
+            "status"          => "queued",
+            "status_url"      => "/v1/workflows/#{workflow_id}/runs/#{queued_run_id}",
+            "scheduler"    => status,
+          }.to_json
+        end
+
         result_or_error = with_workflow_errors(env) do
           @workflow_service.start_run(workflow_id, run_id: run_id, resource_id: resource_id, input_data: input_data, resources: resources)
         end
@@ -49,6 +72,17 @@ module ACD
         return result_or_error if result_or_error.is_a?(String)
 
         nil
+      end
+
+      private def run_scheduler_job(job : Ocawe::Workflow::Scheduler::Job) : Nil
+        result = @workflow_service.start_run(
+          job.workflow_id,
+          run_id: job.run_id,
+          resource_id: job.resource_id,
+          input_data: job.input_data,
+          resources: job.resources,
+        )
+        publish_outbound_federation_output(job.workflow_id, result.output || {} of String => JSON::Any)
       end
 
       private def cancel_workflow_run(env, workflow_id : String, run_id : String) : (String | Nil)

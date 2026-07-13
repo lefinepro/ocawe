@@ -446,27 +446,7 @@ module OcaweCore
       end
 
       private def build_runtime_entrypoint : String
-        cawfile_bundle = ACD::Discovery::CawfileLoader.load_root(Dir.current)
-        crystal_loader = cawfile_bundle.try(&.crystal_loader)
-        cawfile_code = crystal_loader.try(&.code) || [] of String
-        registry_files = crystal_loader.try(&.registry_files) || [] of String
-        return runtime_entry if cawfile_code.empty? && registry_files.empty?
-
-        entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
-        Dir.mkdir_p(File.dirname(entrypoint))
-        entrypoint_dir = File.dirname(entrypoint)
-        content = String.build do |io|
-          io << "require " << require_path(entrypoint_dir, runtime_entry).to_json << "\n"
-          cawfile_code.each do |line|
-            io << line << "\n"
-          end
-          registry_files.each do |registry_file|
-            io << "require " << require_path(entrypoint_dir, registry_file).to_json << "\n"
-          end
-          io << "\nOcaweCore.run\n"
-        end
-        write_file_if_changed(entrypoint, content)
-        entrypoint
+        runtime_entry
       end
 
       private def write_file_if_changed(path : String, content : String) : Nil
@@ -485,7 +465,7 @@ module OcaweCore
       end
 
       private def spawn_cmd(command : String) : Process
-        Process.new("bash", args: ["-lc", command], input: Process::Redirect::Close, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
+        Process.new("bash", args: ["-c", command], input: Process::Redirect::Close, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
       end
 
       private def spawn_runtime(command : String?, binary : String, args : Array(String), chdir : String) : Process
@@ -497,12 +477,12 @@ module OcaweCore
       end
 
       private def run_cmd(command : String) : Bool
-        status = Process.run("bash", args: ["-lc", command], output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
+        status = Process.run("bash", args: ["-c", command], output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
         status.success?
       end
 
       private def run_interactive_cmd(command : String) : Bool
-        status = Process.run("bash", args: ["-lc", command], input: Process::Redirect::Inherit, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
+        status = Process.run("bash", args: ["-c", command], input: Process::Redirect::Inherit, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
         status.success?
       end
 
@@ -510,7 +490,7 @@ module OcaweCore
         output = IO::Memory.new
         status = Process.run(
           "bash",
-          args: ["-lc", "nohup #{command} > #{shell_quote(log_file)} 2>&1 < /dev/null & echo $!"],
+          args: ["-c", "nohup #{command} > #{shell_quote(log_file)} 2>&1 < /dev/null & echo $!"],
           output: output,
           error: Process::Redirect::Inherit
         )

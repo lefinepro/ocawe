@@ -52,6 +52,38 @@ module Ocawe
       end
     end
 
+    struct SchedulerSettings
+      getter enabled : Bool
+      getter min_workers : Int32
+      getter max_workers : Int32
+      getter target_queue_depth : Int32
+      getter scale_up_cooldown_ms : Int32
+      getter scale_down_cooldown_ms : Int32
+
+      def initialize(
+        @enabled : Bool = false,
+        @min_workers : Int32 = 1,
+        @max_workers : Int32 = 4,
+        @target_queue_depth : Int32 = 2,
+        @scale_up_cooldown_ms : Int32 = 500,
+        @scale_down_cooldown_ms : Int32 = 5000,
+      )
+        @min_workers = normalize_non_negative(@min_workers)
+        @max_workers = Math.max(@min_workers, normalize_positive(@max_workers, 1))
+        @target_queue_depth = normalize_positive(@target_queue_depth, 1)
+        @scale_up_cooldown_ms = normalize_non_negative(@scale_up_cooldown_ms)
+        @scale_down_cooldown_ms = normalize_non_negative(@scale_down_cooldown_ms)
+      end
+
+      private def normalize_non_negative(value : Int32) : Int32
+        value < 0 ? 0 : value
+      end
+
+      private def normalize_positive(value : Int32, fallback : Int32) : Int32
+        value <= 0 ? fallback : value
+      end
+    end
+
     struct FederationSettings
       getter auto_subscribe : Array(String)
       getter s2s_poll_interval_seconds : Int32
@@ -134,6 +166,7 @@ module Ocawe
       getter datasets : DatasetSettings
       getter federation : FederationSettings
       getter api : ApiSettings
+      getter scheduler : SchedulerSettings
       getter functions : Hash(String, Ocawe::Workflow::FunctionHandler)
       getter workspace_bootstrap : Proc(Nil)?
       getter mcp : MCPSettings
@@ -146,6 +179,7 @@ module Ocawe
         @datasets : DatasetSettings = DatasetSettings.new,
         @federation : FederationSettings = FederationSettings.new,
         @api : ApiSettings = ApiSettings.new,
+        @scheduler : SchedulerSettings = SchedulerSettings.new,
         @functions : Hash(String, Ocawe::Workflow::FunctionHandler) = {} of String => Ocawe::Workflow::FunctionHandler,
         @workspace_bootstrap : Proc(Nil)? = nil,
         @mcp : MCPSettings = MCPSettings.new,
@@ -165,6 +199,7 @@ module Ocawe
           datasets: DatasetSettings.new,
           federation: FederationSettings.new,
           api: ApiSettings.new,
+          scheduler: SchedulerSettings.new,
           functions: functions,
           workspace_bootstrap: nil,
           mcp: MCPSettings.new,

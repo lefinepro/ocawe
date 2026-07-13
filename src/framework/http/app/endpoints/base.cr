@@ -16,7 +16,12 @@ module ACD
         @skill_loader = Skills::Loader.new
         @workflow_engine = Ocawe::Workflow::Engine.new
         @workflow_service = Ocawe::Workflow::Service.new(@workflow_engine)
+        @scheduler = Ocawe::Workflow::Scheduler::Manager.new(
+          @settings.scheduler,
+          ->(job : Ocawe::Workflow::Scheduler::Job) { run_scheduler_job(job) }
+        )
         @dataset_service = Ocawe::Dataset::Service.new(build_dataset_store(@settings.datasets))
+        @file_service = Ocawe::Files::Service.new(@dataset_service)
         @aptok_federation = nil.as(Aptok::Federation?)
         @federation_kv = Aptok::MemoryKvStore.new
         @mcp_manager = Ocawe::MCP.manager
@@ -76,6 +81,7 @@ module ACD
           mount_tool_endpoints
           mount_skill_endpoints
           mount_dataset_endpoints
+          mount_file_endpoints
           mount_run_endpoints
           mount_hitl_endpoints
           mount_compat_endpoints

@@ -1,4 +1,5 @@
 require "rcl"
+require "set"
 
 module ACD
   module Discovery
@@ -48,6 +49,7 @@ module ACD
       getter config_mcp : Hash(String, RCL::Value)
       getter config_log : Hash(String, RCL::Value)
       getter config_telemetry : Hash(String, RCL::Value)
+      getter config_scheduler : Hash(String, RCL::Value)
       getter start_settings : Hash(String, RCL::Value)
       # Raw .acd.cr-style DSL source lines inside the workflow block
       getter dsl_source : Array(String)?
@@ -81,6 +83,7 @@ module ACD
         @config_mcp : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_log : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_telemetry : Hash(String, RCL::Value) = {} of String => RCL::Value,
+        @config_scheduler : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @start_settings : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
@@ -128,7 +131,7 @@ module ACD
         path = find_cawfile(dir)
         return [] of CawfileBundle unless path
 
-        raw_content = File.read(path)
+        raw_content = normalize_raw_content(File.read(path))
         raw_lines = raw_content.lines
         workflow_slices = extract_workflow_block_slices(raw_lines)
         return [] of CawfileBundle if workflow_slices.empty?
@@ -155,6 +158,7 @@ module ACD
             config_mcp: root_config.config_mcp,
             config_log: root_config.config_log,
             config_telemetry: root_config.config_telemetry,
+            config_scheduler: root_config.config_scheduler,
             start_settings: root_config.start_settings,
             follow: extract_follow_from_raw(slice.dsl_source),
             container: container,
@@ -174,7 +178,7 @@ module ACD
         path = find_cawfile(dir)
         return nil unless path
 
-        raw_content = File.read(path)
+        raw_content = normalize_raw_content(File.read(path))
         raw_lines = raw_content.lines
 
         # First, try to parse with RCL to extract settings, import, and follow
@@ -208,6 +212,7 @@ module ACD
               config_mcp: root_config.config_mcp,
               config_log: root_config.config_log,
               config_telemetry: root_config.config_telemetry,
+              config_scheduler: root_config.config_scheduler,
               start_settings: root_config.start_settings,
               follow: follow,
               container: container,
@@ -239,6 +244,7 @@ module ACD
           fn = {} of String => RCL::Value
           mcp = {} of String => RCL::Value
           telemetry = {} of String => RCL::Value
+          scheduler = {} of String => RCL::Value
           start = {} of String => RCL::Value
 
           in_settings = false
@@ -285,12 +291,16 @@ module ACD
                       wf[prop_name] = parse_value(value_raw)
                     when "telemetry", "otel"
                       telemetry[prop_name] = parse_value(value_raw)
+                    when "scheduler"
+                      scheduler[prop_name] = parse_value(value_raw)
                     end
                   end
                 end
               end
             end
           end
+
+          scheduler.merge!(extract_raw_settings_child_block(raw_lines, "scheduler"))
 
           workflow_id = "root"
           if wf_block_line = raw_lines.find { |l| l.match(/^\s*workflow\s+"/) }
@@ -314,6 +324,7 @@ module ACD
             config_mcp: mcp,
             config_log: {} of String => RCL::Value,
             config_telemetry: telemetry,
+            config_scheduler: scheduler,
             start_settings: start,
             follow: follow,
             container: container,
@@ -332,7 +343,7 @@ module ACD
         path = find_cawfile(dir)
         return nil unless path
 
-        raw_content = File.read(path)
+        raw_content = normalize_raw_content(File.read(path))
         raw_lines = raw_content.lines
 
         begin
@@ -360,6 +371,7 @@ module ACD
               config_mcp: root_config.config_mcp,
               config_log: root_config.config_log,
               config_telemetry: root_config.config_telemetry,
+              config_scheduler: root_config.config_scheduler,
               start_settings: root_config.start_settings,
               follow: follow,
               container: container,
@@ -384,6 +396,7 @@ module ACD
           fn = {} of String => RCL::Value
           mcp = {} of String => RCL::Value
           telemetry = {} of String => RCL::Value
+          scheduler = {} of String => RCL::Value
           start = {} of String => RCL::Value
 
           in_settings = false
@@ -429,12 +442,16 @@ module ACD
                       wf[prop_name] = parse_value(value_raw)
                     when "telemetry", "otel"
                       telemetry[prop_name] = parse_value(value_raw)
+                    when "scheduler"
+                      scheduler[prop_name] = parse_value(value_raw)
                     end
                   end
                 end
               end
             end
           end
+
+          scheduler.merge!(extract_raw_settings_child_block(raw_lines, "scheduler"))
 
           workflow_id = "root"
           if wf_block_line = raw_lines.find { |l| l.match(/^\s*workflow\s+"/) }
@@ -458,6 +475,7 @@ module ACD
             config_mcp: mcp,
             config_log: {} of String => RCL::Value,
             config_telemetry: telemetry,
+            config_scheduler: scheduler,
             start_settings: start,
             follow: follow,
             container: container,
@@ -470,6 +488,10 @@ module ACD
             name: name
           )
         end
+      end
+
+      private def self.normalize_raw_content(content : String) : String
+        content.ends_with?('\n') ? content : "#{content}\n"
       end
 
       private def self.parse_root_config(raw_content : String, raw_lines : Array(String)) : CawfileBundle
@@ -486,6 +508,7 @@ module ACD
         fn = {} of String => RCL::Value
         mcp = {} of String => RCL::Value
         telemetry = {} of String => RCL::Value
+        scheduler = {} of String => RCL::Value
         start = {} of String => RCL::Value
 
         in_settings = false
@@ -531,12 +554,16 @@ module ACD
                     wf[prop_name] = parse_value(value_raw)
                   when "telemetry", "otel"
                     telemetry[prop_name] = parse_value(value_raw)
+                  when "scheduler"
+                    scheduler[prop_name] = parse_value(value_raw)
                   end
                 end
               end
             end
           end
         end
+
+        scheduler.merge!(extract_raw_settings_child_block(raw_lines, "scheduler"))
 
         CawfileBundle.new(
           id: "root",
@@ -547,6 +574,7 @@ module ACD
           config_functions: fn,
           config_mcp: mcp,
           config_telemetry: telemetry,
+          config_scheduler: scheduler,
           start_settings: start,
         )
       end
@@ -569,6 +597,7 @@ module ACD
         mcp = {} of String => RCL::Value
         log = {} of String => RCL::Value
         telemetry = {} of String => RCL::Value
+        scheduler = {} of String => RCL::Value
         start = {} of String => RCL::Value
 
         # Parse properties in settings block
@@ -593,14 +622,16 @@ module ACD
                 wf[prop_name] = ast_node_to_value(value)
               when "telemetry", "otel"
                 telemetry[prop_name] = ast_node_to_value(value)
+              when "scheduler"
+                scheduler[prop_name] = ast_node_to_value(value)
               end
             end
           end
         end
 
         # Parse nested blocks in settings
-        settings_block.blocks.each do |name, child|
-          case name
+        settings_child_blocks(settings_block).each do |child|
+          case child.name
           when "federation"
             fed.merge!(block_to_rcl_value_h(child))
           when "datasets", "data"
@@ -617,6 +648,8 @@ module ACD
             log.merge!(block_to_rcl_value_h(child))
           when "telemetry", "otel"
             telemetry.merge!(block_to_rcl_value_h(child))
+          when "scheduler"
+            scheduler.merge!(block_to_rcl_value_h(child))
           end
         end
 
@@ -630,8 +663,64 @@ module ACD
           config_mcp: mcp,
           config_log: log,
           config_telemetry: telemetry,
+          config_scheduler: scheduler,
           start_settings: start
         )
+      end
+
+      private def self.extract_raw_settings_child_block(raw_lines : Array(String), block_name : String) : Hash(String, RCL::Value)
+        result = {} of String => RCL::Value
+        in_settings = false
+        settings_depth = 0
+        in_child = false
+        child_depth = 0
+
+        raw_lines.each do |line|
+          stripped = line.strip
+          next if stripped.empty? || stripped.starts_with?("#")
+
+          unless in_settings
+            if stripped.match(/^\s*settings\s+do\s*$/)
+              in_settings = true
+              settings_depth = 1
+            end
+            next
+          end
+
+          if in_child
+            if stripped.match(/\bdo\s*$/)
+              child_depth += 1
+            elsif stripped == "end"
+              child_depth -= 1
+              if child_depth <= 0
+                in_child = false
+                next
+              end
+            end
+
+            if eq_idx = stripped.index('=')
+              key = stripped[0, eq_idx].strip
+              value_raw = stripped[eq_idx + 1, stripped.size - eq_idx - 1].strip
+              result[key] = parse_value(value_raw)
+            end
+            next
+          end
+
+          if stripped.match(/^#{Regex.escape(block_name)}\s+do\s*$/)
+            in_child = true
+            child_depth = 1
+            next
+          end
+
+          if stripped.match(/\bdo\s*$/)
+            settings_depth += 1
+          elsif stripped == "end"
+            settings_depth -= 1
+            break if settings_depth <= 0
+          end
+        end
+
+        result
       end
 
       private def self.find_workflow_block(doc : RCL::Document) : RCL::BlockNode?
@@ -639,6 +728,24 @@ module ACD
           return top_block if top_block.name == "workflow"
         end
         nil
+      end
+
+      private def self.settings_child_blocks(block : RCL::BlockNode) : Array(RCL::BlockNode)
+        seen = Set(UInt64).new
+        children = [] of RCL::BlockNode
+        block.blocks.each_value do |child|
+          oid = child.object_id
+          next if seen.includes?(oid)
+          seen << oid
+          children << child
+        end
+        block.named_blocks.each do |child|
+          oid = child.object_id
+          next if seen.includes?(oid)
+          seen << oid
+          children << child
+        end
+        children
       end
 
       private def self.extract_follow(workflow_block : RCL::BlockNode) : Array(String)
