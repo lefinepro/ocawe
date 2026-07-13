@@ -30,7 +30,7 @@ module OcaweCore
 
       def initialize(
         @ocawe_port : Int32 = ENV["OCAWE_PORT"]?.try(&.to_i) || 4111,
-        @internal_key : String = ENV["OCAWE_INTERNAL_KEY"]? || "ocawe_internal"
+        @internal_key : String = ENV["OCAWE_INTERNAL_KEY"]? || "ocawe_internal",
       )
       end
 
@@ -76,11 +76,19 @@ module OcaweCore
 
         unless status.success?
           if out.empty?
-            raise "CLI '#{binary}' exited with code #{status.exit_status}: #{err}"
+            raise "CLI '#{binary}' exited with code #{process_exit_code(status)}: #{err}"
           end
         end
 
         out.empty? ? err : out
+      end
+
+      private def process_exit_code(status : Process::Status)
+        {% if compare_versions(Crystal::VERSION, "1.19.0") >= 0 %}
+          status.exit_code
+        {% else %}
+          status.exit_status
+        {% end %}
       end
 
       private def send_prompt(binary : String, prompt : String) : String
@@ -222,10 +230,10 @@ module OcaweCore
         stdin_reader.close
 
         entry = {
-          process:        process,
-          stdin_writer:   stdin_writer,
-          stdout_reader:  stdout_reader,
-          started_at:     Time.utc,
+          process:       process,
+          stdin_writer:  stdin_writer,
+          stdout_reader: stdout_reader,
+          started_at:    Time.utc,
         }
 
         @@mutex.synchronize do

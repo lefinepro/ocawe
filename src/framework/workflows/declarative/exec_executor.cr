@@ -5,13 +5,14 @@ require "../../mcp/manager"
 require "../../discovery/cawfile_loader"
 require "../../discovery/git_https_puller"
 require "../../telemetry"
+require "../../utils/time_compat"
 require "./acp_executor"
 
 module Ocawe
   module Workflow
     class ExecExecutor
       def exec(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil) : AnyHash
-        started = Time.monotonic
+        started = Ocawe::Utils::TimeCompat.monotonic
         status = "success"
         span = Ocawe::Telemetry.start_span(
           "workflow.exec",
@@ -47,7 +48,7 @@ module Ocawe
           status = "error"
           raise ex
         ensure
-          duration_ms = (Time.monotonic - started).total_milliseconds
+          duration_ms = Ocawe::Utils::TimeCompat.elapsed_milliseconds(started)
           attrs = {
             "exec.ref"                  => ref,
             "workflow.status"           => status,
@@ -206,14 +207,14 @@ module Ocawe
       end
 
       private def wait_for_remote_runtime!(port : Int32) : Nil
-        deadline = Time.monotonic + 15.seconds
+        deadline = Ocawe::Utils::TimeCompat.monotonic + 15.seconds
         loop do
           begin
             response = HTTP::Client.get("http://127.0.0.1:#{port}/health")
             return if response.status_code == 200
           rescue
           end
-          raise "remote Cawfile runtime did not become healthy on port #{port}" if Time.monotonic > deadline
+          raise "remote Cawfile runtime did not become healthy on port #{port}" if Ocawe::Utils::TimeCompat.monotonic > deadline
           sleep 100.milliseconds
         end
       end

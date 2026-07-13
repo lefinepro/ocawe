@@ -116,7 +116,7 @@ module ACD
         fingerprint = current_fingerprint
         spawn do
           loop do
-            sleep RELOAD_INTERVAL_SECONDS
+            sleep RELOAD_INTERVAL_SECONDS.seconds
             current = current_fingerprint
             next if current == fingerprint
 

@@ -45,7 +45,7 @@ module Ocawe
         resume_data : AnyHash?,
         explicit_node : String?,
       ) : WorkflowRunResult
-        run_started_at = Time.monotonic
+        run_started_at = Ocawe::Utils::TimeCompat.monotonic
         telemetry_run_status = "running"
         run_span = Ocawe::Telemetry.start_span(
           "workflow.run",
@@ -84,7 +84,7 @@ module Ocawe
           node_logger_config = @definition.logger_for_node(node.id)
           runtime_logger.node_started(node.id, node_logger_config)
           node_input_data = node_input_for(node, previous_node_id, previous_node_result)
-          node_started_at = Time.monotonic
+          node_started_at = Ocawe::Utils::TimeCompat.monotonic
           node_span = Ocawe::Telemetry.start_span(
             "workflow.node",
             {
@@ -193,7 +193,7 @@ module Ocawe
         raise ex
       ensure
         finalized_run_status = telemetry_run_status || "unknown"
-        duration_ms = (Time.monotonic - run_started_at.not_nil!).total_milliseconds
+        duration_ms = Ocawe::Utils::TimeCompat.elapsed_milliseconds(run_started_at.not_nil!)
         metric_attrs = {
           "workflow.id"     => @workflow_id,
           "workflow.run_id" => @run_id,
@@ -212,11 +212,11 @@ module Ocawe
       private def record_node_telemetry(
         node : WorkflowNode,
         node_span : OpenTelemetry::Span?,
-        node_started_at : Time::Span,
+        node_started_at,
         status : String,
         error : String? = nil,
       ) : Nil
-        duration_ms = (Time.monotonic - node_started_at).total_milliseconds
+        duration_ms = Ocawe::Utils::TimeCompat.elapsed_milliseconds(node_started_at)
         metric_attrs = {
           "workflow.id"        => @workflow_id,
           "workflow.node_id"   => node.id,

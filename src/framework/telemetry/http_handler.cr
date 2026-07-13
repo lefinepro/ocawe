@@ -1,5 +1,6 @@
 require "kemal"
 require "../telemetry"
+require "../utils/time_compat"
 
 module Ocawe
   module Telemetry
@@ -7,7 +8,7 @@ module Ocawe
       def call(env : HTTP::Server::Context)
         return call_next(env) unless Telemetry.enabled?
 
-        started = Time.monotonic
+        started = Ocawe::Utils::TimeCompat.monotonic
         method = env.request.method
         path = env.request.path
         Telemetry.apply_traceparent(env.request.headers["traceparent"]?)
@@ -31,7 +32,7 @@ module Ocawe
         ensure
           route = route_path(env) || path
           status_code = env.response.status_code
-          duration_ms = (Time.monotonic - started).total_milliseconds
+          duration_ms = Ocawe::Utils::TimeCompat.elapsed_milliseconds(started)
           status = status_code >= 500 || exception ? "error" : "success"
           final_attrs = {
             "http.route"                => route,

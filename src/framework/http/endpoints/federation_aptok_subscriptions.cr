@@ -29,19 +29,19 @@ module ACD
         remote_inbox = actor_doc["inbox"]?.try(&.as_s?).to_s
 
         record = JSON.parse({
-          "id" => "#{@settings.federation.local_actor}|#{remote_actor}",
-          "status" => remote_inbox.empty? ? "pending" : "following",
-          "local_actor" => @settings.federation.local_actor,
-          "remote_actor" => remote_actor,
-          "remote_inbox" => remote_inbox,
-          "remote_outbox" => remote_outbox,
-          "queue" => target.queue,
-          "capabilities" => {"activitypub" => true, "forgefed" => true},
-          "cursor" => "",
+          "id"             => "#{@settings.federation.local_actor}|#{remote_actor}",
+          "status"         => remote_inbox.empty? ? "pending" : "following",
+          "local_actor"    => @settings.federation.local_actor,
+          "remote_actor"   => remote_actor,
+          "remote_inbox"   => remote_inbox,
+          "remote_outbox"  => remote_outbox,
+          "queue"          => target.queue,
+          "capabilities"   => {"activitypub" => true, "forgefed" => true},
+          "cursor"         => "",
           "last_polled_at" => "",
-          "error" => "",
-          "created_at" => Aptok.now,
-          "updated_at" => Aptok.now,
+          "error"          => "",
+          "created_at"     => Aptok.now,
+          "updated_at"     => Aptok.now,
         }.to_json).as_h
         @federation_kv.set("ocawe:federation:follow:#{remote_actor}", record.to_json)
         send_aptok_follow(record) unless remote_inbox.empty?
@@ -90,7 +90,7 @@ module ACD
             rescue ex
               STDERR.puts "[federation] poll cycle failed: #{ex.message}"
             end
-            sleep interval
+            sleep interval.seconds
           end
         end
       end
@@ -159,7 +159,6 @@ module ACD
         update_aptok_follow_state(remote_actor_for_error, status: "pending", error: ex.message || ex.class.name) unless remote_actor_for_error.empty?
         STDERR.puts "[federation] follow delivery failed for #{remote_actor_for_error}: #{ex.message || ex.class.name}"
       end
-
     end
   end
 end
