@@ -69,7 +69,7 @@ module Ocawe
       model : String,
       endpoint : String? = nil,
       status : String = "completed",
-      results_dir : String = ENV["ORATOR_RESULTS_DIR"]? || "/results",
+      results_dir : String = ENV["OCAWE_RESULTS_DIR"]? || "/results",
     ) : Bool
       return false unless order_id && !order_id.empty?
 
@@ -82,6 +82,8 @@ module Ocawe
         "status"     => status,
         "created_at" => Time.utc.to_rfc3339,
       }
+      path = File.join(results_dir, "order-#{order_id}.json")
+      FileUtils.mkdir_p(File.dirname(path))
       File.write(File.join(results_dir, "order-#{order_id}.json"), body.to_json)
       true
     end

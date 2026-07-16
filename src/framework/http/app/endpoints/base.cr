@@ -59,6 +59,8 @@ module ACD
           id: String,
           workflow_id: String,
         )
+        @webhook_run_snapshots = {} of String => JSON::Any
+        @webhook_run_lock = Mutex.new
         @cache_lock = Mutex.new
       end
 
@@ -88,6 +90,7 @@ module ACD
           mount_models_endpoints
           mount_environments_endpoints
           mount_trigger_endpoints
+          mount_webhook_endpoints
           mount_mcp_endpoints
           mount_mcp_server_endpoint
           mount_keys_endpoints

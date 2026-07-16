@@ -77,7 +77,7 @@ module Ocawe
       if dir = ENV["OCAWE_SECRETS_DIR"]?
         return File.expand_path(File.join(dir, "secrets.json")) unless dir.empty?
       end
-      if results = ENV["ORATOR_RESULTS_DIR"]?
+      if results = ENV["OCAWE_RESULTS_DIR"]?
         return File.expand_path(File.join(results, "secrets", "secrets.json")) unless results.empty?
       end
       File.expand_path(DEFAULT_FILE)

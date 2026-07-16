@@ -44,9 +44,9 @@ describe "E2E: Workflow as Model in Chat Completions" do
 
     it "extracts workflow_id from model parameter correctly" do
       # Test the model parsing logic
-      model = "workflow/orator"
+      model = "workflow/example"
       workflow_id = model.sub("workflow/", "")
-      workflow_id.should eq("orator")
+      workflow_id.should eq("example")
 
       model2 = "workflow/my-app/v2"
       workflow_id2 = model2.sub("workflow/", "")

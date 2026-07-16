@@ -84,6 +84,25 @@ module Ocawe
       end
     end
 
+    struct WebhookSettings
+      getter enabled : Bool
+      getter secret_env : String
+      getter workspace_root : String
+      getter default_workflow : String?
+      getter allowed_repos : Array(String)
+      getter allowed_refs : Array(String)
+
+      def initialize(
+        @enabled : Bool = false,
+        @secret_env : String = "OCAWE_WEBHOOK_SECRET",
+        @workspace_root : String = "./.ocawe/webhook-workspaces",
+        @default_workflow : String? = nil,
+        @allowed_repos : Array(String) = [] of String,
+        @allowed_refs : Array(String) = [] of String,
+      )
+      end
+    end
+
     struct FederationSettings
       getter auto_subscribe : Array(String)
       getter s2s_poll_interval_seconds : Int32
@@ -167,6 +186,7 @@ module Ocawe
       getter federation : FederationSettings
       getter api : ApiSettings
       getter scheduler : SchedulerSettings
+      getter webhooks : WebhookSettings
       getter functions : Hash(String, Ocawe::Workflow::FunctionHandler)
       getter workspace_bootstrap : Proc(Nil)?
       getter mcp : MCPSettings
@@ -180,6 +200,7 @@ module Ocawe
         @federation : FederationSettings = FederationSettings.new,
         @api : ApiSettings = ApiSettings.new,
         @scheduler : SchedulerSettings = SchedulerSettings.new,
+        @webhooks : WebhookSettings = WebhookSettings.new,
         @functions : Hash(String, Ocawe::Workflow::FunctionHandler) = {} of String => Ocawe::Workflow::FunctionHandler,
         @workspace_bootstrap : Proc(Nil)? = nil,
         @mcp : MCPSettings = MCPSettings.new,
@@ -200,6 +221,7 @@ module Ocawe
           federation: FederationSettings.new,
           api: ApiSettings.new,
           scheduler: SchedulerSettings.new,
+          webhooks: WebhookSettings.new,
           functions: functions,
           workspace_bootstrap: nil,
           mcp: MCPSettings.new,

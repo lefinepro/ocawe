@@ -29,18 +29,20 @@ module OcaweCore
           "messages" => any(build_messages(request)),
         } of String => JSON::Any
 
+        copy_metadata(payload, request.metadata, "temperature")
+        copy_metadata(payload, request.metadata, "max_tokens")
+        copy_metadata(payload, request.metadata, "max_completion_tokens")
+
         if tools = request.tools
           payload["tools"] = JSON.parse(tools.to_json)
         end
 
         effective_base = request.base_url || @base_url
-        response = HTTP::Client.post(
+        response = post_json(
           "#{normalized_base_url(effective_base)}/chat/completions",
-          headers: HTTP::Headers{
-            "Authorization" => "Bearer #{key}",
-            "Content-Type"  => "application/json",
-          },
-          body: payload.to_json
+          key,
+          payload.to_json,
+          request_timeout(request.metadata)
         )
 
         unless response.success?
@@ -92,6 +94,39 @@ module OcaweCore
           base = base[0, idx + 3]
         end
         base.ends_with?("/v1") ? base : "#{base}/v1"
+      end
+
+      private def post_json(url : String, key : String, body : String, timeout : Time::Span) : HTTP::Client::Response
+        uri = URI.parse(url)
+        HTTP::Client.new(uri) do |client|
+          client.connect_timeout = timeout
+          client.read_timeout = timeout
+          client.write_timeout = timeout
+          client.post(
+            uri.request_target,
+            headers: HTTP::Headers{
+              "Authorization" => "Bearer #{key}",
+              "Content-Type"  => "application/json",
+            },
+            body: body
+          )
+        end
+      end
+
+      private def request_timeout(metadata : AnyHash) : Time::Span
+        seconds = metadata_number(metadata["timeout_seconds"]?) || metadata_number(metadata["timeout"]?) || 20.0
+        seconds = 1.0 if seconds < 1.0
+        seconds.seconds
+      end
+
+      private def metadata_number(value : JSON::Any?) : Float64?
+        return nil unless value
+        value.as_f? || value.as_i?.try(&.to_f) || value.as_s?.try(&.to_f?)
+      end
+
+      private def copy_metadata(payload : Hash(String, JSON::Any), metadata : AnyHash, key : String) : Nil
+        value = metadata[key]?
+        payload[key] = value if value
       end
 
       private def extract_result(payload : JSON::Any) : Tuple(String, Array(JSON::Any)?)

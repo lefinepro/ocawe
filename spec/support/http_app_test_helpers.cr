@@ -1,14 +1,14 @@
 class ACD::Kemal::App
   def test_load_workflow_definition(
     bundle : ACD::Discovery::WorkflowBundle,
-    loaded_agents : Array(ACD::Agents::LoadedAgent)
+    loaded_agents : Array(ACD::Agents::LoadedAgent),
   ) : Ocawe::Workflow::WorkflowDefinition
     load_workflow_definition(bundle, loaded_agents)
   end
 
   def test_wrap_nodes_in_control(
     nodes : Array(Ocawe::Workflow::WorkflowNode),
-    name : String
+    name : String,
   ) : Ocawe::Workflow::WorkflowNode
     wrap_nodes_in_control(nodes, name)
   end
@@ -35,7 +35,7 @@ class ACD::Kemal::App
     body : Hash(String, JSON::Any),
     ticket : Hash(String, JSON::Any),
     local_domain : String,
-    default_actor : String = ""
+    default_actor : String = "",
   ) : String
     resolve_ticket_workflow_actor(body, ticket, local_domain, default_actor)
   end
@@ -45,7 +45,7 @@ class ACD::Kemal::App
   end
 
   def test_extract_ticket_activity_payload(
-    activity : Hash(String, JSON::Any)
+    activity : Hash(String, JSON::Any),
   ) : NamedTuple(activity_type: String, ticket: Hash(String, JSON::Any))?
     extract_ticket_activity_payload(activity)
   end
@@ -53,7 +53,7 @@ class ACD::Kemal::App
   def test_infer_ticket_workflow_activity(
     activity_doc : Hash(String, JSON::Any),
     ticket : Hash(String, JSON::Any),
-    incoming_activity_type : String
+    incoming_activity_type : String,
   ) : String
     infer_ticket_workflow_activity(activity_doc, ticket, incoming_activity_type)
   end
@@ -65,7 +65,7 @@ class ACD::Kemal::App
     remote_actor : String,
     workflow_actor : String,
     local_domain : String,
-    result_text : String
+    result_text : String,
   ) : Hash(String, JSON::Any)
     build_merge_result_offer_activity(
       suffix: suffix,
@@ -88,7 +88,7 @@ class ACD::Kemal::App
     remote_actor : String,
     workflow_actor : String,
     local_domain : String,
-    published_at : String
+    published_at : String,
   ) : Nil
     publish_result_activity_from_output(
       workflow_id: workflow_id,
@@ -121,11 +121,19 @@ class ACD::Kemal::App
     ensure_aptok_subscription(value)
   end
 
-  def test_chat_completion_task_ref(completion_id : String) : String
-    chat_completion_task_ref(completion_id)
+  def test_verify_webhook_signature(payload : String, headers : ::HTTP::Headers) : Bool
+    verify_webhook_signature(payload, headers)
   end
 
-  def test_retrieve_chat_completion(completion_id : String)
-    retrieve_chat_completion(completion_id)
+  def test_select_webhook_workflow_id(requested : String?, workflow_ids : Array(String)) : String
+    select_webhook_workflow_id(requested, workflow_ids)
+  end
+
+  def test_handle_cawfile_webhook(
+    body : Hash(String, JSON::Any),
+    headers : ::HTTP::Headers,
+    workflow_override : String? = nil,
+  ) : Hash(String, JSON::Any)
+    handle_cawfile_webhook(body, headers, workflow_override)
   end
 end

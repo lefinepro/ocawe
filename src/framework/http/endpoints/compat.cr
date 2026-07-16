@@ -30,24 +30,6 @@ module ACD
           end
         end
 
-        get "/v1/chat/completions/:completion_id" do |env|
-          completion_id = env.params.url["completion_id"]
-          if completion = retrieve_chat_completion(completion_id)
-            env.response.status_code = 200
-            env.response.content_type = "application/json"
-            next completion.to_json
-          end
-
-          env.response.status_code = 404
-          env.response.content_type = "application/json"
-          {
-            "error" => {
-              "type" => "not_found",
-              "message" => "chat completion not found: #{completion_id}",
-            },
-          }.to_json
-        end
-
         post "/v1/chat/completions/tasks" do |env|
           body = json_body(env)
           task_id = body["task_id"]?.try(&.as_s?) || "chatcmpltask_#{Random::Secure.hex(12)}"
@@ -103,55 +85,9 @@ module ACD
         files = resolve_file_resources(body)
         metadata["files"] = JSON.parse(files.to_json) unless files.empty?
 
-        # Check if model is a workflow reference (e.g. "workflow/orator")
+        # Check if model is a workflow reference (e.g. "workflow/my-workflow")
         if model.starts_with?("workflow/")
           workflow_id = model.sub("workflow/", "")
-          if workflow_id == "orator" && Ocawe::Workflow.function_registry.registered?("orator_handle_request")
-            input_data = {
-              "input" => JSON.parse(prompt.to_json),
-              "prompt" => JSON.parse(prompt.to_json),
-              "messages" => JSON.parse(messages.to_json),
-            } of String => JSON::Any
-            input_data["system"] = JSON.parse(system_message.to_json) if system_message
-            input_data["files"] = JSON.parse(files.to_json) unless files.empty?
-
-            ctx = Ocawe::Workflow::NodeContext.new(
-              workflow_id: "orator",
-              run_id: "chatcmpl_#{Random::Secure.hex(8)}",
-              node_id: "orator_handle_request",
-              input_data: input_data,
-              state: input_data,
-            )
-            result = Ocawe::Workflow.function_registry.call("orator_handle_request", ctx)
-            publish_outbound_federation_output("orator", result)
-            output_text = result["text"]?.try(&.as_s?) ||
-              result["content"]?.try(&.as_s?) ||
-              result.to_json
-            now = Time.utc.to_unix
-
-            return JSON.parse({
-              "id" => "chatcmpl_orator_#{Random::Secure.hex(12)}",
-              "object" => "chat.completion",
-              "created" => now,
-              "model" => model,
-              "choices" => [
-                {
-                  "index" => 0,
-                  "message" => {
-                    "role" => "assistant",
-                    "content" => output_text,
-                  },
-                  "finish_reason" => "stop",
-                },
-              ],
-              "usage" => {
-                "prompt_tokens" => 0,
-                "completion_tokens" => 0,
-                "total_tokens" => 0,
-              },
-            }.to_json).as_h
-          end
-
           workflow = workflow_by_id(workflow_id)
 
           unless workflow
@@ -178,7 +114,7 @@ module ACD
           now = Time.utc.to_unix
 
           return JSON.parse({
-            "id" => workflow_chat_completion_id(snapshot, workflow_id) || "chatcmpl_#{Random::Secure.hex(12)}",
+            "id" => "chatcmpl_#{Random::Secure.hex(12)}",
             "object" => "chat.completion",
             "created" => now,
             "model" => model,
@@ -444,173 +380,6 @@ module ACD
 
       private def stream_requested?(body : Hash(String, JSON::Any)) : Bool
         body["stream"]?.try(&.as_bool?) || false
-      end
-
-      private def retrieve_chat_completion(completion_id : String)
-        ref = chat_completion_task_ref(completion_id)
-        return nil if ref.empty?
-
-        task = load_chat_completion_task(ref, completion_id)
-        return nil unless task
-
-        if order_id = task["order_id"]?.try(&.as_s?)
-          unless order_id.empty?
-            if result = chat_order_result(order_id)
-              task = update_chat_completion_task(task, result)
-            end
-          end
-        end
-
-        id = task["completion_id"]?.try(&.as_s?) || chat_completion_id_for_ref(task["ref"]?.try(&.as_s?) || ref)
-        model = task["model"]?.try(&.as_s?) || "workflow/orator"
-        status = task["status"]?.try(&.as_s?) || "queued"
-        result = task["result"]?.try(&.as_s?) || ""
-        content = status == "completed" && !result.empty? ? result : "The task is still running."
-
-        chat_completion_payload(id, model, content, chat_completion_created(task))
-      end
-
-      private def workflow_chat_completion_id(snapshot : Ocawe::Workflow::WorkflowRunSnapshot?, workflow_id : String) : String?
-        return nil unless workflow_id == "orator"
-        return nil unless snapshot
-
-        if state = snapshot.state
-          if id = state["completion_id"]?.try(&.as_s?)
-            return id unless id.empty?
-          end
-          if tasks = state["queued_tasks"]?.try(&.as_a?)
-            if first = tasks.first?
-              if id = first["completion_id"]?.try(&.as_s?)
-                return id unless id.empty?
-              end
-            end
-          end
-        end
-
-        if output = snapshot.output
-          if id = output["completion_id"]?.try(&.as_s?)
-            return id unless id.empty?
-          end
-          if tasks = output["queued_tasks"]?.try(&.as_a?)
-            if first = tasks.first?
-              if id = first["completion_id"]?.try(&.as_s?)
-                return id unless id.empty?
-              end
-            end
-          end
-        end
-      end
-
-      private def chat_completion_payload(id : String, model : String, content : String, created : Int64)
-        {
-          "id" => id,
-          "object" => "chat.completion",
-          "created" => created,
-          "model" => model,
-          "choices" => [
-            {
-              "index" => 0,
-              "message" => {
-                "role" => "assistant",
-                "content" => content,
-              },
-              "finish_reason" => "stop",
-            },
-          ],
-          "usage" => {
-            "prompt_tokens" => 0,
-            "completion_tokens" => 0,
-            "total_tokens" => 0,
-          },
-        }
-      end
-
-      private def chat_completion_task_ref(completion_id : String) : String
-        value = completion_id.strip
-        return "" unless value.starts_with?("chatcmpl_orator_")
-        value = value.sub(/^chatcmpl_orator_/, "")
-        value =~ /\A[a-zA-Z0-9_-]+\z/ ? value : ""
-      end
-
-      private def load_chat_completion_task(ref : String, completion_id : String)
-        path = File.join(chat_completion_task_dir, "#{ref}.json")
-        if File.exists?(path)
-          task = JSON.parse(File.read(path)).as_h
-          return task if chat_completion_task_matches?(task, ref, completion_id)
-        end
-
-        Dir.glob(File.join(chat_completion_task_dir, "*.json")).each do |candidate|
-          task = JSON.parse(File.read(candidate)).as_h
-          return task if chat_completion_task_matches?(task, ref, completion_id)
-        end
-        nil
-      rescue
-        nil
-      end
-
-      private def chat_completion_task_matches?(task, ref : String, completion_id : String) : Bool
-        task["ref"]?.try(&.as_s?) == ref ||
-          task["order_id"]?.try(&.as_s?) == ref ||
-          task["completion_id"]?.try(&.as_s?) == completion_id
-      end
-
-      private def chat_order_result(order_id : String)
-        path = File.join(chat_completion_results_dir, "order-#{order_id}.json")
-        return nil unless File.exists?(path)
-
-        raw = File.read(path)
-        parsed = JSON.parse(raw)
-        content = parsed["content"]?.try(&.as_s?) || parsed["answer"]?.try(&.as_s?) || raw
-        status = parsed["status"]?.try(&.as_s?) || "completed"
-        status = "queued" if chat_fallback_result?(content)
-        {content: content.strip, status: status}
-      rescue
-        nil
-      end
-
-      private def update_chat_completion_task(task, result)
-        ref = task["ref"]?.try(&.as_s?) || ""
-        return task if ref.empty?
-
-        task["status"] = JSON.parse(result[:status].to_json)
-        task["result"] = JSON.parse(result[:content].to_json)
-        task["updated_at"] = JSON.parse(Time.utc.to_rfc3339.to_json)
-        File.write(File.join(chat_completion_task_dir, "#{ref}.json"), task.to_json)
-        task
-      rescue
-        task
-      end
-
-      private def chat_completion_created(task) : Int64
-        if created = task["created"]?.try(&.as_i64?)
-          return created
-        end
-        if created_at = task["created_at"]?.try(&.as_s?)
-          return Time.parse_rfc3339(created_at).to_unix
-        end
-        Time.utc.to_unix
-      rescue
-        Time.utc.to_unix
-      end
-
-      private def chat_fallback_result?(content : String) : Bool
-        text = content.downcase
-        text.includes?("did not return an immediate answer") ||
-          text.includes?("registered the task") ||
-          text.includes?("rotator failed:") ||
-          text.includes?("rate limit exceeded")
-      end
-
-      private def chat_completion_id_for_ref(ref : String) : String
-        "chatcmpl_orator_#{ref}"
-      end
-
-      private def chat_completion_task_dir : String
-        File.join(chat_completion_results_dir, "tasks")
-      end
-
-      private def chat_completion_results_dir : String
-        ENV["ORATOR_RESULTS_DIR"]? || ENV["OCAWE_RESULTS_DIR"]? || "/results"
       end
 
       private def write_chat_completion_response(env, completion, stream : Bool) : String

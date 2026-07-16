@@ -201,6 +201,16 @@
       nixosModules.default = { config, lib, pkgs, ... }:
         let
           cfg = config.services.ocawe;
+          generatedConfig = pkgs.writeText "ocawe-generated-config.rcl" ''
+            webhooks do
+              enabled = ${lib.boolToString cfg.webhooks.enable}
+              secret_env = ${builtins.toJSON cfg.webhooks.secretEnv}
+              workspace_root = ${builtins.toJSON cfg.webhooks.workspaceRoot}
+              ${lib.optionalString (cfg.webhooks.defaultWorkflow != null) "default_workflow = ${builtins.toJSON cfg.webhooks.defaultWorkflow}"}
+              allowed_repos = ${builtins.toJSON cfg.webhooks.allowedRepos}
+              allowed_refs = ${builtins.toJSON cfg.webhooks.allowedRefs}
+            end
+          '';
         in
         {
           options.services.ocawe = {
@@ -254,6 +264,46 @@
               default = [];
               description = "Additional arguments passed to ocawecore.";
             };
+
+            webhooks = {
+              enable = lib.mkEnableOption "Ocawe Cawfile webhook runner";
+
+              secretEnv = lib.mkOption {
+                type = lib.types.str;
+                default = "OCAWE_WEBHOOK_SECRET";
+                description = "Environment variable containing the webhook HMAC secret.";
+              };
+
+              secretEnvironmentFile = lib.mkOption {
+                type = lib.types.nullOr lib.types.path;
+                default = null;
+                description = "Optional systemd EnvironmentFile containing the webhook secret.";
+              };
+
+              workspaceRoot = lib.mkOption {
+                type = lib.types.str;
+                default = "/var/lib/ocawe/webhook-workspaces";
+                description = "Directory where webhook-triggered repositories are cloned.";
+              };
+
+              defaultWorkflow = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Default workflow to run when a webhook Cawfile contains multiple workflows.";
+              };
+
+              allowedRepos = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [];
+                description = "Allowed repository keys such as source.lefine.pro/lefinepro/*.";
+              };
+
+              allowedRefs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [];
+                description = "Allowed webhook refs such as refs/heads/release.";
+              };
+            };
           };
 
           config = lib.mkIf cfg.enable {
@@ -278,11 +328,15 @@
                 WorkingDirectory = cfg.workflowsRoot;
                 Restart = "on-failure";
                 RestartSec = "5s";
+              }
+              // lib.optionalAttrs (cfg.webhooks.secretEnvironmentFile != null) {
+                EnvironmentFile = cfg.webhooks.secretEnvironmentFile;
               };
               script = ''
                 exec ${cfg.package}/bin/ocawecore \
                   --port=${toString cfg.port} \
                   --log-level=${lib.escapeShellArg cfg.logLevel} \
+                  ${lib.optionalString cfg.webhooks.enable "--config-rcl=${generatedConfig} \\"}
                   ${lib.escapeShellArgs cfg.extraArgs}
               '';
             };
@@ -326,6 +380,7 @@
 
             buildInputs = [
               pkgs.boehmgc
+              pkgs.gmp
               pkgs.libevent
               pkgs.libxml2
               pkgs.libyaml

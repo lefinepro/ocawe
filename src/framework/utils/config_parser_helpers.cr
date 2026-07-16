@@ -47,6 +47,33 @@ module OcaweCore
           end
         end
 
+        webhooks = base.webhooks
+        if webhooks_raw = tree["webhooks"]?
+          if webhook_config = webhooks_raw.as?(Hash(String, RCL::Value))
+            enabled = bool_or_nil(webhook_config["enabled"]?)
+            default_workflow = string_or_nil(webhook_config["default_workflow"]?) || string_or_nil(webhook_config["defaultWorkflow"]?) || webhooks.default_workflow
+            allowed_repos = parse_string_list_value(webhook_config["allowed_repos"]?)
+            allowed_refs = parse_string_list_value(webhook_config["allowed_refs"]?)
+            webhooks = Ocawe::Config::WebhookSettings.new(
+              enabled: enabled.nil? ? webhooks.enabled : enabled.not_nil!,
+              secret_env: string_or_nil(webhook_config["secret_env"]?) || string_or_nil(webhook_config["secretEnv"]?) || webhooks.secret_env,
+              workspace_root: string_or_nil(webhook_config["workspace_root"]?) || string_or_nil(webhook_config["workspaceRoot"]?) || webhooks.workspace_root,
+              default_workflow: default_workflow,
+              allowed_repos: allowed_repos.empty? ? webhooks.allowed_repos : allowed_repos,
+              allowed_refs: allowed_refs.empty? ? webhooks.allowed_refs : allowed_refs,
+            )
+          elsif enabled = bool_or_nil(webhooks_raw)
+            webhooks = Ocawe::Config::WebhookSettings.new(
+              enabled: enabled,
+              secret_env: webhooks.secret_env,
+              workspace_root: webhooks.workspace_root,
+              default_workflow: webhooks.default_workflow,
+              allowed_repos: webhooks.allowed_repos,
+              allowed_refs: webhooks.allowed_refs,
+            )
+          end
+        end
+
         federation = base.federation
         if fed_raw = tree["federation"]?
           if fed = fed_raw.as?(Hash(String, RCL::Value))
@@ -146,6 +173,7 @@ module OcaweCore
           federation: federation,
           api: api,
           scheduler: scheduler,
+          webhooks: webhooks,
           functions: functions,
           workspace_bootstrap: base.workspace_bootstrap,
           mcp: base.mcp,
@@ -172,6 +200,7 @@ module OcaweCore
         tree["log"] = bundle.config_log unless bundle.config_log.empty?
         tree["telemetry"] = bundle.config_telemetry unless bundle.config_telemetry.empty?
         tree["scheduler"] = bundle.config_scheduler unless bundle.config_scheduler.empty?
+        tree["webhooks"] = bundle.config_webhooks unless bundle.config_webhooks.empty?
 
         # Auto-enable federation API when Api::Federation types are used in Cawfile
         if bundle.enable_federation

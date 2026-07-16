@@ -50,6 +50,7 @@ module ACD
       getter config_log : Hash(String, RCL::Value)
       getter config_telemetry : Hash(String, RCL::Value)
       getter config_scheduler : Hash(String, RCL::Value)
+      getter config_webhooks : Hash(String, RCL::Value)
       getter start_settings : Hash(String, RCL::Value)
       # Raw .acd.cr-style DSL source lines inside the workflow block
       getter dsl_source : Array(String)?
@@ -84,6 +85,7 @@ module ACD
         @config_log : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_telemetry : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @config_scheduler : Hash(String, RCL::Value) = {} of String => RCL::Value,
+        @config_webhooks : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @start_settings : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
@@ -159,6 +161,7 @@ module ACD
             config_log: root_config.config_log,
             config_telemetry: root_config.config_telemetry,
             config_scheduler: root_config.config_scheduler,
+            config_webhooks: root_config.config_webhooks,
             start_settings: root_config.start_settings,
             follow: extract_follow_from_raw(slice.dsl_source),
             container: container,
@@ -213,6 +216,7 @@ module ACD
               config_log: root_config.config_log,
               config_telemetry: root_config.config_telemetry,
               config_scheduler: root_config.config_scheduler,
+              config_webhooks: root_config.config_webhooks,
               start_settings: root_config.start_settings,
               follow: follow,
               container: container,
@@ -245,6 +249,7 @@ module ACD
           mcp = {} of String => RCL::Value
           telemetry = {} of String => RCL::Value
           scheduler = {} of String => RCL::Value
+          webhooks = {} of String => RCL::Value
           start = {} of String => RCL::Value
 
           in_settings = false
@@ -277,6 +282,8 @@ module ACD
                   start["port"] = parse_value(value_raw)
                 when "log_level"
                   start["log_level"] = parse_value(value_raw)
+                when "webhooks"
+                  webhooks["enabled"] = parse_value(value_raw)
                 else
                   if key.includes?('.')
                     parts = key.split('.', 2)
@@ -293,6 +300,8 @@ module ACD
                       telemetry[prop_name] = parse_value(value_raw)
                     when "scheduler"
                       scheduler[prop_name] = parse_value(value_raw)
+                    when "webhooks"
+                      webhooks[prop_name] = parse_value(value_raw)
                     end
                   end
                 end
@@ -301,6 +310,7 @@ module ACD
           end
 
           scheduler.merge!(extract_raw_settings_child_block(raw_lines, "scheduler"))
+          webhooks.merge!(extract_raw_settings_child_block(raw_lines, "webhooks"))
 
           workflow_id = "root"
           if wf_block_line = raw_lines.find { |l| l.match(/^\s*workflow\s+"/) }
@@ -325,6 +335,7 @@ module ACD
             config_log: {} of String => RCL::Value,
             config_telemetry: telemetry,
             config_scheduler: scheduler,
+            config_webhooks: webhooks,
             start_settings: start,
             follow: follow,
             container: container,
@@ -372,6 +383,7 @@ module ACD
               config_log: root_config.config_log,
               config_telemetry: root_config.config_telemetry,
               config_scheduler: root_config.config_scheduler,
+              config_webhooks: root_config.config_webhooks,
               start_settings: root_config.start_settings,
               follow: follow,
               container: container,
@@ -397,6 +409,7 @@ module ACD
           mcp = {} of String => RCL::Value
           telemetry = {} of String => RCL::Value
           scheduler = {} of String => RCL::Value
+          webhooks = {} of String => RCL::Value
           start = {} of String => RCL::Value
 
           in_settings = false
@@ -428,6 +441,8 @@ module ACD
                   start["port"] = parse_value(value_raw)
                 when "log_level"
                   start["log_level"] = parse_value(value_raw)
+                when "webhooks"
+                  webhooks["enabled"] = parse_value(value_raw)
                 else
                   if key.includes?('.')
                     parts = key.split('.', 2)
@@ -444,6 +459,8 @@ module ACD
                       telemetry[prop_name] = parse_value(value_raw)
                     when "scheduler"
                       scheduler[prop_name] = parse_value(value_raw)
+                    when "webhooks"
+                      webhooks[prop_name] = parse_value(value_raw)
                     end
                   end
                 end
@@ -452,6 +469,7 @@ module ACD
           end
 
           scheduler.merge!(extract_raw_settings_child_block(raw_lines, "scheduler"))
+          webhooks.merge!(extract_raw_settings_child_block(raw_lines, "webhooks"))
 
           workflow_id = "root"
           if wf_block_line = raw_lines.find { |l| l.match(/^\s*workflow\s+"/) }
@@ -476,6 +494,7 @@ module ACD
             config_log: {} of String => RCL::Value,
             config_telemetry: telemetry,
             config_scheduler: scheduler,
+            config_webhooks: webhooks,
             start_settings: start,
             follow: follow,
             container: container,
@@ -509,6 +528,7 @@ module ACD
         mcp = {} of String => RCL::Value
         telemetry = {} of String => RCL::Value
         scheduler = {} of String => RCL::Value
+        webhooks = {} of String => RCL::Value
         start = {} of String => RCL::Value
 
         in_settings = false
@@ -540,6 +560,8 @@ module ACD
                 start["port"] = parse_value(value_raw)
               when "log_level"
                 start["log_level"] = parse_value(value_raw)
+              when "webhooks"
+                webhooks["enabled"] = parse_value(value_raw)
               else
                 if key.includes?('.')
                   parts = key.split('.', 2)
@@ -556,6 +578,8 @@ module ACD
                     telemetry[prop_name] = parse_value(value_raw)
                   when "scheduler"
                     scheduler[prop_name] = parse_value(value_raw)
+                  when "webhooks"
+                    webhooks[prop_name] = parse_value(value_raw)
                   end
                 end
               end
@@ -564,6 +588,7 @@ module ACD
         end
 
         scheduler.merge!(extract_raw_settings_child_block(raw_lines, "scheduler"))
+        webhooks.merge!(extract_raw_settings_child_block(raw_lines, "webhooks"))
 
         CawfileBundle.new(
           id: "root",
@@ -575,6 +600,7 @@ module ACD
           config_mcp: mcp,
           config_telemetry: telemetry,
           config_scheduler: scheduler,
+          config_webhooks: webhooks,
           start_settings: start,
         )
       end
@@ -598,6 +624,7 @@ module ACD
         log = {} of String => RCL::Value
         telemetry = {} of String => RCL::Value
         scheduler = {} of String => RCL::Value
+        webhooks = {} of String => RCL::Value
         start = {} of String => RCL::Value
 
         # Parse properties in settings block
@@ -607,6 +634,8 @@ module ACD
             start["port"] = ast_node_to_value(value)
           when "log_level"
             start["log_level"] = ast_node_to_value(value)
+          when "webhooks"
+            webhooks["enabled"] = ast_node_to_value(value)
           else
             # Check for dot-notation keys like "data.adapter"
             if key.includes?('.')
@@ -624,6 +653,8 @@ module ACD
                 telemetry[prop_name] = ast_node_to_value(value)
               when "scheduler"
                 scheduler[prop_name] = ast_node_to_value(value)
+              when "webhooks"
+                webhooks[prop_name] = ast_node_to_value(value)
               end
             end
           end
@@ -650,6 +681,8 @@ module ACD
             telemetry.merge!(block_to_rcl_value_h(child))
           when "scheduler"
             scheduler.merge!(block_to_rcl_value_h(child))
+          when "webhooks"
+            webhooks.merge!(block_to_rcl_value_h(child))
           end
         end
 
@@ -664,6 +697,7 @@ module ACD
           config_log: log,
           config_telemetry: telemetry,
           config_scheduler: scheduler,
+          config_webhooks: webhooks,
           start_settings: start
         )
       end
