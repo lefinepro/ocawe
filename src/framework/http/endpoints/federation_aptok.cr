@@ -197,13 +197,13 @@ module ACD
 
         federation.nodeinfo do |_ctx|
           JSON.parse({
-            "version" => "2.1",
-            "software" => {"name" => "ocawe", "version" => OcaweCore::VERSION},
-            "protocols" => ["activitypub"],
-            "services" => {"inbound" => [] of String, "outbound" => [] of String},
+            "version"           => "2.1",
+            "software"          => {"name" => "ocawe", "version" => OcaweCore::VERSION},
+            "protocols"         => ["activitypub"],
+            "services"          => {"inbound" => [] of String, "outbound" => [] of String},
             "openRegistrations" => false,
-            "usage" => {"users" => {"total" => workflow_ids.size}},
-            "metadata" => {"forgefed" => true},
+            "usage"             => {"users" => {"total" => workflow_ids.size}},
+            "metadata"          => {"forgefed" => true},
           }.to_json).as_h
         end
         @aptok_federation = federation
@@ -242,7 +242,7 @@ module ACD
         key = local_actor_key_pair(actor_uri)
         public_key = key ? Aptok.public_key(key) : nil
 
-        Aptok.actor(
+        actor = Aptok.actor(
           "Application",
           actor_uri,
           workflow_id,
@@ -253,6 +253,50 @@ module ACD
           alias_uri: ENV["OCAWE_FEDERATION_ALIAS_URI"]?,
           public_key: public_key
         )
+        decorate_local_actor_document(actor)
+        actor
+      end
+
+      private def decorate_local_actor_document(actor : Aptok::JsonMap) : Nil
+        if summary = ENV["OCAWE_FEDERATION_ACTOR_SUMMARY"]?
+          summary = summary.strip
+          actor["summary"] = JSON.parse(summary.to_json) unless summary.empty?
+        end
+
+        tags = federation_actor_tags
+        unless tags.empty?
+          actor["tag"] = JSON.parse(tags.map { |tag|
+            {"type" => "Hashtag", "name" => "##{tag}"}
+          }.to_json)
+        end
+
+        capability = federation_actor_capability(tags)
+        actor["attachment"] = JSON.parse([capability].to_json) if capability
+      end
+
+      private def federation_actor_tags : Array(String)
+        raw = ENV["OCAWE_FEDERATION_TAGS"]? || ""
+        raw.split(',')
+          .map(&.strip)
+          .reject(&.empty?)
+          .map { |tag| tag.starts_with?('#') ? tag[1..] : tag }
+          .uniq
+      end
+
+      private def federation_actor_capability(tags : Array(String)) : Hash(String, String | Array(String))?
+        resource = (ENV["OCAWE_FEDERATION_RESOURCE_CONFORMS_TO"]? || "").strip
+        return nil if resource.empty?
+
+        capability = {
+          "type"               => "PropertyValue",
+          "name"               => "Marketplace capability",
+          "value"              => resource,
+          "resourceConformsTo" => resource,
+          "action"             => (ENV["OCAWE_FEDERATION_ACTION"]? || "deliverService").strip,
+          "purpose"            => (ENV["OCAWE_FEDERATION_PURPOSE"]? || "request").strip,
+        } of String => String | Array(String)
+        capability["tag"] = tags unless tags.empty?
+        capability
       end
 
       private def configured_local_actor_identifier : String
@@ -328,10 +372,10 @@ module ACD
           end
         end.reject(&.empty?).uniq!
         {
-          "@context" => JSON.parse(Aptok::ACTIVITYSTREAMS_CONTEXT.to_json),
-          "type" => JSON.parse("OrderedCollection".to_json),
-          "id" => JSON.parse("#{actor}/#{collection}".to_json),
-          "totalItems" => JSON.parse(items.size.to_json),
+          "@context"     => JSON.parse(Aptok::ACTIVITYSTREAMS_CONTEXT.to_json),
+          "type"         => JSON.parse("OrderedCollection".to_json),
+          "id"           => JSON.parse("#{actor}/#{collection}".to_json),
+          "totalItems"   => JSON.parse(items.size.to_json),
           "orderedItems" => JSON.parse(items.to_json),
         }
       end
@@ -345,22 +389,22 @@ module ACD
 
         now = Aptok.now
         record = JSON.parse({
-          "id" => "#{local_actor}|#{remote_actor}",
-          "status" => "active",
-          "local_actor" => local_actor,
+          "id"           => "#{local_actor}|#{remote_actor}",
+          "status"       => "active",
+          "local_actor"  => local_actor,
           "remote_actor" => remote_actor,
-          "created_at" => now,
-          "updated_at" => now,
+          "created_at"   => now,
+          "updated_at"   => now,
         }.to_json).as_h
         @federation_kv.set("ocawe:federation:follower:#{local_actor}:#{remote_actor}", record.to_json)
 
         accept = JSON.parse({
-          "@context" => Aptok::ACTIVITYSTREAMS_CONTEXT,
-          "type" => "Accept",
-          "id" => "#{local_actor}/activities/accept-#{Random::Secure.hex(12)}",
-          "actor" => local_actor,
-          "object" => activity,
-          "to" => [remote_actor],
+          "@context"  => Aptok::ACTIVITYSTREAMS_CONTEXT,
+          "type"      => "Accept",
+          "id"        => "#{local_actor}/activities/accept-#{Random::Secure.hex(12)}",
+          "actor"     => local_actor,
+          "object"    => activity,
+          "to"        => [remote_actor],
           "published" => now,
         }.to_json).as_h
         append_aptok_outbox_event(local_actor, accept, "outbox-accept-#{Random::Secure.hex(12)}")
@@ -443,7 +487,7 @@ module ACD
         actor : String,
         remote_actor : String,
         inbox : String,
-        key_pair : Aptok::ActorKeyPair?
+        key_pair : Aptok::ActorKeyPair?,
       ) : Nil
         delivery = Aptok::DeliveryConfig.new(
           inbox: inbox,
@@ -455,7 +499,6 @@ module ACD
       rescue ex
         STDERR.puts "[federation] outbound delivery failed to #{inbox}: #{ex.message || ex.class.name}"
       end
-
     end
   end
 end
