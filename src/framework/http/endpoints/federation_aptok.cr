@@ -248,8 +248,9 @@ module ACD
           workflow_id,
           ctx.get_inbox_uri(workflow_id),
           ctx.get_outbox_uri(workflow_id),
-          name: workflow_id,
+          name: ENV["OCAWE_FEDERATION_ACTOR_NAME"]? || workflow_id,
           shared_inbox: "#{ctx.origin}/inbox",
+          alias_uri: ENV["OCAWE_FEDERATION_ALIAS_URI"]?,
           public_key: public_key
         )
       end

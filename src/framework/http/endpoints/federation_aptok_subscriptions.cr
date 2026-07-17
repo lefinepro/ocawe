@@ -2,7 +2,11 @@ module ACD
   module Kemal
     class App
       private def bootstrap_federation_subscriptions : Nil
-        @settings.federation.auto_subscribe.each do |entry|
+        targets = Set(String).new
+        @settings.federation.auto_subscribe.each { |entry| targets << entry.strip unless entry.strip.empty? }
+        workflow_follow_targets.each { |entry| targets << entry.strip unless entry.strip.empty? }
+
+        targets.each do |entry|
           normalized = entry.strip
           next if normalized.empty?
 
@@ -10,7 +14,7 @@ module ACD
             record = ensure_aptok_subscription(normalized)
             STDERR.puts "[federation] subscribed #{normalized} -> #{record["remote_actor"]?.try(&.as_s?) || normalized}"
           rescue ex
-            STDERR.puts "[federation] auto_subscribe failed for #{normalized}: #{ex.message || ex.class.name}"
+            STDERR.puts "[federation] follow subscription failed for #{normalized}: #{ex.message || ex.class.name}"
           end
         end
       end
@@ -27,6 +31,14 @@ module ACD
         remote_actor = actor_doc["id"]?.try(&.as_s?) || target.remote_actor
         remote_outbox = actor_doc["outbox"]?.try(&.as_s?).to_s
         remote_inbox = actor_doc["inbox"]?.try(&.as_s?).to_s
+        key = "ocawe:federation:follow:#{remote_actor}"
+
+        if existing = @federation_kv.get(key).try { |raw| JSON.parse(raw).as_h }
+          status = existing["status"]?.try(&.as_s?).to_s
+          if status == "active" || status == "following"
+            return existing
+          end
+        end
 
         record = JSON.parse({
           "id"             => "#{@settings.federation.local_actor}|#{remote_actor}",
@@ -43,7 +55,7 @@ module ACD
           "created_at"     => Aptok.now,
           "updated_at"     => Aptok.now,
         }.to_json).as_h
-        @federation_kv.set("ocawe:federation:follow:#{remote_actor}", record.to_json)
+        @federation_kv.set(key, record.to_json)
         send_aptok_follow(record) unless remote_inbox.empty?
         record
       end

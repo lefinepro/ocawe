@@ -27,6 +27,7 @@ module ACD
         @mcp_manager = Ocawe::MCP.manager
         @workflow_ids = [] of String
         @service_workflow_ids = [] of String
+        @workflow_follow_targets = [] of String
         @started_service_workflows = Set(String).new
         @workflow_index = {} of String => NamedTuple(
           source_root_type: String,
@@ -107,6 +108,7 @@ module ACD
       private def federation_api_enabled? : Bool
         @settings.api.enable?("federation") ||
           !@settings.federation.auto_subscribe.empty? ||
+          !workflow_follow_targets.empty? ||
           Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
       end
 
@@ -179,6 +181,7 @@ module ACD
           workflow_id: String,
         )
         service_workflow_ids = [] of String
+        follow_targets = Set(String).new
         global_agents = @agent_loader.load_dir("./agents")
 
         bundles.each do |bundle|
@@ -187,6 +190,12 @@ module ACD
 
           ids << bundle.id
           service_workflow_ids << bundle.id if bundle.service
+          if cawfile = bundle.cawfile
+            cawfile.follow.each do |target|
+              normalized = target.strip
+              follow_targets << normalized unless normalized.empty?
+            end
+          end
           definition = load_workflow_definition(bundle, loaded_agents)
           rebuilt_engine.register(definition)
           tool_ids = [] of String
@@ -243,6 +252,7 @@ module ACD
         @cache_lock.synchronize do
           @workflow_ids = ids
           @service_workflow_ids = service_workflow_ids
+          @workflow_follow_targets = follow_targets.to_a.sort
           @workflow_index = index
           @skills_index = skills_index
           @agents_index = agents_index
@@ -250,6 +260,8 @@ module ACD
           @workflow_engine = rebuilt_engine
           @workflow_service = Ocawe::Workflow::Service.new(@workflow_engine)
         end
+
+        bootstrap_federation_subscriptions if federation_api_enabled?
       end
 
       private def start_service_workflows : Nil
@@ -287,6 +299,10 @@ module ACD
 
       private def workflow_ids : Array(String)
         @cache_lock.synchronize { @workflow_ids.dup }
+      end
+
+      private def workflow_follow_targets : Array(String)
+        @cache_lock.synchronize { @workflow_follow_targets.dup }
       end
 
       private def workflow_by_id(workflow_id : String)
