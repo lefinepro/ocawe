@@ -14,7 +14,7 @@ module ACD
           end
 
           params = JSON.parse body
-          name = params["name"]?.try(&.as_s?) || params["workflow_id"]?.try(&.as_s?)
+          name = params["name"]?.try(&.as_s?) || params["id"]?.try(&.as_s?) || params["workflow_id"]?.try(&.as_s?)
           unless name && !name.empty?
             next json_error(env, 400, "bad_request", "workflow name is required")
           end
@@ -22,7 +22,7 @@ module ACD
           nodes = params["nodes"]?.try(&.as_a?) || [] of JSON::Any
           schedule = params["schedule"]?.try(&.as_s?)
           tag = params["tag"]?.try(&.as_s?)
-          trigger_message = params["trigger_message"]?.try(&.as_s?)
+          trigger_message = params["trigger_message"]?.try(&.as_s?) || params["trigger"]?.try(&.as_s?)
           is_service = !schedule.nil? && !schedule.empty?
 
           workflows_root = ENV["OCAWE_WORKFLOWS_ROOT"]? || File.join(Dir.current, "src", "workflows")
