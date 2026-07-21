@@ -38,6 +38,69 @@ module ACD
       end
     end
 
+    struct CawfileResource
+      getter id : String
+      getter name : String
+      getter description : String
+      getter action : String
+      getter purpose : String
+      getter tags : Array(String)
+
+      def initialize(
+        @id : String,
+        @name : String = "",
+        @description : String = "",
+        @action : String = "deliverService",
+        @purpose : String = "request",
+        @tags : Array(String) = [] of String,
+      )
+      end
+    end
+
+    struct CawfileTestAssertion
+      getter workflow_id : String
+      getter input : String
+      getter equality : String
+      getter wait_seconds : Int32
+
+      def initialize(
+        @workflow_id : String,
+        @input : String = "",
+        @equality : String = "",
+        @wait_seconds : Int32 = 0,
+      )
+      end
+    end
+
+    struct CawfileTest
+      getter name : String
+      getter assertions : Array(CawfileTestAssertion)
+
+      def initialize(@name : String, @assertions : Array(CawfileTestAssertion) = [] of CawfileTestAssertion)
+      end
+    end
+
+    struct CawfileTriggers
+      include JSON::Serializable
+
+      getter status : String
+      getter schedule : String?
+      getter trigger_message : String?
+      getter tags : Array(String)
+
+      def initialize(
+        @schedule : String? = nil,
+        @trigger_message : String? = nil,
+        @tags : Array(String) = [] of String,
+      )
+        @status = configured? ? "configured" : "not_configured"
+      end
+
+      def configured? : Bool
+        !@schedule.nil? || !@trigger_message.nil? || !@tags.empty?
+      end
+    end
+
     struct CawfileBundle
       getter id : String
       # Embedded config (mirrors ocawe.config.rcl fields)
@@ -56,6 +119,13 @@ module ACD
       getter dsl_source : Array(String)?
       # Federation follow targets extracted from workflow block
       getter follow : Array(String)
+      # ActivityPub resources this workflow actor publishes
+      getter resources : Array(CawfileResource)
+      # Cawfile-level workflow tests.
+      getter tests : Array(CawfileTest)
+      # Declarative trigger metadata. Ocawe stores and exposes this metadata but
+      # does not execute schedules or message matches itself.
+      getter triggers : CawfileTriggers
       # Container configuration (static or nix with packages)
       getter container : CawfileContainer?
       # Whether federation API should be enabled (detected from Api::Federation usage)
@@ -89,6 +159,9 @@ module ACD
         @start_settings : Hash(String, RCL::Value) = {} of String => RCL::Value,
         @dsl_source : Array(String)? = nil,
         @follow : Array(String) = [] of String,
+        @resources : Array(CawfileResource) = [] of CawfileResource,
+        @tests : Array(CawfileTest) = [] of CawfileTest,
+        @triggers : CawfileTriggers = CawfileTriggers.new,
         @container : CawfileContainer? = nil,
         @enable_federation : Bool = false,
         @enable_models : Bool = false,
@@ -143,6 +216,9 @@ module ACD
         enable_federation = detect_federation_from_raw(raw_lines)
         enable_models = detect_models_from_raw(raw_lines)
         name = extract_name_from_raw(raw_lines)
+        resources = extract_comment_resources(raw_lines, name)
+        tests = extract_test_blocks(raw_lines)
+        triggers = extract_triggers(raw_lines)
 
         crystal = extract_crystal_code(raw_lines)
         crystal.registry_files = discover_registry_files(crystal.requires, dir)
@@ -164,6 +240,9 @@ module ACD
             config_webhooks: root_config.config_webhooks,
             start_settings: root_config.start_settings,
             follow: extract_follow_from_raw(slice.dsl_source),
+            resources: resources,
+            tests: tests,
+            triggers: triggers,
             container: container,
             enable_federation: enable_federation,
             enable_models: enable_models,
@@ -183,6 +262,7 @@ module ACD
 
         raw_content = normalize_raw_content(File.read(path))
         raw_lines = raw_content.lines
+        triggers = extract_triggers(raw_lines)
 
         # First, try to parse with RCL to extract settings, import, and follow
         begin
@@ -200,6 +280,8 @@ module ACD
             enable_models = detect_models_from_raw(raw_lines)
             model, input_type, output_type = extract_model_and_validate(raw_lines, dir, dir)
             name = extract_name_from_raw(raw_lines)
+            resources = extract_comment_resources(raw_lines, name)
+            tests = extract_test_blocks(raw_lines)
 
             crystal = extract_crystal_code(raw_lines)
             crystal.registry_files = discover_registry_files(crystal.requires, dir)
@@ -219,6 +301,9 @@ module ACD
               config_webhooks: root_config.config_webhooks,
               start_settings: root_config.start_settings,
               follow: follow,
+              resources: resources,
+              tests: tests,
+              triggers: triggers,
               container: container,
               enable_federation: enable_federation,
               enable_models: enable_models,
@@ -319,6 +404,8 @@ module ACD
 
           model, input_type, output_type = extract_model_and_validate(raw_lines, path, dir)
           name = extract_name_from_raw(raw_lines)
+          resources = extract_comment_resources(raw_lines, name)
+          tests = extract_test_blocks(raw_lines)
 
           crystal = extract_crystal_code(raw_lines)
           crystal.registry_files = discover_registry_files(crystal.requires, dir)
@@ -338,6 +425,9 @@ module ACD
             config_webhooks: webhooks,
             start_settings: start,
             follow: follow,
+            resources: resources,
+            tests: tests,
+            triggers: triggers,
             container: container,
             enable_federation: enable_federation,
             enable_models: enable_models,
@@ -356,6 +446,7 @@ module ACD
 
         raw_content = normalize_raw_content(File.read(path))
         raw_lines = raw_content.lines
+        triggers = extract_triggers(raw_lines)
 
         begin
           doc = RCL.parse_string(raw_content)
@@ -367,6 +458,8 @@ module ACD
             follow = extract_follow(workflow_block)
             container = extract_container_from_raw(raw_lines)
             name = extract_name_from_raw(raw_lines)
+            resources = extract_comment_resources(raw_lines, name)
+            tests = extract_test_blocks(raw_lines)
 
             crystal = extract_crystal_code(raw_lines)
             crystal.registry_files = discover_registry_files(crystal.requires, dir)
@@ -386,6 +479,9 @@ module ACD
               config_webhooks: root_config.config_webhooks,
               start_settings: root_config.start_settings,
               follow: follow,
+              resources: resources,
+              tests: tests,
+              triggers: triggers,
               container: container,
               enable_federation: detect_federation_from_raw(raw_lines),
               enable_models: detect_models_from_raw(raw_lines),
@@ -478,6 +574,8 @@ module ACD
 
           model, input_type, output_type = extract_model_and_validate(raw_lines, path, dir)
           name = extract_name_from_raw(raw_lines)
+          resources = extract_comment_resources(raw_lines, name)
+          tests = extract_test_blocks(raw_lines)
 
           crystal = extract_crystal_code(raw_lines)
           crystal.registry_files = discover_registry_files(crystal.requires, dir)
@@ -497,6 +595,9 @@ module ACD
             config_webhooks: webhooks,
             start_settings: start,
             follow: follow,
+            resources: resources,
+            tests: tests,
+            triggers: triggers,
             container: container,
             enable_federation: detect_federation_from_raw(raw_lines),
             enable_models: detect_models_from_raw(raw_lines),
@@ -602,6 +703,7 @@ module ACD
           config_scheduler: scheduler,
           config_webhooks: webhooks,
           start_settings: start,
+          resources: [] of CawfileResource,
         )
       end
 
@@ -698,7 +800,8 @@ module ACD
           config_telemetry: telemetry,
           config_scheduler: scheduler,
           config_webhooks: webhooks,
-          start_settings: start
+          start_settings: start,
+          resources: [] of CawfileResource,
         )
       end
 
@@ -780,6 +883,14 @@ module ACD
           children << child
         end
         children
+      end
+
+      private def self.normalize_resource_tags(tags : Array(String)) : Array(String)
+        tags
+          .map(&.strip)
+          .reject(&.empty?)
+          .map { |tag| tag.starts_with?('#') ? tag[1..] : tag }
+          .uniq
       end
 
       private def self.extract_follow(workflow_block : RCL::BlockNode) : Array(String)
@@ -872,6 +983,77 @@ module ACD
         slices
       end
 
+      private def self.extract_test_blocks(lines : Array(String)) : Array(CawfileTest)
+        tests = [] of CawfileTest
+
+        idx = 0
+        while idx < lines.size
+          line = lines[idx]
+          match = line.match(/^\s*test\s+"([^"]+)"\s+do\s*(?:#.*)?$/)
+          unless match
+            idx += 1
+            next
+          end
+
+          start_idx = idx + 1
+          depth = 1
+          end_idx = start_idx
+          (start_idx...lines.size).each do |body_idx|
+            stripped = lines[body_idx].strip
+            if stripped.match(/^\s*(test\s+"[^"]+"|workflow\s+"[^"]+"|settings|if\s+|unless\s+|while\s+|until\s+|parallel|loop|dataset)\b.*\bdo\b/) ||
+               stripped.match(/^\s*(if|unless)\s+/)
+              depth += 1
+            elsif stripped.match(/^\s*\bend\b/)
+              depth -= 1
+              if depth == 0
+                end_idx = body_idx
+                break
+              end
+            end
+          end
+
+          assertions = lines[start_idx...end_idx]
+            .compact_map { |body_line| parse_test_assertion(body_line) }
+          tests << CawfileTest.new(match[1], assertions)
+          idx = end_idx + 1
+        end
+
+        tests
+      end
+
+      private def self.parse_test_assertion(line : String) : CawfileTestAssertion?
+        stripped = line.strip
+        match = stripped.match(/^assert\s+"([^"]+)"(?:\s*,\s*(.*))?$/)
+        return nil unless match
+
+        attrs = parse_keyword_string_args(match[2]? || "")
+        CawfileTestAssertion.new(
+          match[1],
+          input: attrs["input"]? || "",
+          equality: attrs["equality"]? || "",
+          wait_seconds: attrs["wait"]?.try(&.to_i?) || 0
+        )
+      end
+
+      private def self.parse_keyword_string_args(raw : String) : Hash(String, String)
+        attrs = {} of String => String
+        raw.scan(/(\w+)\s*:\s*"((?:\\.|[^"])*)"/) do |match|
+          attrs[match[1]] = unescape_quoted_string(match[2])
+        end
+        raw.scan(/(\w+)\s*:\s*(\d+)/) do |match|
+          attrs[match[1]] = match[2]
+        end
+        attrs
+      end
+
+      private def self.unescape_quoted_string(value : String) : String
+        value
+          .gsub("\\\"", "\"")
+          .gsub("\\n", "\n")
+          .gsub("\\t", "\t")
+          .gsub("\\\\", "\\")
+      end
+
       private def self.service_annotation?(annotations : Array(String)) : Bool
         annotations.any? { |line| line.match(/^\s*@\[Service(?:\([^)]*\))?\]\s*$/) }
       end
@@ -953,6 +1135,9 @@ module ACD
           image = img_match[1]
         end
         mode = packages.empty? ? ContainerMode::Static : ContainerMode::Nix
+        if mode_match = inner.match(/mode\s*[:=]\s*"([^"]+)"/)
+          mode = mode_match[1].downcase == "nix" ? ContainerMode::Nix : ContainerMode::Static
+        end
         CawfileContainer.new(mode: mode, packages: packages, image: image, files: files)
       end
 
@@ -1064,6 +1249,53 @@ module ACD
           end
         end
         nil
+      end
+
+      private def self.extract_comment_resources(lines : Array(String), name : String?) : Array(CawfileResource)
+        resource_name = name.to_s.strip
+        resource_id = resource_id_from_name(resource_name)
+        return [] of CawfileResource if resource_id.empty?
+
+        [
+          CawfileResource.new(
+            id: resource_id,
+            name: resource_name.empty? ? resource_id : resource_name,
+            description: extract_org_header(lines, "description") || "",
+            tags: extract_org_tags(lines),
+          ),
+        ]
+      end
+
+      private def self.resource_id_from_name(name : String) : String
+        raw = name.strip
+        raw = raw.split(/[({\s]/).first?.to_s
+        raw.downcase
+          .gsub(/[^a-z0-9_-]/, "-")
+          .gsub(/-+/, "-")
+          .gsub(/^-+|-+$/, "")
+      end
+
+      private def self.extract_org_header(lines : Array(String), key : String) : String?
+        lines.each do |line|
+          stripped = line.strip
+          if match = stripped.match(/^#\+#{Regex.escape(key)}:\s*(.+)$/i)
+            return match[1].strip
+          end
+        end
+        nil
+      end
+
+      private def self.extract_org_tags(lines : Array(String)) : Array(String)
+        raw = extract_org_header(lines, "tags") || ""
+        normalize_resource_tags(raw.split(';'))
+      end
+
+      private def self.extract_triggers(lines : Array(String)) : CawfileTriggers
+        CawfileTriggers.new(
+          schedule: extract_org_header(lines, "ocawe-schedule"),
+          trigger_message: extract_org_header(lines, "ocawe-trigger-message"),
+          tags: extract_org_tags(lines),
+        )
       end
 
       private def self.parse_value(raw : String) : RCL::Value

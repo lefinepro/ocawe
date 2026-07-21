@@ -5,7 +5,7 @@ module OcaweCore
       @runtime_bin : String?
 
       private DEFAULT_PORT  = 4111
-      private CORE_COMMANDS = Set{"build", "dev", "up", "shell", "exec", "pull", "-v", "--version", "-h", "--help"}
+      private CORE_COMMANDS = Set{"build", "dev", "up", "shell", "exec", "test", "pull", "-v", "--version", "-h", "--help"}
 
       def initialize
       end
@@ -24,6 +24,8 @@ module OcaweCore
           shell(args)
         when "exec"
           exec(args)
+        when "test"
+          test(args)
         when "pull"
           pull(args)
         when "-v", "--version"
@@ -56,6 +58,8 @@ module OcaweCore
                 Open an interactive shell inside the running workflow environment.
             exec [PATH] -- COMMAND [ARG...]
                 Execute a command inside the running workflow environment.
+            test [PATH]
+                Run Cawfile test blocks against ORATOR_URL/OCAWE_TEST_BASE_URL.
             pull REF
                 Clone or fast-forward pull a git Cawfile reference.
             -v, --version

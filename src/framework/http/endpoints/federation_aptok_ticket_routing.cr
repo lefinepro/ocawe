@@ -1,8 +1,8 @@
 module ACD
   module Kemal
     class App
-      private def process_aptok_inbox_activity(activity : Aptok::JsonMap) : Nil
-        return if process_registered_aptok_inbox_activity(activity)
+      private def process_aptok_inbox_activity(activity : Aptok::JsonMap) : Bool
+        return true if process_registered_aptok_inbox_activity(activity)
 
         remote_actor = activity["actor"]?.try(&.as_s?).to_s
         follow = if remote_actor.empty?
@@ -45,14 +45,16 @@ module ACD
         activity_type = activity["type"]?.try(&.as_s?).to_s
         remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
         status = follow["status"]?.try(&.as_s?).to_s
+        STDERR.puts "[federation] inbox activity type=#{activity_type} actor=#{remote_actor} follow_status=#{status}"
 
         if activity_type == "Accept"
           update_aptok_follow_state(remote_actor, status: "active", error: "") unless remote_actor.empty?
           return true
         end
 
-        return false unless status.empty? || status == "active"
+        return false unless status.empty? || status == "active" || status == "following" || status == "pending"
         ticket_payload = extract_ticket_activity_payload(activity)
+        STDERR.puts "[federation] inbox activity ignored: no ticket payload type=#{activity_type}" unless ticket_payload
         return false unless ticket_payload
 
         process_ticket_create_activity(follow, activity, ticket_payload[:ticket], ticket_payload[:activity_type])
@@ -144,12 +146,16 @@ module ACD
         local_actor = @settings.federation.local_actor if local_actor.empty?
         local_domain = local_domain_from_actor_url(local_actor)
         workflow_actor = resolve_ticket_workflow_actor(activity_doc, ticket, local_domain, local_actor)
+        STDERR.puts "[federation] ticket ignored: empty workflow actor" if workflow_actor.empty?
         return false if workflow_actor.empty?
 
         workflow_id = workflow_id_from_actor(workflow_actor)
+        workflow_id = registered_ticket_workflow_id(workflow_id, local_actor)
+        STDERR.puts "[federation] ticket ignored: empty workflow id actor=#{workflow_actor}" if workflow_id.empty?
         return false if workflow_id.empty?
 
         task = ticket["name"]?.try(&.as_s?) || ticket["summary"]?.try(&.as_s?) || ""
+        STDERR.puts "[federation] ticket ignored: empty task ticket=#{ticket["id"]?.try(&.as_s?).to_s}" if task.strip.empty?
         return false if task.strip.empty?
         content = ticket["content"]?.try(&.as_s?) || ""
         activity = infer_ticket_workflow_activity(activity_doc, ticket, incoming_activity_type)
@@ -220,7 +226,9 @@ module ACD
           published_at: received_at,
         )
         true
-      rescue
+      rescue ex
+        STDERR.puts "[federation] ticket activity processing failed: #{ex.message || ex.class.name}"
+        ex.backtrace?.try(&.each { |line| STDERR.puts line })
         false
       end
 
@@ -230,12 +238,28 @@ module ACD
         return "" if parts.empty?
         actor_index = -1
         parts.each_with_index { |part, idx| actor_index = idx if part == "actors" }
-        return parts[actor_index + 1] if actor_index >= 0 && actor_index + 1 < parts.size
+        if actor_index >= 0 && actor_index + 1 < parts.size
+          candidate = parts[actor_index + 1]
+          ids = workflow_ids
+          return ids.first if ids.size == 1 && !ids.includes?(candidate)
+          return candidate
+        end
         fallback = parts.last? || ""
         ids = workflow_ids
         return fallback if fallback.empty? || ids.empty? || ids.includes?(fallback)
         return ids.first if ids.size == 1
         fallback
+      end
+
+      private def registered_ticket_workflow_id(candidate : String, local_actor : String) : String
+        ids = workflow_ids
+        return candidate if ids.empty? || ids.includes?(candidate)
+
+        local_candidate = workflow_id_from_actor(local_actor)
+        return local_candidate if ids.includes?(local_candidate)
+
+        preferred = ids.find { |id| id != "actor" && id != "server" }
+        preferred || ids.first? || candidate
       end
 
       private def infer_queue_from_actor(remote_actor : String) : String

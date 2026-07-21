@@ -1,4 +1,5 @@
 require "option_parser"
+require "file_utils"
 require "../../framework/discovery/cawfile_loader"
 require "../../framework/discovery/git_https_puller"
 require "../../framework/builder"
@@ -231,6 +232,38 @@ module OcaweCore
         abort_unless_success(run_interactive_cmd(command))
       end
 
+      private def test(args : Array(String)) : Nil
+        workflow_path = args.shift?
+        workflows_root = resolve_workflows_root(workflow_path)
+        bundle = ACD::Discovery::CawfileLoader.load_root(workflows_root)
+        unless bundle
+          STDERR.puts "Error: no Cawfile workflow found for #{workflows_root}"
+          exit(1)
+        end
+
+        tests = bundle.tests
+        if tests.empty?
+          puts "[ocawe] no Cawfile tests found"
+          return
+        end
+
+        runner = Ocawe::Testing::CawfileRunner.new(Ocawe::Testing::CawfileRunner.default_base_url)
+        results = runner.run(bundle)
+        failed = results.count { |result| !result.passed }
+        results.each do |result|
+          if result.passed
+            puts "ok #{result.name} assert #{result.workflow_id}"
+          else
+            puts "not ok #{result.name} assert #{result.workflow_id}"
+            puts "  expected: #{result.expected}"
+            puts "  actual: #{result.actual}" unless result.actual.empty?
+            puts "  missing tags: #{result.missing_tags.join(", ")}" unless result.missing_tags.empty?
+            puts "  error: #{result.error}" if result.error
+          end
+        end
+        exit(1) if failed > 0
+      end
+
       private def pull(args : Array(String)) : Nil
         if args.empty?
           STDERR.puts "Error: ocawe pull requires REF"
@@ -446,7 +479,40 @@ module OcaweCore
       end
 
       private def build_runtime_entrypoint : String
-        runtime_entry
+        cawfile = ACD::Discovery::CawfileLoader.find_cawfile(Dir.current)
+        return runtime_entry unless cawfile
+
+        cawfile_bundle = ACD::Discovery::CawfileLoader.load(Dir.current, "root")
+        crystal_loader = cawfile_bundle.try(&.crystal_loader)
+        return runtime_entry unless crystal_loader
+
+        entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
+        entrypoint_dir = File.dirname(entrypoint)
+        lines = [] of String
+        lines << %(require "#{require_path(entrypoint_dir, runtime_entry)}")
+        crystal_loader.code.each do |line|
+          lines << runtime_entry_line(line, entrypoint_dir)
+        end
+        crystal_loader.registry_files.each do |path|
+          lines << %(require "#{require_path(entrypoint_dir, path)}")
+        end
+        lines << ""
+        lines << "OcaweCore.run"
+        FileUtils.mkdir_p(File.dirname(entrypoint))
+        write_file_if_changed(entrypoint, lines.join("\n"))
+        entrypoint
+      end
+
+      private def runtime_entry_line(line : String, entrypoint_dir : String) : String
+        stripped = line.strip
+        if match = stripped.match(/^require\s+"([^"]+)"/)
+          required = match[1]
+          if required.starts_with?(".")
+            target = File.expand_path(required, Dir.current)
+            return %(require "#{require_path(entrypoint_dir, target)}")
+          end
+        end
+        line
       end
 
       private def write_file_if_changed(path : String, content : String) : Nil

@@ -15,6 +15,10 @@ description: "Markdown agent"
 
 Markdown prompt.
 
+<output-ui>
+<weather-widget location="{{location}}" temperature="{{temperature}}"></weather-widget>
+</output-ui>
+
 ```crystal schema:input
 Schema::Types.object({"input" => Schema::Types.any()}, strict: false)
 ```
@@ -30,6 +34,10 @@ description: "Org agent"
 ---
 
 Org prompt.
+
+#+begin_output ui
+<weather-widget location="{{location}}" condition="{{condition}}"></weather-widget>
+#+end_output
 
 #+begin_src crystal schema:input
 Schema::Types.object({"input" => Schema::Types.any()}, strict: false)
@@ -48,11 +56,13 @@ ORG
       markdown_agent.prompt.should eq("Markdown prompt.")
       markdown_agent.input_schema_dsl.not_nil!.should contain("Schema::Types.object")
       markdown_agent.output_schema_dsl.not_nil!.should contain("last_response")
+      markdown_agent.output_ui_template.not_nil!.should contain("<weather-widget")
 
       org_agent = agents.find! { |agent| agent.id == "org-agent" }
       org_agent.prompt.should eq("Org prompt.")
       org_agent.input_schema_dsl.not_nil!.should contain("Schema::Types.object")
       org_agent.output_schema_dsl.not_nil!.should contain("last_response")
+      org_agent.output_ui_template.not_nil!.should contain("condition")
     ensure
       FileUtils.rm_rf(root)
     end

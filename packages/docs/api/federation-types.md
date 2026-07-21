@@ -62,3 +62,45 @@ When `Api::Federation::Inbox` or `Api::Federation::Outbox` is included in a Cawf
 4. `bootstrap_federation_subscriptions` auto-subscribes to `follow` targets
 
 No manual configuration needed — just include the types.
+
+## Widget Blocks
+
+`Api::Widgets` builds ActivityPub JSON for UI widgets without emitting HTML or CSS.
+Kefine owns rendering and styling; Ocawe only supplies ActivityStreams objects and
+grid layout.
+
+Use `Api::Widgets.block` to wrap any ActivityStreams object as a layout block:
+
+```crystal
+article = Aptok.article(
+  "https://example.test/widgets/weather/article",
+  name: "Weather in Berlin",
+  summary: "Sunny, 21 C",
+  content: {"location" => "Berlin", "temperature" => 21, "unit" => "C"}.to_json,
+  media_type: "application/json"
+)
+
+block = Api::Widgets.block(
+  "https://example.test/widgets/weather/block",
+  article,
+  col: 1,
+  row: 1,
+  width: 4,
+  height: 2,
+  unit: "weather"
+)
+
+page = Api::Widgets.ordered_page(
+  "https://example.test/widgets?page=1",
+  "https://example.test/widgets",
+  [block]
+)
+```
+
+The emitted block has:
+
+- `@context` with ActivityStreams and marketplace/valueflows terms.
+- `type: ["Object", "Block"]` so the block remains an ActivityStreams object.
+- `position: { "col": n, "row": n }`, `width`, and `height` as positive grid units.
+- `object` containing the semantic payload, such as `Article`, `Note`, `Image`, or `Document`.
+- `resourceQuantity.hasUnit` carrying the marketplace unit (`weather`, `chart`, `table`, etc.).

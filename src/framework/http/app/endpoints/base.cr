@@ -11,7 +11,12 @@ module ACD
         @port : Int32,
         @settings : Ocawe::Config::Settings = Ocawe::Config::Settings.default,
       )
-        @locator = Discovery::WorkflowLocator.new(Dir.current)
+        configured_generated_root = ENV["OCAWE_GENERATED_WORKFLOWS_ROOT"]?
+        @generated_workflows_root = File.expand_path(
+          configured_generated_root || File.join(Dir.current, ".ocawe", "generated-workflows")
+        )
+        @locator = Discovery::WorkflowLocator.new(Dir.current, generated_root: @generated_workflows_root)
+        @generated_workflow_writer = Discovery::GeneratedWorkflowWriter.new(@generated_workflows_root)
         @agent_loader = Agents::Loader.new
         @skill_loader = Skills::Loader.new
         @workflow_engine = Ocawe::Workflow::Engine.new
@@ -28,6 +33,15 @@ module ACD
         @workflow_ids = [] of String
         @service_workflow_ids = [] of String
         @workflow_follow_targets = [] of String
+        @workflow_federation_resources = {} of String => Array(NamedTuple(
+          id: String,
+          name: String,
+          description: String,
+          action: String,
+          purpose: String,
+          tags: Array(String),
+        ))
+        @workflow_trigger_index = {} of String => Discovery::CawfileTriggers
         @started_service_workflows = Set(String).new
         @workflow_index = {} of String => NamedTuple(
           source_root_type: String,
@@ -55,6 +69,7 @@ module ACD
           model: String?,
           default_model: String?,
           file_path: String,
+          output_ui_template: String?,
         )
         @tools_index = [] of NamedTuple(
           id: String,
@@ -62,6 +77,8 @@ module ACD
         )
         @webhook_run_snapshots = {} of String => JSON::Any
         @webhook_run_lock = Mutex.new
+        @workflow_creation_lock = Mutex.new
+        @reload_lock = Mutex.new
         @cache_lock = Mutex.new
       end
 
@@ -134,7 +151,7 @@ module ACD
             next if current[:fingerprint] == fingerprint
 
             begin
-              reload_cache!(current[:bundles])
+              reload_cache!
               start_service_workflows
               fingerprint = current[:fingerprint]
               puts "[ocawecore] workflow cache reloaded"
@@ -146,6 +163,10 @@ module ACD
       end
 
       private def reload_cache!(bundles : Array(Discovery::WorkflowBundle)? = nil)
+        @reload_lock.synchronize { rebuild_cache!(bundles) }
+      end
+
+      private def rebuild_cache!(bundles : Array(Discovery::WorkflowBundle)? = nil)
         bundles ||= @locator.list_workflows
         @dataset_service.reset_dsl_sources!
         rebuilt_engine = Ocawe::Workflow::Engine.new
@@ -176,6 +197,7 @@ module ACD
           model: String?,
           default_model: String?,
           file_path: String,
+          output_ui_template: String?,
         )
         tools_index = [] of NamedTuple(
           id: String,
@@ -183,6 +205,15 @@ module ACD
         )
         service_workflow_ids = [] of String
         follow_targets = Set(String).new
+        federation_resources = {} of String => Array(NamedTuple(
+          id: String,
+          name: String,
+          description: String,
+          action: String,
+          purpose: String,
+          tags: Array(String),
+        ))
+        trigger_index = {} of String => Discovery::CawfileTriggers
         global_agents = @agent_loader.load_dir("./agents")
 
         bundles.each do |bundle|
@@ -196,6 +227,13 @@ module ACD
               normalized = target.strip
               follow_targets << normalized unless normalized.empty?
             end
+            trigger_index[bundle.id] = cawfile.triggers
+          else
+            trigger_index[bundle.id] = Discovery::CawfileTriggers.new
+          end
+          resources = federation_resources_from_bundle(bundle)
+          unless resources.empty?
+            federation_resources[bundle.id] = resources
           end
           definition = load_workflow_definition(bundle, loaded_agents)
           rebuilt_engine.register(definition)
@@ -220,14 +258,15 @@ module ACD
           loaded_agents.each do |agent|
             qualified_id = "#{bundle.id}:#{agent.id}"
             agents_index[qualified_id] = {
-              id:            qualified_id,
-              workflow_id:   bundle.id,
-              name:          agent.id,
-              description:   agent.description,
-              prompt:        agent.prompt,
-              model:         agent.model,
-              default_model: definition.default_model,
-              file_path:     agent.file_path,
+              id:                 qualified_id,
+              workflow_id:        bundle.id,
+              name:               agent.id,
+              description:        agent.description,
+              prompt:             agent.prompt,
+              model:              agent.model,
+              default_model:      definition.default_model,
+              file_path:          agent.file_path,
+              output_ui_template: agent.output_ui_template,
             }
           end
 
@@ -254,6 +293,8 @@ module ACD
           @workflow_ids = ids
           @service_workflow_ids = service_workflow_ids
           @workflow_follow_targets = follow_targets.to_a.sort
+          @workflow_federation_resources = federation_resources
+          @workflow_trigger_index = trigger_index
           @workflow_index = index
           @skills_index = skills_index
           @agents_index = agents_index
@@ -306,8 +347,40 @@ module ACD
         @cache_lock.synchronize { @workflow_follow_targets.dup }
       end
 
+      private def workflow_federation_resources(workflow_id : String)
+        @cache_lock.synchronize { @workflow_federation_resources[workflow_id]? || [] of NamedTuple(id: String, name: String, description: String, action: String, purpose: String, tags: Array(String)) }
+      end
+
+      private def workflow_actor_name(workflow_id : String) : String
+        resources = workflow_federation_resources(workflow_id)
+        name = resources.first?.try(&.[:name]).to_s.strip
+        name.empty? ? workflow_id : name
+      end
+
+      private def federation_resources_from_bundle(bundle)
+        resources = bundle.resources.map do |resource|
+          {
+            id:          resource.id,
+            name:        resource.name,
+            description: resource.description,
+            action:      resource.action,
+            purpose:     resource.purpose,
+            tags:        resource.tags,
+          }
+        end
+        return resources unless resources.empty?
+
+        [] of NamedTuple(id: String, name: String, description: String, action: String, purpose: String, tags: Array(String))
+      end
+
       private def workflow_by_id(workflow_id : String)
         @cache_lock.synchronize { @workflow_index[workflow_id]? }
+      end
+
+      private def workflow_trigger_metadata(workflow_id : String) : Discovery::CawfileTriggers
+        @cache_lock.synchronize do
+          @workflow_trigger_index[workflow_id]? || Discovery::CawfileTriggers.new
+        end
       end
 
       private def workflows : Array(NamedTuple(id: String, name: String, description: String, default_model: String?, agents: Array(String), skills: Array(String), tools: Array(String)))
@@ -338,12 +411,58 @@ module ACD
         @cache_lock.synchronize { @skills_index[skill_id]? }
       end
 
-      private def agents : Array(NamedTuple(id: String, workflow_id: String, name: String, description: String, prompt: String, model: String?, default_model: String?, file_path: String))
+      private def agents : Array(NamedTuple(id: String, workflow_id: String, name: String, description: String, prompt: String, model: String?, default_model: String?, file_path: String, output_ui_template: String?))
         @cache_lock.synchronize { @agents_index.values.to_a }
       end
 
       private def agent_by_id(agent_id : String)
         @cache_lock.synchronize { @agents_index[agent_id]? }
+      end
+
+      private def output_ui_template_for_workflow(workflow_id : String) : String?
+        @cache_lock.synchronize do
+          @agents_index.values.find do |agent|
+            agent[:workflow_id] == workflow_id && !agent[:output_ui_template].to_s.strip.empty?
+          end.try(&.[:output_ui_template])
+        end
+      end
+
+      private def output_ui_blocks(template : String?, data : Ocawe::Workflow::AnyHash) : Array(JSON::Any)
+        return [] of JSON::Any if template.to_s.strip.empty?
+
+        html = render_output_ui_template(template.not_nil!, data).strip
+        return [] of JSON::Any if html.empty?
+
+        [
+          JSON.parse({
+            "type"   => "web_component",
+            "format" => "html",
+            "html"   => html,
+            "source" => "agent_template",
+          }.to_json),
+        ]
+      end
+
+      private def render_output_ui_template(template : String, data : Ocawe::Workflow::AnyHash) : String
+        template.gsub(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/) do
+          key = $1
+          output_ui_value(data, key).to_s
+        end
+      end
+
+      private def output_ui_value(data : Ocawe::Workflow::AnyHash, key : String) : String
+        value = nil.as(JSON::Any?)
+        key.split('.').each_with_index do |part, index|
+          if index == 0
+            value = data[part]?
+          else
+            value = value.try(&.as_h?).try(&.[part]?)
+          end
+        end
+
+        return "" unless value
+        any = value.not_nil!
+        any.as_s? || any.as_i64?.try(&.to_s) || any.as_f?.try(&.to_s) || any.as_bool?.try(&.to_s) || any.to_json
       end
 
       private def merge_agents(

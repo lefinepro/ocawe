@@ -9,11 +9,11 @@ module ACD
           {
             "agents" => agents.map { |agent|
               {
-                "id" => agent[:id],
-                "name" => agent[:name],
-                "workflow_id" => agent[:workflow_id],
-                "description" => agent[:description],
-                "model" => agent[:model],
+                "id"            => agent[:id],
+                "name"          => agent[:name],
+                "workflow_id"   => agent[:workflow_id],
+                "description"   => agent[:description],
+                "model"         => agent[:model],
                 "default_model" => agent[:default_model],
               }
             },
@@ -30,13 +30,13 @@ module ACD
 
           env.response.content_type = "application/json"
           {
-            "id" => agent[:id],
-            "name" => agent[:name],
-            "workflow_id" => agent[:workflow_id],
-            "description" => agent[:description],
-            "model" => agent[:model],
+            "id"            => agent[:id],
+            "name"          => agent[:name],
+            "workflow_id"   => agent[:workflow_id],
+            "description"   => agent[:description],
+            "model"         => agent[:model],
             "default_model" => agent[:default_model],
-            "prompt" => agent[:prompt],
+            "prompt"        => agent[:prompt],
           }.to_json
         end
 
@@ -78,17 +78,26 @@ module ACD
             next({error: {type: "generation_error", message: ex.message || "agent generation failed"}}.to_json)
           end
           result = agent_result.not_nil!
+          output_data = {
+            "text"        => JSON.parse(result.content.to_json),
+            "content"     => JSON.parse(result.content.to_json),
+            "agent_id"    => JSON.parse(agent[:id].to_json),
+            "workflow_id" => JSON.parse(agent[:workflow_id].to_json),
+          } of String => JSON::Any
+          output_blocks = output_ui_blocks(agent[:output_ui_template], output_data)
 
           env.response.content_type = "application/json"
-          {
-            "agent_id" => agent[:id],
-            "workflow_id" => agent[:workflow_id],
-            "agent_type" => result.agent_type,
-            "provider" => result.provider,
-            "model" => result.model,
-            "text" => result.content,
-            "metadata" => result.metadata,
-          }.to_json
+          payload = {
+            "agent_id"    => JSON.parse(agent[:id].to_json),
+            "workflow_id" => JSON.parse(agent[:workflow_id].to_json),
+            "agent_type"  => JSON.parse(result.agent_type.to_json),
+            "provider"    => JSON.parse(result.provider.to_json),
+            "model"       => JSON.parse(result.model.to_json),
+            "text"        => JSON.parse(result.content.to_json),
+            "metadata"    => JSON.parse(result.metadata.to_json),
+          } of String => JSON::Any
+          payload["output_blocks"] = JSON.parse(output_blocks.to_json) unless output_blocks.empty?
+          payload.to_json
         end
       end
 

@@ -141,6 +141,19 @@ module ACD
             )
             next
           end
+          if match = line.match(/^\s*follow\s+\[(.*)\](.*)$/)
+            actors = match[1].scan(/"([^"]+)"/).map { |m| m[1] }
+            attributes = parse_line_attributes(match[2]? || "", ctx.workflow_file, "follow")
+            input_schema = compile_optional_function_schema(attributes["input_schema"]?, ctx.workflow_file, "follow", "input")
+            output_schema = compile_optional_function_schema(attributes["output_schema"]?, ctx.workflow_file, "follow", "output")
+            ctx.workflow.follow(
+              actors,
+              id: parse_optional_string(attributes["id"]?) || "follow",
+              input_schema: input_schema,
+              output_schema: output_schema,
+            )
+            next
+          end
           if line.match(/^\s*@\[Workspace\(/)
             workspace_annotation = line
             unless workspace_annotation.includes?(")]")

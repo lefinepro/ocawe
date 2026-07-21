@@ -4,6 +4,8 @@ OpenAPI snapshot is stored in `docs/api/openapi.json`.
 
 Key endpoints:
 - `GET /v1/workflows`
+- `POST /v1/workflows/create`
+- `DELETE /v1/workflows/generated/{id}`
 - `POST /v1/workflows/{workflowId}/runs`
 - `POST /v1/workflows/{workflowId}/runs/{runId}/resume`
 - `POST /v1/triggers/workflows/{id}`
@@ -56,3 +58,6 @@ Notes:
 - Runs API supports inline `resources` object in both `POST /runs` and `POST /resume`; runtime merges it into `state["resources"]`.
 - Triggers API (`/v1/triggers/*`) is the canonical invocation layer for workflows, agents, skills, and functions.
 - `GET /v1/workflows/{workflowId}` includes logger metadata when present: `logger` (workflow default) and `node_loggers` (node overrides from `@[Logger(...)]`).
+- Generated workflow create/delete endpoints require `Authorization: Bearer <OCAWE_API_KEY>` and fail closed when the key is not configured.
+- `POST /v1/workflows/create` atomically writes a generated `Cawfile`, reloads the runtime cache, and returns an editable `assistant -> output` canvas graph. Generated files live under `OCAWE_GENERATED_WORKFLOWS_ROOT`, or `.ocawe/generated-workflows` under the active workflows root by default.
+- `DELETE /v1/workflows/generated/{id}` removes only a marked API-generated `Cawfile`; it restores the staged artifact if cache reload fails and preserves unrelated files.

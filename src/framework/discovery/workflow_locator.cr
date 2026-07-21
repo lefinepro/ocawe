@@ -24,27 +24,39 @@ module ACD
         @service : Bool = false,
       )
       end
+
+      def resources : Array(CawfileResource)
+        @cawfile.try(&.resources) || [] of CawfileResource
+      end
     end
 
     class WorkflowLocator
-      def initialize(@preferred_root : String = "./src/workflows")
+      def initialize(
+        @preferred_root : String = "./src/workflows",
+        generated_root : String? = nil,
+      )
+        @generated_root = generated_root
+        if generated_root && File.expand_path(generated_root) == File.expand_path(@preferred_root)
+          @generated_root = nil
+        end
       end
 
       def list_workflows : Array(WorkflowBundle)
-        ids = Set(String).new
         bundles = [] of WorkflowBundle
         root_bundles = root_cawfile_bundles
-
         bundles.concat(root_bundles)
+        seen = root_bundles.map(&.id).to_set
 
-        each_bundle_dir(@preferred_root) { |name| ids << name }
-
-        ids.to_a.sort.each do |id|
-          begin
-            if bundle = resolve?(id, root_bundles)
-              bundles << bundle
+        workflow_roots.each do |entry|
+          ids = Set(String).new
+          each_bundle_dir(entry[:path]) { |name| ids << name }
+          ids.to_a.sort.each do |id|
+            next if seen.includes?(id)
+            begin
+              bundles << bundle_from_dir(id, File.join(entry[:path], id), entry[:source_type])
+              seen << id
+            rescue
             end
-          rescue
           end
         end
 
@@ -69,7 +81,22 @@ module ACD
           return bundle_from_dir(id, preferred_dir, "preferred")
         end
 
+        if generated_root = @generated_root
+          generated_dir = File.join(generated_root, id)
+          if Dir.exists?(generated_dir)
+            return bundle_from_dir(id, generated_dir, "generated")
+          end
+        end
+
         nil
+      end
+
+      private def workflow_roots
+        roots = [{path: @preferred_root, source_type: "preferred"}]
+        if generated_root = @generated_root
+          roots << {path: generated_root, source_type: "generated"}
+        end
+        roots
       end
 
       private def bundle_from_dir(id : String, dir : String, source_type : String)

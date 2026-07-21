@@ -15,6 +15,7 @@
 #   end
 require "json"
 require "./acp"
+require "./widgets"
 
 module Api
   # Shared base fields present in most request types.

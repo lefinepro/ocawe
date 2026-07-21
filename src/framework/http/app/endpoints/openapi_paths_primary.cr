@@ -38,6 +38,68 @@ module ACD
                 },
               },
             },
+            "/v1/workflows/create" => {
+              "post" => {
+                "tags" => ["Workflows"],
+                "summary" => "Create and register a generated Cawfile workflow",
+                "security" => [{"bearerAuth" => [] of String}],
+                "requestBody" => {
+                  "required" => true,
+                  "content" => {
+                    "application/json" => {
+                      "schema" => {"$ref" => "#/components/schemas/GeneratedWorkflowCreateRequest"},
+                    },
+                  },
+                },
+                "responses" => {
+                  "201" => {
+                    "description" => "Workflow created and registered",
+                    "content" => {
+                      "application/json" => {
+                        "schema" => {"$ref" => "#/components/schemas/GeneratedWorkflowCreateResponse"},
+                      },
+                    },
+                  },
+                  "400" => {"description" => "Invalid request"},
+                  "401" => {"description" => "Missing or invalid bearer token"},
+                  "409" => {"description" => "Workflow already exists"},
+                  "413" => {"description" => "Request body is too large"},
+                  "422" => {"description" => "Cawfile creation or registration failed"},
+                  "503" => {"description" => "Generated workflow API is disabled"},
+                },
+              },
+            },
+            "/v1/workflows/generated/{id}" => {
+              "delete" => {
+                "tags" => ["Workflows"],
+                "summary" => "Delete and unregister an API-generated workflow",
+                "security" => [{"bearerAuth" => [] of String}],
+                "parameters" => [
+                  {
+                    "name" => "id",
+                    "in" => "path",
+                    "required" => true,
+                    "schema" => {"type" => "string", "pattern" => "^[a-z0-9][a-z0-9_-]{0,63}$"},
+                  },
+                ],
+                "responses" => {
+                  "200" => {
+                    "description" => "Generated workflow deleted and unregistered",
+                    "content" => {
+                      "application/json" => {
+                        "schema" => {"$ref" => "#/components/schemas/GeneratedWorkflowDeleteResponse"},
+                      },
+                    },
+                  },
+                  "400" => {"description" => "Invalid workflow id"},
+                  "401" => {"description" => "Missing or invalid bearer token"},
+                  "404" => {"description" => "Generated workflow not found"},
+                  "409" => {"description" => "Cawfile is not managed by the generated workflow API"},
+                  "422" => {"description" => "Deletion or cache reload failed"},
+                  "503" => {"description" => "Generated workflow API is disabled"},
+                },
+              },
+            },
             "/v1/workflows/{workflowId}" => {
               "get" => {
                 "tags" => ["Workflows"],
