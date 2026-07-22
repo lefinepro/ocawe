@@ -115,6 +115,8 @@ module OcaweCore
         workflows_root = resolve_workflows_root(args.first?)
         FileUtils.mkdir_p(workflows_root)
         runtime_bin = runtime_bin()
+        puts "[ocawe] preparing #{dev_mode ? "dev" : "up"} runtime binary=#{runtime_bin} workflows_root=#{workflows_root}"
+        STDOUT.flush
 
         port ||= read_port_from_cawfile(workflows_root)
 
@@ -468,7 +470,11 @@ module OcaweCore
       end
 
       private def ensure_runtime_binary(output : String) : Bool
-        return true if File.file?(output)
+        if File.file?(output)
+          puts "[ocawe] using existing runtime: #{output}"
+          STDOUT.flush
+          return true
+        end
 
         unless system("command -v crystal > /dev/null 2>&1")
           STDERR.puts "Error: runtime binary not found: #{output}"
@@ -476,6 +482,8 @@ module OcaweCore
           return false
         end
 
+        puts "[ocawe] building runtime: #{output}"
+        STDOUT.flush
         Dir.cd(project_root) do
           run_cmd("mkdir -p build && crystal build #{runtime_entry} -D ocawe_runtime_main --release --no-debug -o #{output}")
         end
