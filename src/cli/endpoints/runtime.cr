@@ -113,6 +113,7 @@ module OcaweCore
         end
 
         workflows_root = resolve_workflows_root(args.first?)
+        FileUtils.mkdir_p(workflows_root)
         runtime_bin = runtime_bin()
 
         port ||= read_port_from_cawfile(workflows_root)
