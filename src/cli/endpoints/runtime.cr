@@ -164,7 +164,7 @@ module OcaweCore
         effective_port = (port || DEFAULT_PORT).not_nil!
         puts "[ocawe] starting #{dev_mode ? "dev" : "up"} runtime port=#{effective_port} workflows_root=#{workflows_root}"
         STDOUT.flush
-        runtime_args = ["--port", "#{effective_port}"]
+        runtime_args = ["--port=#{effective_port}"]
         runtime_command = nil.as(String?)
         if image = container_tag
           if container_runtime_available?
@@ -206,7 +206,11 @@ module OcaweCore
             terminate(runtime)
             exit(0)
           end
-          runtime.wait
+          status = runtime.wait
+          unless status.success?
+            STDERR.puts "[ocawe] runtime exited"
+            exit(1)
+          end
         end
       end
 
@@ -347,7 +351,7 @@ module OcaweCore
           if resolved = candidates.find { |path| ACD::Discovery::CawfileLoader.find_cawfile(path) }
             resolved
           else
-            File.join(File.expand_path(Dir.current), workflow_path)
+            File.expand_path(workflow_path)
           end
         else
           Dir.current
