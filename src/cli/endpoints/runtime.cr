@@ -160,6 +160,8 @@ module OcaweCore
         end
 
         effective_port = (port || DEFAULT_PORT).not_nil!
+        puts "[ocawe] starting #{dev_mode ? "dev" : "up"} runtime port=#{effective_port} workflows_root=#{workflows_root}"
+        STDOUT.flush
         runtime_args = ["--port", "#{effective_port}"]
         runtime_command = nil.as(String?)
         if image = container_tag

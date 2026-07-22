@@ -56,6 +56,8 @@ module OcaweCore
     auto_start_environment(workflows_root)
 
     ENV["OCAWE_PORT"] = port.to_s
+    puts "[ocawecore] starting http port=#{port} workflows_root=#{workflows_root}"
+    STDOUT.flush
 
     ACD::Kemal::App.new(
       port,
