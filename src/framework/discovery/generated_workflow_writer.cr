@@ -21,6 +21,25 @@ module ACD
       end
     end
 
+    struct GeneratedWorkflowReplacementArtifact
+      getter id : String
+      getter content : String
+      getter previous_content : String
+      getter relative_path : String
+      getter workflow_dir : String
+      getter cawfile_path : String
+
+      def initialize(
+        @id : String,
+        @content : String,
+        @previous_content : String,
+        @relative_path : String,
+        @workflow_dir : String,
+        @cawfile_path : String,
+      )
+      end
+    end
+
     struct GeneratedWorkflowDeletionArtifact
       getter id : String
       getter content : String
@@ -89,6 +108,61 @@ module ACD
       def rollback(artifact : GeneratedWorkflowArtifact) : Nil
         expected = workflow_dir_for(artifact.id)
         FileUtils.rm_rf(expected) if artifact.workflow_dir == expected && Dir.exists?(expected)
+      end
+
+      def replace_cawfile(id : String, content : String) : GeneratedWorkflowReplacementArtifact
+        GeneratedWorkflowRequest.validate_id!(id)
+        if content.bytesize > GeneratedWorkflowRequest::MAX_BODY_BYTES
+          raise GeneratedWorkflowPayloadTooLargeError.new("cawfile exceeds #{GeneratedWorkflowRequest::MAX_BODY_BYTES} bytes")
+        end
+        validate_replacement_content!(content)
+
+        workflow_dir = workflow_dir_for(id)
+        unless Dir.exists?(workflow_dir) && !File.symlink?(workflow_dir)
+          raise GeneratedWorkflowNotFoundError.new("generated workflow not found: #{id}")
+        end
+
+        cawfile_path = File.join(workflow_dir, "Cawfile")
+        unless File.file?(cawfile_path) && !File.symlink?(cawfile_path)
+          raise GeneratedWorkflowNotFoundError.new("generated workflow Cawfile not found: #{id}")
+        end
+
+        previous_content = File.read(cawfile_path)
+        unless generated_content?(previous_content)
+          raise GeneratedWorkflowProtectionError.new("workflow is not managed by the generated workflow API: #{id}")
+        end
+
+        temporary_path = File.join(workflow_dir, ".Cawfile.replace-#{Random::Secure.hex(8)}")
+        begin
+          File.write(temporary_path, content)
+          File.rename(temporary_path, cawfile_path)
+          validate_cawfile_loads!(workflow_dir, id)
+          GeneratedWorkflowReplacementArtifact.new(
+            id: id,
+            content: content,
+            previous_content: previous_content,
+            relative_path: File.join(id, "Cawfile"),
+            workflow_dir: workflow_dir,
+            cawfile_path: cawfile_path,
+          )
+        rescue ex
+          File.delete(temporary_path) if File.exists?(temporary_path)
+          File.write(temporary_path, previous_content)
+          File.rename(temporary_path, cawfile_path)
+          raise ex
+        end
+      end
+
+      def rollback_replace(artifact : GeneratedWorkflowReplacementArtifact) : Nil
+        GeneratedWorkflowRequest.validate_id!(artifact.id)
+        return unless artifact.workflow_dir == workflow_dir_for(artifact.id)
+        temporary_path = File.join(artifact.workflow_dir, ".Cawfile.rollback-#{Random::Secure.hex(8)}")
+        begin
+          File.write(temporary_path, artifact.previous_content)
+          File.rename(temporary_path, artifact.cawfile_path)
+        ensure
+          File.delete(temporary_path) if File.exists?(temporary_path)
+        end
       end
 
       # Atomically hides a generated Cawfile from discovery while retaining an
@@ -206,13 +280,27 @@ module ACD
       end
 
       private def validate_cawfile!(workflow_dir : String, id : String) : Nil
+        validate_cawfile_loads!(workflow_dir, id)
+        bundle = CawfileLoader.load(workflow_dir, id)
+        dsl = bundle.try(&.dsl_source)
+        unless dsl && dsl.any? { |line| line.includes?(%q(agent "assistant")) }
+          raise "generated Cawfile is missing its initial agent node"
+        end
+      end
+
+      private def validate_cawfile_loads!(workflow_dir : String, id : String) : Nil
         bundle = CawfileLoader.load(workflow_dir, id)
         unless bundle && bundle.id == id
           raise "generated Cawfile did not load workflow #{id}"
         end
-        dsl = bundle.dsl_source
-        unless dsl && dsl.any? { |line| line.includes?(%q(agent "assistant")) }
-          raise "generated Cawfile is missing its initial agent node"
+      end
+
+      private def validate_replacement_content!(content : String) : Nil
+        unless generated_content?(content)
+          raise GeneratedWorkflowValidationError.new("replacement Cawfile must include #{GENERATED_MARKER}")
+        end
+        if content.includes?('\0')
+          raise GeneratedWorkflowValidationError.new("replacement Cawfile must not contain NUL characters")
         end
       end
 

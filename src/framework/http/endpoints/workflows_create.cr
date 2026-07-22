@@ -55,6 +55,47 @@ module ACD
           end
         end
 
+        put "/v1/workflows/generated/:id/cawfile" do |env|
+          if auth_error = generated_workflow_auth_error(env)
+            next auth_error
+          end
+
+          workflow_id = env.params.url["id"]
+          begin
+            body = JSON.parse(read_generated_workflow_body(env)).as_h?
+            unless body
+              raise Discovery::GeneratedWorkflowValidationError.new("request body must be a JSON object")
+            end
+            content = body["cawfile_content"]?.try(&.as_s?) || body["content"]?.try(&.as_s?)
+            unless content && !content.strip.empty?
+              raise Discovery::GeneratedWorkflowValidationError.new("cawfile_content is required")
+            end
+
+            artifact = replace_generated_workflow_cawfile(workflow_id, content)
+            env.response.status_code = 200
+            env.response.content_type = "application/json"
+            {
+              status:          "updated",
+              workflow_id:     artifact.id,
+              cawfile_path:    artifact.relative_path,
+              cawfile_content: artifact.content,
+            }.to_json
+          rescue ex : JSON::ParseException
+            json_error(env, 400, "invalid_request", "request body must contain valid JSON")
+          rescue ex : Discovery::GeneratedWorkflowValidationError
+            json_error(env, 400, "invalid_request", ex.message || "invalid generated workflow cawfile")
+          rescue ex : Discovery::GeneratedWorkflowPayloadTooLargeError
+            json_error(env, 413, "payload_too_large", ex.message || "request body is too large")
+          rescue ex : Discovery::GeneratedWorkflowNotFoundError
+            json_error(env, 404, "not_found", ex.message || "generated workflow not found")
+          rescue ex : Discovery::GeneratedWorkflowProtectionError
+            json_error(env, 409, "protected_workflow", ex.message || "workflow is not managed by the generated workflow API")
+          rescue ex
+            STDERR.puts "[ocawecore] generated workflow cawfile update failed: #{ex.message || ex.class.name}"
+            json_error(env, 422, "workflow_update_error", "failed to update or register generated workflow")
+          end
+        end
+
         get "/v1/nodes" do |env|
           env.response.content_type = "application/json"
           [
@@ -169,6 +210,29 @@ module ACD
               reload_cache!
             rescue restore_ex
               STDERR.puts "[ocawecore] workflow cache restore after deletion failed: #{restore_ex.message || restore_ex.class.name}"
+            end
+            raise ex
+          end
+          artifact
+        end
+      end
+
+      private def replace_generated_workflow_cawfile(
+        workflow_id : String,
+        content : String,
+      ) : Discovery::GeneratedWorkflowReplacementArtifact
+        @workflow_creation_lock.synchronize do
+          artifact = @generated_workflow_writer.replace_cawfile(workflow_id, content)
+          begin
+            reload_cache!
+            unless workflow_by_id(workflow_id)
+              raise "generated workflow was not registered after update: #{workflow_id}"
+            end
+          rescue ex
+            @generated_workflow_writer.rollback_replace(artifact)
+            begin
+              reload_cache!
+            rescue
             end
             raise ex
           end
