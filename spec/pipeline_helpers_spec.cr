@@ -42,4 +42,19 @@ describe Ocawe::Pipeline do
       FileUtils.rm_rf(dir) if dir
     end
   end
+
+  it "does not write empty Orator order results as completed" do
+    dir = File.join(Dir.tempdir, "ocawe-pipeline-empty-result-#{Time.utc.to_unix_ms}")
+    begin
+      Dir.mkdir_p(dir)
+      written = Ocawe::Pipeline.write_order_result("empty", "  ", "test-model", results_dir: dir)
+      written.should be_true
+
+      parsed = JSON.parse(File.read(File.join(dir, "order-empty.json")))
+      parsed["content"].as_s.should eq("Model returned an empty response.")
+      parsed["status"].as_s.should eq("failed")
+    ensure
+      FileUtils.rm_rf(dir) if dir
+    end
+  end
 end

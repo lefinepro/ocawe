@@ -32,6 +32,8 @@ dependencies:
   opentelemetry-sdk:
     github: wyhaines/opentelemetry-sdk.cr
     version: ~> 0.6.2
+  to_html:
+    github: sbsoftware/to_html.cr
 
 development_dependencies:
   ameba:

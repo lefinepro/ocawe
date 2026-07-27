@@ -73,13 +73,20 @@ module Ocawe
     ) : Bool
       return false unless order_id && !order_id.empty?
 
+      final_status = status
+      final_content = content
+      if final_status == "completed" && final_content.strip.empty?
+        final_status = "failed"
+        final_content = "Model returned an empty response."
+      end
+
       FileUtils.mkdir_p(results_dir)
       body = {
         "order_id"   => order_id,
-        "content"    => content,
+        "content"    => final_content,
         "model"      => model,
         "endpoint"   => endpoint || "",
-        "status"     => status,
+        "status"     => final_status,
         "created_at" => Time.utc.to_rfc3339,
       }
       path = File.join(results_dir, "order-#{order_id}.json")
