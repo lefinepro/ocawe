@@ -1,0 +1,41 @@
+# 13 - Lefine Planner Solver
+#
+# Solver workflow for Fmatch plan tasks. It auto-subscribes to the Fmatch planner
+# actor, polls its outbox, accepts Ticket activities, and publishes federation
+# results back to the task result inbox.
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+
+  federation do
+    auto_subscribe = ["http://fmatch:7277/actor/planner"]
+    s2s_poll_interval_seconds = 15
+    s2s_http_timeout_seconds = 20
+    signatures_required = false
+    local_actor = "http://dorian:4111/actors/coder"
+  end
+end
+
+container do
+  packages = ["codex-acp", "git", "curl", "jq"]
+  files = ["."]
+end
+
+struct Input
+  include Api::Federation::Inbox
+  include Api::ACP::Agent
+end
+
+struct Output
+  include Api::Federation::Outbox
+  include Api::ACP::Agent
+end
+
+#+name: model
+#+description: Lefine coder solver for queued planner tasks
+#+tags: codex; coder; planner
+@[Validate(Input, Output)]
+workflow "coder" do
+  exec "codex", runtime: {"acp"}
+end
