@@ -18,7 +18,7 @@ settings do
 end
 
 container do
-  packages = ["codex-acp", "git", "curl", "jq"]
+  packages = ["codex", "git", "curl", "jq"]
   files = ["."]
 end
 
@@ -37,5 +37,5 @@ end
 #+tags: codex; coder; planner
 @[Validate(Input, Output)]
 workflow "coder" do
-  exec "codex", runtime: {"acp"}
+  exec "tools/lefine_codex_solver.sh", runtime: {"shell"}
 end

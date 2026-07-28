@@ -106,9 +106,61 @@ module ACD
                      )
                    end
         activity["to"] = JSON.parse([remote_actor].to_json) unless remote_actor.empty? || activity.has_key?("to")
+        add_lefine_task_result_fields(activity, ticket, status)
 
         append_aptok_outbox_event(workflow_actor, JSON.parse(activity.to_json).as_h, "outbox-result-#{suffix}")
+        deliver_lefine_task_result(ticket, activity)
       rescue
+      end
+
+      private def add_lefine_task_result_fields(activity : Hash(String, JSON::Any), ticket : Hash(String, JSON::Any), status : String) : Nil
+        task_ref = ticket["taskRef"]?.try(&.as_s?) || ticket["task_ref"]?.try(&.as_s?) || ""
+        return if task_ref.empty?
+
+        object = activity["object"]?.try(&.as_h?)
+        return unless object
+
+        object["taskRef"] = JSON.parse(task_ref.to_json)
+        object["status"] = JSON.parse(normalize_lefine_result_status(status).to_json)
+      end
+
+      private def normalize_lefine_result_status(status : String) : String
+        value = status.strip.downcase
+        return "failed" if value == "failed" || value == "error"
+        "completed"
+      end
+
+      private def deliver_lefine_task_result(ticket : Hash(String, JSON::Any), activity : Hash(String, JSON::Any)) : Nil
+        inbox = ticket_result_inbox(ticket)
+        return if inbox.empty?
+
+        headers = ::HTTP::Headers{"Content-Type" => "application/activity+json"}
+        response = ::HTTP::Client.post(inbox, headers: headers, body: activity.to_json)
+        unless response.status_code >= 200 && response.status_code < 300
+          STDERR.puts "[federation] lefine result delivery failed HTTP #{response.status_code}: #{response.body}"
+        end
+      rescue ex
+        STDERR.puts "[federation] lefine result delivery failed: #{ex.message || ex.class.name}"
+      end
+
+      private def ticket_result_inbox(ticket : Hash(String, JSON::Any)) : String
+        attachment = ticket["attachment"]?
+        if attachment_hash = attachment.try(&.as_h?)
+          return property_href(attachment_hash, "resultInbox")
+        end
+
+        attachments = attachment.try(&.as_a?) || [] of JSON::Any
+        attachments.each do |entry|
+          next unless entry_hash = entry.as_h?
+          value = property_href(entry_hash, "resultInbox")
+          return value unless value.empty?
+        end
+        ""
+      end
+
+      private def property_href(entry : Hash(String, JSON::Any), name : String) : String
+        return "" unless entry["name"]?.try(&.as_s?).to_s == name
+        entry["href"]?.try(&.as_s?) || entry["value"]?.try(&.as_s?) || ""
       end
 
       private def enrich_output_with_embedded_json(output : Hash(String, JSON::Any)) : Hash(String, JSON::Any)

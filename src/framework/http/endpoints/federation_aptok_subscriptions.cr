@@ -31,11 +31,26 @@ module ACD
         remote_actor = actor_doc["id"]?.try(&.as_s?) || target.remote_actor
         remote_outbox = actor_doc["outbox"]?.try(&.as_s?).to_s
         remote_inbox = actor_doc["inbox"]?.try(&.as_s?).to_s
+        remote_outbox = infer_activitypub_peer_endpoint(remote_actor, "outbox") if remote_outbox.empty?
+        remote_inbox = infer_activitypub_peer_endpoint(remote_actor, "inbox") if remote_inbox.empty?
         key = "ocawe:federation:follow:#{remote_actor}"
 
         if existing = @federation_kv.get(key).try { |raw| JSON.parse(raw).as_h }
           status = existing["status"]?.try(&.as_s?).to_s
           if status == "active" || status == "following"
+            refreshed = false
+            if existing["remote_outbox"]?.try(&.as_s?).to_s.empty? && !remote_outbox.empty?
+              existing["remote_outbox"] = Aptok.json(remote_outbox)
+              refreshed = true
+            end
+            if existing["remote_inbox"]?.try(&.as_s?).to_s.empty? && !remote_inbox.empty?
+              existing["remote_inbox"] = Aptok.json(remote_inbox)
+              refreshed = true
+            end
+            if refreshed
+              existing["updated_at"] = Aptok.json(Aptok.now)
+              @federation_kv.set(key, existing.to_json)
+            end
             return existing
           end
         end
@@ -89,6 +104,22 @@ module ACD
         {"", raw}
       end
 
+      private def infer_activitypub_peer_endpoint(actor : String, endpoint : String) : String
+        uri = URI.parse(actor)
+        path = uri.path || ""
+        marker = "/actor/"
+        idx = path.index(marker)
+        return "" unless idx
+
+        handle = path[idx + marker.size, path.size - idx - marker.size]?.to_s
+        return "" if handle.empty? || handle.includes?("/")
+
+        port = uri.port ? ":#{uri.port}" : ""
+        "#{uri.scheme}://#{uri.host}#{port}/#{endpoint}/#{handle}"
+      rescue
+        ""
+      end
+
       private def start_federation_poller : Nil
         interval = @settings.federation.s2s_poll_interval_seconds
         return if interval <= 0
@@ -125,26 +156,69 @@ module ACD
           follow = JSON.parse(entry.value).as_h
           remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
           remote_outbox = follow["remote_outbox"]?.try(&.as_s?).to_s
-          next if remote_actor.empty? || remote_outbox.empty?
+          if remote_actor.empty? || remote_outbox.empty?
+            STDERR.puts "[federation] poll skipped remote_actor=#{remote_actor.empty? ? "(empty)" : remote_actor} remote_outbox=#{remote_outbox.empty? ? "(empty)" : remote_outbox}"
+            next
+          end
 
           begin
             ctx = aptok_federation.create_context
-            collection = ctx.lookup_object(remote_outbox, Aptok::LookupObjectOptions.new(cross_origin: "trust"))
+            STDERR.puts "[federation] polling remote_actor=#{remote_actor} outbox=#{remote_outbox}"
+            collection = fetch_activitypub_collection(remote_outbox) ||
+                         ctx.lookup_object(remote_outbox, Aptok::LookupObjectOptions.new(cross_origin: "trust"))
             activities = collection ? ctx.traverse_collection(collection, 50) : [] of Aptok::JsonMap
+            activities = ordered_collection_items(collection) if activities.empty? && collection
+            STDERR.puts "[federation] poll fetched remote_actor=#{remote_actor} activities=#{activities.size}"
             activities.each do |activity|
               activity_id = activity["id"]?.try(&.as_s?).to_s
-              next if activity_id.empty?
+              if activity_id.empty?
+                STDERR.puts "[federation] polled activity skipped: missing id"
+                next
+              end
               seen_key = "ocawe:federation:seen:#{remote_actor}:#{activity_id}"
-              next if @federation_kv.get(seen_key)
+              if @federation_kv.get(seen_key)
+                STDERR.puts "[federation] polled activity already seen id=#{activity_id}"
+                next
+              end
 
+              STDERR.puts "[federation] processing polled activity id=#{activity_id} type=#{activity["type"]?.try(&.as_s?).to_s}"
               @federation_kv.set(seen_key, Aptok.now) if process_polled_activity(follow, activity)
             end
 
             update_aptok_follow_state(remote_actor, error: "", last_polled_at: Aptok.now)
           rescue ex
+            STDERR.puts "[federation] poll failed remote_actor=#{remote_actor}: #{ex.message || ex.class.name}"
             update_aptok_follow_state(remote_actor, error: ex.message || ex.class.name, last_polled_at: Aptok.now)
           end
         end
+      end
+
+      private def fetch_activitypub_collection(iri : String) : Aptok::JsonMap?
+        headers = ::HTTP::Headers{
+          "Accept" => "application/activity+json, application/ld+json, application/json",
+        }
+        response = ::HTTP::Client.get(iri, headers: headers)
+        unless response.status_code >= 200 && response.status_code < 300
+          STDERR.puts "[federation] outbox fetch failed HTTP #{response.status_code}: #{response.body}"
+          return nil
+        end
+
+        JSON.parse(response.body).as_h?
+      rescue ex
+        STDERR.puts "[federation] outbox fetch failed: #{ex.message || ex.class.name}"
+        nil
+      end
+
+      private def ordered_collection_items(collection : Aptok::JsonMap) : Array(Aptok::JsonMap)
+        activities = [] of Aptok::JsonMap
+        raw_items = collection["orderedItems"]?.try(&.as_a?) || collection["items"]?.try(&.as_a?)
+        return activities unless raw_items
+
+        raw_items.each do |item|
+          activity = item.as_h?
+          activities << activity if activity
+        end
+        activities
       end
 
       private def update_aptok_follow_state(remote_actor : String, status : String? = nil, cursor : String? = nil, last_polled_at : String? = nil, error : String? = nil) : Nil
