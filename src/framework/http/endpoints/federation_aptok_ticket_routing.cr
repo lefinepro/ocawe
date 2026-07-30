@@ -209,7 +209,26 @@ module ACD
             "local_actor" => local_actor,
             "workflow_actor" => workflow_actor,
           }.to_json),
+          "federation_result_context" => JSON.parse({
+            "ticket"             => ticket,
+            "requested_activity" => activity,
+            "remote_actor"       => remote_actor,
+            "workflow_actor"     => workflow_actor,
+            "local_domain"       => local_domain,
+            "published_at"       => received_at,
+          }.to_json),
         } of String => JSON::Any
+
+        if @scheduler.enabled?
+          @scheduler.enqueue(
+            Ocawe::Workflow::Scheduler::Job.new(
+              workflow_id: workflow_id,
+              run_id: "federation-#{Random::Secure.hex(12)}",
+              input_data: input_data,
+            )
+          )
+          return true
+        end
 
         run_result = @workflow_service.start_run(workflow_id, input_data: input_data)
         run_output = run_result.output || {} of String => JSON::Any

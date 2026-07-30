@@ -15,6 +15,13 @@ settings do
     signatures_required = false
     local_actor = "http://dorian:4111/actors/coder"
   end
+
+  scheduler do
+    enabled = true
+    min_workers = 0
+    max_workers = 1
+    target_queue_depth = 1
+  end
 end
 
 container do
@@ -37,5 +44,5 @@ end
 #+tags: codex; coder; planner
 @[Validate(Input, Output)]
 workflow "coder" do
-  exec "tools/lefine_codex_solver.sh", runtime: {"shell"}
+  exec "tools/lefine_codex_solver.sh", runtime: {shell: "bash"}
 end

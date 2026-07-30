@@ -82,7 +82,38 @@ module ACD
           input_data: job.input_data,
           resources: job.resources,
         )
-        publish_outbound_federation_output(job.workflow_id, result.output || {} of String => JSON::Any)
+        output = result.output || {} of String => JSON::Any
+        if publish_scheduled_federation_result(job, result.status, output)
+          return
+        end
+
+        publish_outbound_federation_output(job.workflow_id, output)
+      end
+
+      private def publish_scheduled_federation_result(
+        job : Ocawe::Workflow::Scheduler::Job,
+        run_status : String,
+        output : Hash(String, JSON::Any)
+      ) : Bool
+        context = job.input_data["federation_result_context"]?.try(&.as_h?)
+        return false unless context
+
+        ticket = context["ticket"]?.try(&.as_h?)
+        return false unless ticket
+
+        publish_result_activity_from_output(
+          workflow_id: job.workflow_id,
+          run_id: job.run_id,
+          run_status: run_status,
+          output: output,
+          ticket: ticket,
+          requested_activity: context["requested_activity"]?.try(&.as_s?) || "ticket",
+          remote_actor: context["remote_actor"]?.try(&.as_s?) || "",
+          workflow_actor: context["workflow_actor"]?.try(&.as_s?) || "",
+          local_domain: context["local_domain"]?.try(&.as_s?) || "",
+          published_at: context["published_at"]?.try(&.as_s?) || Time.utc.to_s("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        true
       end
 
       private def cancel_workflow_run(env, workflow_id : String, run_id : String) : (String | Nil)
