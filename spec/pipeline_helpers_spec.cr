@@ -25,6 +25,17 @@ describe Ocawe::Pipeline do
     Ocawe::Pipeline.as_string(json_bool(true)).should eq("true")
   end
 
+  it "derives order ids from marketplace request ids" do
+    activity = JSON.parse({
+      "id" => "https://planner.example/actors/planner/requests/build-feature-1",
+      "object" => {
+        "id" => "https://planner.example/actors/planner/requests/build-feature-1#proposal",
+      },
+    }.to_json).as_h
+
+    Ocawe::Pipeline.order_id_from(activity, activity["object"].as_h).should eq("build-feature-1")
+  end
+
   it "writes Orator-compatible order result files" do
     dir = File.join(Dir.tempdir, "ocawe-pipeline-result-#{Time.utc.to_unix_ms}")
     begin
@@ -56,5 +67,28 @@ describe Ocawe::Pipeline do
     ensure
       FileUtils.rm_rf(dir) if dir
     end
+  end
+
+  it "builds pure Aptok marketplace request activities without pipeline metadata" do
+    activity = JSON.parse(Ocawe::Pipeline.marketplace_request_activity(
+      "https://planner.example/activities/1",
+      "https://planner.example/actors/planner",
+      "https://fmatch.example/actor/planner",
+      "Plan task",
+      "Create a plan",
+      "https://fmatch/marketplace/resources/planning"
+    )).as_h
+    proposal = activity["object"].as_h
+    intent = proposal["publishes"].as_h
+
+    Aptok.valid_fep_0837?(proposal).should be_true
+    activity["type"].as_s.should eq("Create")
+    proposal["type"].as_s.should eq("Proposal")
+    proposal["purpose"].as_s.should eq("request")
+    intent["action"].as_s.should eq("deliverService")
+    intent["resourceConformsTo"].as_s.should eq("https://fmatch/marketplace/resources/planning")
+    proposal.has_key?("attachment").should be_false
+    proposal.has_key?("mediaType").should be_false
+    intent.has_key?("receiver").should be_false
   end
 end
