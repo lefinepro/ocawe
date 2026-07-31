@@ -83,6 +83,7 @@ describe Ocawe::Pipeline do
 
     Aptok.valid_fep_0837?(proposal).should be_true
     activity["type"].as_s.should eq("Create")
+    activity["@context"].as_a.map(&.as_s?).compact.should contain("https://w3id.org/fep/0837")
     proposal["type"].as_s.should eq("Proposal")
     proposal["purpose"].as_s.should eq("request")
     intent["action"].as_s.should eq("deliverService")

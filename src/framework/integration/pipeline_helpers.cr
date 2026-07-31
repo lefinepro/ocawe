@@ -279,6 +279,7 @@ module Ocawe
       Aptok.validate_fep_0837!(proposal)
 
       activity = Aptok.create(id, actor, proposal)
+      ensure_context(activity, "https://w3id.org/fep/0837")
       activity["to"] = Aptok.json([target])
       activity.to_json
     end
@@ -306,6 +307,20 @@ module Ocawe
         "Accept-Encoding" => "identity",
         "User-Agent"      => "ocawe-pipeline/1.0",
       }
+    end
+
+    private def ensure_context(activity : Hash(String, JSON::Any), context : String) : Nil
+      current = activity["@context"]?
+      contexts = [] of JSON::Any
+      if array = current.try(&.as_a?)
+        contexts.concat(array)
+      elsif current
+        contexts << current
+      end
+      return if contexts.any? { |item| item.as_s? == context }
+
+      contexts << Aptok.json(context)
+      activity["@context"] = Aptok.json(contexts)
     end
 
     private def recursive_attachment_value(value : AnyHash | JSON::Any, names : Enumerable(String)) : String?
