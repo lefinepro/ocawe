@@ -173,6 +173,7 @@ module Ocawe
         chain.each { |item| candidates << item }
       end
       candidates.each do |candidate|
+        next if ack_only_payload?(candidate)
         if text = deep_string(candidate, ["content", "text", "answer", "result"])
           return text unless text.empty?
         end
@@ -203,6 +204,14 @@ module Ocawe
         end
       end
       nil
+    end
+
+    def ack_only_payload?(value : JSON::Any) : Bool
+      hash = value.as_h?
+      return false unless hash
+      keys = hash.keys.map(&.downcase)
+      return true if keys == ["handled"]
+      keys.all? { |key| {"handled", "ok", "accepted", "status"}.includes?(key) }
     end
 
     def json_object_from_text(raw : String) : JSON::Any?

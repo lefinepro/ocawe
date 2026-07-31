@@ -69,6 +69,28 @@ describe Ocawe::Pipeline do
     end
   end
 
+  it "does not treat inbox acknowledgements as delivery content" do
+    payload = JSON.parse({
+      "chain" => [
+        {
+          "actor"  => "http://planner:8080/actors/planner",
+          "inbox"  => "http://planner:8080/actors/planner/inbox",
+          "status" => 202,
+          "ok"     => true,
+          "result" => {"handled" => true},
+        },
+      ],
+      "delivery" => {
+        "status" => 202,
+        "ok"     => true,
+        "result" => {"handled" => true},
+      },
+      "status" => "accepted",
+    }.to_json)
+
+    Ocawe::Pipeline.delivery_content(payload).should be_nil
+  end
+
   it "builds pure Aptok marketplace request activities without pipeline metadata" do
     activity = JSON.parse(Ocawe::Pipeline.marketplace_request_activity(
       "https://planner.example/activities/1",
