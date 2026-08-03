@@ -111,6 +111,7 @@ module Ocawe
       getter local_actor : String
       getter local_key_id : String
       getter local_private_key_path : String
+      getter actor_type : String
 
       def initialize(
         @auto_subscribe : Array(String) = [] of String,
@@ -120,6 +121,7 @@ module Ocawe
         @local_actor : String = "http://127.0.0.1:4111/actors/server",
         @local_key_id : String = "http://127.0.0.1:4111/actors/server#main-key",
         @local_private_key_path : String = "./.ocawe/federation-private.pem",
+        @actor_type : String = "Application",
       )
       end
     end

@@ -73,7 +73,7 @@ module ACD
       end
 
       private def build_chat_completion(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
-        model = body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL
+        model = normalize_chat_model(body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
         messages = extract_chat_messages(body)
         prompt = chat_prompt_from_messages(messages, body)
         system_message = chat_system_message(messages, body)
@@ -182,6 +182,12 @@ module ACD
             "total_tokens"      => 0,
           },
         }.to_json).as_h
+      end
+
+      private def normalize_chat_model(model : String) : String
+        normalized = model.strip
+        return "workflow/orator" if normalized == "orator" || normalized == "workflow-orator"
+        normalized
       end
 
       private def build_open_response(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash

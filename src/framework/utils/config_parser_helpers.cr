@@ -86,8 +86,16 @@ module OcaweCore
             local_actor = string_or_nil(fed["local_actor"]?) || federation.local_actor
             local_key_id = string_or_nil(fed["local_key_id"]?) || federation.local_key_id
             local_private_key_path = string_or_nil(fed["local_private_key_path"]?) || federation.local_private_key_path
+            actor_type = string_or_nil(fed["actor_type"]?) || federation.actor_type
             federation = Ocawe::Config::FederationSettings.new(
-              auto_subscribe, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path
+              auto_subscribe: auto_subscribe,
+              s2s_poll_interval_seconds: poll_interval,
+              s2s_http_timeout_seconds: http_timeout,
+              signatures_required: signatures_required.not_nil!,
+              local_actor: local_actor,
+              local_key_id: local_key_id,
+              local_private_key_path: local_private_key_path,
+              actor_type: actor_type
             )
           end
         end

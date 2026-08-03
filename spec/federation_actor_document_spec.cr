@@ -33,6 +33,33 @@ describe "ACD::Kemal::App federation actor document" do
     end
   end
 
+  it "uses configured federation actor type and key id" do
+    key_path = File.tempname("ocawe-fed-key", ".pem")
+    Process.run("openssl", args: ["genrsa", "-out", key_path, "2048"], output: Process::Redirect::Close, error: Process::Redirect::Close).success?.should be_true
+
+    settings = Ocawe::Config::Settings.new(
+      workflows: Ocawe::Config::WorkflowSettings.new(preferred_workflows_root: "./src/workflows"),
+      federation: Ocawe::Config::FederationSettings.new(
+        local_actor: "https://lefine.pro/actors/orator",
+        local_key_id: "https://lefine.pro/actors/orator#custom-key",
+        local_private_key_path: key_path,
+        actor_type: "Service"
+      )
+    )
+    app = ACD::Kemal::App.new(0, settings: settings)
+    app.test_set_workflow_ids(["orator"])
+
+    actor = app.test_local_actor_document("orator")
+
+    actor["type"]?.try(&.as_s?).should eq("Service")
+    actor["id"]?.try(&.as_s?).should eq("https://lefine.pro/actors/orator")
+    actor["publicKey"]?.try(&.as_h?).not_nil!["id"]?.try(&.as_s?).should eq("https://lefine.pro/actors/orator#custom-key")
+  ensure
+    if path = key_path
+      File.delete(path) if File.exists?(path)
+    end
+  end
+
   it "publishes Cawfile federation resource metadata on the actor document" do
     settings = Ocawe::Config::Settings.new(
       workflows: Ocawe::Config::WorkflowSettings.new(preferred_workflows_root: "./src/workflows"),

@@ -258,7 +258,7 @@ module ACD
         public_key = key ? Aptok.public_key(key) : nil
 
         actor = Aptok.actor(
-          "Application",
+          local_actor_type,
           actor_uri,
           workflow_id,
           ctx.get_inbox_uri(workflow_id),
@@ -330,15 +330,15 @@ module ACD
         actor_id = aptok_federation.create_context.get_actor_uri(found_workflow)
         resource_iri = federation_resource_iri(actor_id, resource[:id])
         document = JSON.parse({
-          "@context" => [Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::MARKETPLACE_CONTEXT],
-          "id" => resource_iri,
-          "type" => "Resource",
-          "name" => resource[:name],
-          "summary" => resource[:description],
-          "attributedTo" => actor_id,
+          "@context"           => [Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::MARKETPLACE_CONTEXT],
+          "id"                 => resource_iri,
+          "type"               => "Resource",
+          "name"               => resource[:name],
+          "summary"            => resource[:description],
+          "attributedTo"       => actor_id,
           "resourceConformsTo" => resource_iri,
-          "action" => resource[:action],
-          "purpose" => resource[:purpose],
+          "action"             => resource[:action],
+          "purpose"            => resource[:purpose],
         }.to_json).as_h
         tags = resource[:tags]
         unless tags.empty?
@@ -357,6 +357,11 @@ module ACD
         tail.empty? ? "server" : tail
       end
 
+      private def local_actor_type : String
+        actor_type = @settings.federation.actor_type.strip
+        actor_type.empty? ? "Application" : actor_type
+      end
+
       private def local_actor_key_pair(actor_uri : String) : Aptok::ActorKeyPair?
         key_path = @settings.federation.local_private_key_path
         return nil unless File.exists?(key_path)
@@ -365,11 +370,16 @@ module ACD
         return nil if public_key.empty?
 
         Aptok::ActorKeyPair.new(
-          id: "#{actor_uri}#main-key",
+          id: local_actor_key_id(actor_uri),
           owner: actor_uri,
           public_key_pem: public_key,
           private_key_path: key_path
         )
+      end
+
+      private def local_actor_key_id(actor_uri : String) : String
+        configured = @settings.federation.local_key_id.strip
+        configured.empty? ? "#{actor_uri}#main-key" : configured
       end
 
       private def local_actor_public_key_pem(key_path : String) : String
