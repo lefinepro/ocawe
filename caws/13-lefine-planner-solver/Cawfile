@@ -1,0 +1,54 @@
+# 13 - Timer Agent
+#
+# Timer workflow for current time, countdown timers, alarms, and stopwatch state.
+
+require "json"
+require "./plugins/registry"
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+  federation.local_actor = "http://timer:4111/actors/timer"
+  federation.signatures_required = false
+end
+
+container do
+  files = ["."]
+end
+
+struct Input
+  include JSON::Serializable
+  property action : String?
+  property prompt : String?
+  property seconds : Int64?
+  property now_unix : Int64?
+  property started_at : Int64?
+  property target_at : Int64?
+  property alarm_unix : Int64?
+end
+
+struct Output
+  include JSON::Serializable
+  property action : String?
+  property status : String?
+  property message : String?
+  property now_unix : Int64?
+  property iso_utc : String?
+  property seconds : Int64?
+  property started_at : Int64?
+  property target_at : Int64?
+  property remaining_seconds : Int64?
+  property elapsed_seconds : Int64?
+end
+
+#+name: timer
+#+description: Timer agent for current time, countdown timers, alarms, and stopwatch state
+#+tags: timer; stopwatch; alarm; time; tool; fastest
+#+resourceConformsTo: https://fmatch/marketplace/resources/timer
+#+action: deliverService
+#+purpose: request
+@[Validate(Input, Output)]
+workflow "timer" do
+  follow ["@planner@fmatch.internal.fedi"]
+  timer
+end
