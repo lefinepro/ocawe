@@ -26,6 +26,13 @@ class ACD::Kemal::App
     !workflow_by_id(workflow_id).nil?
   end
 
+  def test_copy_chat_identity_fields(
+    source : Hash(String, JSON::Any),
+    target : Hash(String, JSON::Any),
+  ) : Nil
+    copy_chat_identity_fields(source, target)
+  end
+
   def test_workflow_details_response(workflow_id : String) : String?
     workflow_details_response(workflow_id)
   end
