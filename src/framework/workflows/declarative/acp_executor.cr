@@ -1,4 +1,5 @@
 require "json"
+require "random/secure"
 require "../../acp"
 
 module Ocawe
@@ -12,7 +13,12 @@ module Ocawe
     # Or using the shorthand:
     #   exec "codex", runtime: { "acp" => { "command" => "codex" } }
     class ACPExecutor
-      def initialize(@node_id : String, @cwd : String = Dir.current, @env : Hash(String, String) = {} of String => String)
+      def initialize(
+        @node_id : String,
+        @cwd : String = Dir.current,
+        @env : Hash(String, String) = {} of String => String,
+        @filesystem_policy : ACP::Client::FilesystemPolicy? = nil
+      )
       end
 
       def run(ref : String, input : String, config : Hash(String, JSON::Any)) : Hash(String, JSON::Any)
@@ -20,9 +26,11 @@ module Ocawe
         command_args = config["args"]?.try(&.as_a?).try(&.compact_map { |v| v.as_s? }) || [] of String
         cwd = config["cwd"]?.try(&.as_s?) || @cwd
         agent_env = merge_env(config["env"]?)
+        run_id = task_container_run_id(ref)
+        launch = resolve_launch(command, command_args, cwd, agent_env, config["placement"]?, run_id)
 
         # Initialize agent
-        client = ACP::Client.new(command, command_args, agent_env)
+        client = ACP::Client.new(launch[:command], launch[:args], launch[:env], @filesystem_policy, launch[:process_cwd])
         client.start
 
         # Create session
@@ -42,6 +50,7 @@ module Ocawe
 
           # Build output
           output = build_output(session_id, result, updates, config)
+          output["container_run_id"] = JSON.parse(run_id.to_json)
           output
         rescue ex : Exception
           raise "ACP node '#{ref}' failed: #{ex.message}"
@@ -67,6 +76,78 @@ module Ocawe
           end
         end
         env
+      end
+
+      private def resolve_launch(command : String, args : Array(String), cwd : String, env : Hash(String, String), placement : JSON::Any?, run_id : String)
+        placement_config = placement.try(&.as_h?) || {} of String => JSON::Any
+        mode = placement_config["mode"]?.try(&.as_s?) || ENV["OCAWE_AGENT_PLACEMENT"]? || "container"
+        case mode
+        when "container"
+          container_launch(command, args, cwd, env, placement_config, run_id)
+        when "host"
+          raise "ACP agents must use container placement"
+        else
+          raise "unknown ACP placement mode: #{mode}"
+        end
+      end
+
+      private def container_launch(command : String, args : Array(String), cwd : String, env : Hash(String, String), placement : Hash(String, JSON::Any), run_id : String)
+        image = ENV["OCAWE_AGENT_CONTAINER_IMAGE"]? || placement["image"]?.try(&.as_s?)
+        raise "container ACP placement requires image" unless image && !image.empty?
+
+        host_path = placement["host_path"]?.try(&.as_s?) || ENV["OCAWE_AGENT_HOST_PATH"]?
+        mount_path = placement["path"]?.try(&.as_s?) || ENV["OCAWE_AGENT_WORKSPACE_PATH"]? || cwd
+        if workspace = @filesystem_policy
+          mount_path = workspace.root
+        end
+        raise "container ACP placement requires host_path" unless host_path && !host_path.empty?
+
+        write_policy = @filesystem_policy.try(&.write_policy) || "write"
+        mount_mode = write_policy == "read_only" ? "ro" : "rw"
+        container_tool = placement["tool"]?.try(&.as_s?) || ENV["OCAWE_CONTAINER_TOOL"]? || "docker"
+        container_name = task_container_name(run_id)
+        container_args = [
+          "run",
+          "--rm",
+          "-i",
+          "--name",
+          container_name,
+          "--label",
+          "ocawe.acp.task_run_id=#{run_id}",
+          "--label",
+          "ocawe.acp.node=#{safe_container_token(@node_id, 48)}",
+          "-w",
+          cwd,
+        ]
+        container_args.concat(["-v", "#{File.expand_path(host_path)}:#{mount_path}:#{mount_mode}"])
+        env.each do |key, value|
+          container_args.concat(["-e", "#{key}=#{value}"])
+        end
+        container_args << image
+        container_args << command
+        container_args.concat(args)
+
+        {
+          command: container_tool,
+          args: container_args,
+          env: {} of String => String,
+          process_cwd: nil.as(String?),
+        }
+      end
+
+      private def task_container_run_id(ref : String) : String
+        suffix = Random::Secure.hex(6)
+        "#{safe_container_token(ref, 48)}-#{Time.utc.to_unix_ms}-#{suffix}"
+      end
+
+      private def task_container_name(run_id : String) : String
+        "ocawe-acp-#{run_id}"[0, 128]
+      end
+
+      private def safe_container_token(value : String, max_size : Int32) : String
+        token = value.downcase.gsub(/[^a-z0-9_.-]+/, "-").strip("-")
+        token = "task" if token.empty?
+        token[0, Math.min(token.size, max_size)]
       end
 
       private def build_output(session_id : String, result : ACP::SessionPromptResult, updates : Array(ACP::SessionUpdate), config : Hash(String, JSON::Any)) : Hash(String, JSON::Any)

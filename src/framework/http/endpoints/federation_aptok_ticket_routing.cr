@@ -63,6 +63,7 @@ module ACD
       private def normalize_federation_activity(raw : String?) : String
         value = raw.to_s.strip.downcase
         return "merge" if value == "merge" || value == "mergerequest"
+        return "plan" if value == "plan"
         "ticket"
       end
 
@@ -136,7 +137,44 @@ module ACD
         return explicit unless explicit == "ticket"
         return "merge" if incoming_activity_type == "Offer"
         return "merge" if ticket_has_offer_attachment?(ticket)
+        return "plan" if ticket_has_plan_command?(ticket)
         "ticket"
+      end
+
+      private def ticket_has_plan_command?(ticket : Hash(String, JSON::Any)) : Bool
+        return true if ticket["command"]?.try(&.as_s?).to_s.strip == "#plan"
+        return true if attachment_value(ticket["command"]?) == "#plan"
+        return true if attachment_value(ticket["attachment"]?) == "#plan"
+
+        attachment = ticket["attachment"]?
+        attachments = attachment.try(&.as_a?)
+        return false unless attachments
+        attachments.any? do |entry|
+          next false unless entry_hash = entry.as_h?
+          next false unless entry_hash["type"]?.try(&.as_s?).to_s.strip.downcase == "propertyvalue"
+          next false unless entry_hash["name"]?.try(&.as_s?).to_s == "command"
+          entry_hash["value"]?.try(&.as_s?).to_s.strip == "#plan"
+        end
+      end
+
+      private def attachment_value(value : JSON::Any?) : String
+        return "" unless value
+        return value.as_s? || "" if value.as_s?
+        if value_hash = value.as_h?
+          return pick_first_non_empty(
+            value_hash["content"]?.try(&.as_s?),
+            value_hash["value"]?.try(&.as_s?),
+            value_hash["name"]?.try(&.as_s?),
+            value_hash["id"]?.try(&.as_s?),
+          )
+        end
+        if values = value.as_a?
+          values.each do |entry|
+            value_text = attachment_value(entry)
+            return value_text unless value_text.empty?
+          end
+        end
+        ""
       end
 
       private def process_ticket_create_activity(follow : Hash(String, JSON::Any), activity_doc : Hash(String, JSON::Any), ticket : Hash(String, JSON::Any), incoming_activity_type : String) : Bool
@@ -150,15 +188,20 @@ module ACD
         return false if workflow_actor.empty?
 
         workflow_id = workflow_id_from_actor(workflow_actor)
-        workflow_id = registered_ticket_workflow_id(workflow_id, local_actor)
+        # Activity is inferred before workflow selection, so explicit `plan` keeps a dedicated planner path when present.
+        activity = infer_ticket_workflow_activity(activity_doc, ticket, incoming_activity_type)
+        workflow_id = registered_ticket_workflow_id(workflow_id, local_actor, activity)
         STDERR.puts "[federation] ticket ignored: empty workflow id actor=#{workflow_actor}" if workflow_id.empty?
         return false if workflow_id.empty?
 
-        task = ticket["name"]?.try(&.as_s?) || ticket["summary"]?.try(&.as_s?) || ""
+        content = ticket["content"]?.try(&.as_s?) || ""
+        task = pick_first_non_empty(
+          ticket["name"]?.try(&.as_s?),
+          ticket["summary"]?.try(&.as_s?),
+          content,
+        )
         STDERR.puts "[federation] ticket ignored: empty task ticket=#{ticket["id"]?.try(&.as_s?).to_s}" if task.strip.empty?
         return false if task.strip.empty?
-        content = ticket["content"]?.try(&.as_s?) || ""
-        activity = infer_ticket_workflow_activity(activity_doc, ticket, incoming_activity_type)
         repo_url = pick_first_non_empty(
           ticket["source"]?.try(&.as_s?),
           ticket_offer_attachment_field(ticket, "target"),
@@ -251,8 +294,13 @@ module ACD
         fallback
       end
 
-      private def registered_ticket_workflow_id(candidate : String, local_actor : String) : String
+      private def registered_ticket_workflow_id(candidate : String, local_actor : String, requested_activity : String) : String
         ids = workflow_ids
+        if requested_activity == "plan"
+          planner = ids.find { |id| id == "planner" || id.ends_with?("-planner") || id.includes?("plan") || id == "lefine-planner" }
+          return planner unless planner.nil?
+        end
+
         return candidate if ids.empty? || ids.includes?(candidate)
 
         local_candidate = workflow_id_from_actor(local_actor)

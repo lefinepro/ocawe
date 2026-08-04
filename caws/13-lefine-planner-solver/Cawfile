@@ -41,6 +41,24 @@ struct Output
   property elapsed_seconds : Int64?
 end
 
+struct PlannerInput
+  include JSON::Serializable
+  property task : String?
+  property content : String?
+  property repo_url : String?
+  property repo_ref : String?
+  property command : String?
+  property ticket : JSON::Any?
+  property federation_input : JSON::Any?
+end
+
+struct PlannerOutput
+  include JSON::Serializable
+  property status : String?
+  property result : String?
+  property result_text : String?
+end
+
 #+name: timer
 #+description: Timer agent for current time, countdown timers, alarms, and stopwatch state
 #+tags: timer; stopwatch; alarm; time; tool; fastest
@@ -51,4 +69,16 @@ end
 workflow "timer" do
   follow ["@planner@fmatch.internal.fedi"]
   timer
+end
+
+#+name: planner
+#+description: Lefine planner workflow for #plan tasks
+#+tags: planner; planning; lefine; task
+#+resourceConformsTo: https://fmatch/marketplace/resources/planning
+#+action: deliverService
+#+purpose: request
+@[Validate(PlannerInput, PlannerOutput)]
+workflow "planner" do
+  follow ["@planner@fmatch.internal.fedi"]
+  exec "tools/run-codex-plan.sh", runtime: {shell: "bash"}
 end
