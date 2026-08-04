@@ -80,15 +80,31 @@ module Ocawe
 
       private def resolve_launch(command : String, args : Array(String), cwd : String, env : Hash(String, String), placement : JSON::Any?, run_id : String)
         placement_config = placement.try(&.as_h?) || {} of String => JSON::Any
-        mode = placement_config["mode"]?.try(&.as_s?) || ENV["OCAWE_AGENT_PLACEMENT"]? || "container"
+        placement_image = ENV["OCAWE_AGENT_CONTAINER_IMAGE"]? || placement_config["image"]?.try(&.as_s?)
+        placement_host_path = placement_config["host_path"]?.try(&.as_s?) || ENV["OCAWE_AGENT_HOST_PATH"]?
+        mode = placement_config["mode"]?.try(&.as_s?) || ENV["OCAWE_AGENT_PLACEMENT"]?
+
+        unless mode
+          mode = (placement_image && !placement_image.empty? && placement_host_path && !placement_host_path.empty?) ? "container" : "host"
+        end
+
         case mode
         when "container"
           container_launch(command, args, cwd, env, placement_config, run_id)
         when "host"
-          raise "ACP agents must use container placement"
+          host_launch(command, args, cwd, env, placement_config, run_id)
         else
           raise "unknown ACP placement mode: #{mode}"
         end
+      end
+
+      private def host_launch(command : String, args : Array(String), cwd : String, env : Hash(String, String), placement : Hash(String, JSON::Any), run_id : String)
+        {
+          command: command,
+          args: args,
+          env: env,
+          process_cwd: cwd,
+        }
       end
 
       private def container_launch(command : String, args : Array(String), cwd : String, env : Hash(String, String), placement : Hash(String, JSON::Any), run_id : String)
