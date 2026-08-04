@@ -24,7 +24,16 @@ jobs:
           crystal: ${{ env.CRYSTAL_VERSION }}
 
       - name: Install shards
-        run: shards update
+        run: shards update --skip-postinstall
+
+      - name: Patch dependency Crystal compatibility
+        run: |
+          if [ -f lib/ameba/src/ameba/tokenizer.cr ]; then
+            perl -pi -e 's/lexer\.next_string_array_token/token = @lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
+          fi
+          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
+            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
+          fi
 
       - name: Build Ameba
         run: |
@@ -49,6 +58,11 @@ jobs:
 
       - name: Install shards
         run: shards update --production
+      - name: Patch dependency Crystal compatibility
+        run: |
+          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
+            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
+          fi
 
       - name: Run Crystal syntax smoke-check
         run: crystal build src/ocawe.cr --no-codegen
@@ -79,6 +93,11 @@ jobs:
 
       - name: Install shards
         run: shards update --production
+      - name: Patch dependency Crystal compatibility
+        run: |
+          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
+            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
+          fi
 
       - name: Run E2E integration specs
         run: |
@@ -121,6 +140,11 @@ jobs:
 
       - name: Install shards
         run: shards update --production
+      - name: Patch dependency Crystal compatibility
+        run: |
+          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
+            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
+          fi
 
       - name: Build playground
         working-directory: packages/playground
