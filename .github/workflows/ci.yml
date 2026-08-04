@@ -20,7 +20,7 @@ jobs:
         uses: crystal-lang/install-crystal@v1
 
       - name: Install shards
-        run: shards update --skip-postinstall
+        run: shards install --skip-postinstall
 
       - name: Patch dependency Crystal compatibility
         run: |
@@ -51,7 +51,7 @@ jobs:
         run: crystal --version
 
       - name: Install shards
-        run: shards update --production --skip-postinstall
+        run: shards install --production --skip-postinstall
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then
@@ -84,7 +84,7 @@ jobs:
         uses: crystal-lang/install-crystal@v1
 
       - name: Install shards
-        run: shards update --production --skip-postinstall
+        run: shards install --production --skip-postinstall
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then
@@ -129,7 +129,7 @@ jobs:
         run: crystal --version
 
       - name: Install shards
-        run: shards update --production --skip-postinstall
+        run: shards install --production --skip-postinstall
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then

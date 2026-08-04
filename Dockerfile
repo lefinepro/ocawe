@@ -10,7 +10,7 @@ RUN apt-get update \
 RUN npm install -g opencode-ai && test -f /usr/local/bin/opencode
 
 COPY shard.yml shard.lock ./
-RUN shards update --production --skip-postinstall \
+RUN shards install --production --skip-postinstall \
   && if [ -f lib/nbchannel/src/nbchannel.cr ]; then \
       perl -pi -e 's/Crystal::Scheduler\\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr \
     ; fi

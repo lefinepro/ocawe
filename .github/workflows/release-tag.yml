@@ -56,7 +56,7 @@ jobs:
           corepack prepare pnpm@11.9.0 --activate
 
       - name: Install shards
-        run: shards update --production --skip-postinstall
+        run: shards install --production --skip-postinstall
 
       - name: Patch dependency Crystal compatibility
         run: |
