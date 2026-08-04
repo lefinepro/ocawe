@@ -25,6 +25,7 @@ jobs:
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/ameba/src/ameba/tokenizer.cr ]; then
+            perl -pi -e 's/token\s*=\s*\.next_token/token = @lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
             perl -pi -e 's/lexer\.next_string_array_token/token = @lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
           fi
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then
@@ -34,7 +35,7 @@ jobs:
       - name: Build Ameba
         run: |
           mkdir -p bin
-          crystal build -Dpreview_mt -o bin/ameba lib/ameba/src/cli.cr
+          crystal build -o bin/ameba lib/ameba/src/cli.cr
       - name: Run Ameba
         run: bin/ameba
 
