@@ -25,8 +25,8 @@ jobs:
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/ameba/src/ameba/tokenizer.cr ]; then
-            sed -i 's/lexer\\.next_string_array_token/@lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
-            sed -i -E 's/(^[[:space:]]*[[:alnum:]_]+[[:space:]]*=[[:space:]]*)\\.next_token/\1@lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
+            sed -i 's/lexer\.next_string_array_token/@lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
+            sed -i -E 's/(^[[:space:]]*[[:alnum:]_]+[[:space:]]*=[[:space:]]*)\.next_token/\1@lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
           fi
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then
             perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
