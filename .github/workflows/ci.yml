@@ -25,9 +25,9 @@ jobs:
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/ameba/src/ameba/tokenizer.cr ]; then
-            perl -pi -e 's/token\\s*=\\s*lexer\\.next_string_array_token/token = \\@lexer.next_token/g; s/token\\s*=\\s*\\.next_token/token = \\@lexer.next_token/g' lib/ameba/src/ameba/tokenizer.cr
-            if rg -n "lexer\\.next_string_array_token|\\=\\s*\\.next_token" lib/ameba/src/ameba/tokenizer.cr; then
-              echo "Ameba tokenizer is still using Crystal-incompatible lexer methods"
+            sed -i 's/next_string_array_token/next_token/g' lib/ameba/src/ameba/tokenizer.cr
+            if rg -n "next_string_array_token" lib/ameba/src/ameba/tokenizer.cr; then
+              echo "Ameba tokenizer still has Crystal-incompatible next_string_array_token call"
               exit 1
             fi
           fi
