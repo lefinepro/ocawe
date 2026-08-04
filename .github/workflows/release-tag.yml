@@ -56,7 +56,13 @@ jobs:
           corepack prepare pnpm@11.9.0 --activate
 
       - name: Install shards
-        run: shards update --production
+        run: shards update --production --skip-postinstall
+
+      - name: Patch dependency Crystal compatibility
+        run: |
+          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
+            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
+          fi
 
       - name: Build runtime binary
         run: |
