@@ -200,7 +200,7 @@ module ACD
           ticket["summary"]?.try(&.as_s?),
           content,
         )
-        STDERR.puts "[federation] ticket ignored: empty task ticket=#{ticket["id"]?.try(&.as_s?).to_s}" if task.strip.empty?
+        STDERR.puts "[federation] ticket ignored: empty task ticket=#{ticket["id"]?.try(&.as_s?) || ""}" if task.strip.empty?
         return false if task.strip.empty?
         repo_url = pick_first_non_empty(
           ticket["source"]?.try(&.as_s?),

@@ -886,11 +886,12 @@ module ACD
       end
 
       private def self.normalize_resource_tags(tags : Array(String)) : Array(String)
-        tags
+        normalized = tags
           .map(&.strip)
           .reject(&.empty?)
           .map { |tag| tag.starts_with?('#') ? tag[1..] : tag }
-          .uniq
+        normalized.uniq!
+        normalized
       end
 
       private def self.extract_follow(workflow_block : RCL::BlockNode) : Array(String)

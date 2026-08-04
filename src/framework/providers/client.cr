@@ -69,7 +69,7 @@ module OcaweCore
 
       private def validate_response!(response : TextGenerationResponse) : Nil
         return unless response.text.strip.empty?
-        return if response.tool_calls.try(&.any?)
+        return if response.tool_calls.try { |tool_calls| !tool_calls.empty? }
 
         raise "model returned an empty response"
       end

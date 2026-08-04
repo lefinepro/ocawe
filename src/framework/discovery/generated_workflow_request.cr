@@ -58,7 +58,8 @@ module ACD
         body = JSON.parse(raw).as_h?
         raise GeneratedWorkflowValidationError.new("request body must be a JSON object") unless body
 
-        unknown = body.keys.reject { |key| ALLOWED_FIELDS.includes?(key) }.sort
+        unknown = body.keys.reject { |key| ALLOWED_FIELDS.includes?(key) }
+        unknown.sort!
         unless unknown.empty?
           raise GeneratedWorkflowValidationError.new("unknown request fields: #{unknown.join(", ")}")
         end

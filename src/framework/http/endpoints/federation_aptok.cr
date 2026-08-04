@@ -278,7 +278,8 @@ module ACD
           actor["summary"] = JSON.parse(summary.to_json) unless summary.empty?
         end
 
-        tags = resources.flat_map { |resource| resource[:tags] }.uniq
+        tags = resources.flat_map { |resource| resource[:tags] }
+        tags.uniq!
         unless tags.empty?
           actor["tag"] = JSON.parse(tags.map { |tag|
             {"type" => "Hashtag", "name" => "##{tag}"}

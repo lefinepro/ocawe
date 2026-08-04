@@ -44,7 +44,7 @@ module Ocawe
     end
 
     def response_tokens(text : String) : Int32
-      text.split(/\s+/).reject(&.empty?).size
+      text.split(/\s+/).count { |token| !token.empty? }
     end
 
     def record(
