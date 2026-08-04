@@ -98,7 +98,7 @@ module Ocawe
         end
       end
 
-      private def host_launch(command : String, args : Array(String), cwd : String, env : Hash(String, String), placement : Hash(String, JSON::Any), run_id : String)
+      private def host_launch(command : String, args : Array(String), cwd : String, env : Hash(String, String), _placement : Hash(String, JSON::Any), _run_id : String)
         {
           command: command,
           args: args,
