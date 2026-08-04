@@ -32,13 +32,12 @@ dependencies:
   opentelemetry-sdk:
     github: wyhaines/opentelemetry-sdk.cr
     version: ~> 0.6.2
-  nbchannel:
-    path: lib/nbchannel
   to_html:
     github: sbsoftware/to_html.cr
 
 development_dependencies:
   ameba:
-    path: lib/ameba
+    github: crystal-ameba/ameba
+    version: ~> 1.5.0
 
 license: MIT
