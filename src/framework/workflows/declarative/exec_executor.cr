@@ -73,7 +73,11 @@ module Ocawe
       end
 
       private def acp_prompt_input(input_data : AnyHash) : String
-        input_data["prompt"]?.try(&.as_s?) || input_data.to_json
+        if prompt = input_data["prompt"]?.try(&.as_s?)
+          prompt
+        else
+          input_data.to_json
+        end
       end
 
       private def exec_mcp_tool(ref : String, ctx : NodeContext) : AnyHash
