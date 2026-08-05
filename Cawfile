@@ -1,0 +1,25 @@
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+struct DeployInput
+  include JSON::Serializable
+  getter sha : String?
+  getter ref : String?
+  getter target : String?
+  getter source_archive : String?
+end
+
+struct DeployOutput
+  include JSON::Serializable
+  getter status : String?
+  getter project : String?
+end
+
+@[Validate(DeployInput, DeployOutput)]
+workflow "release" do
+  exec "deployment/ocawe/tools/stage-prepare.sh /tmp/ocawe-deploy-state", runtime: {shell: "bash"}
+  exec "deployment/ocawe/tools/stage-build.sh /tmp/ocawe-deploy-state", runtime: {shell: "bash"}
+  exec "deployment/ocawe/tools/stage-deploy.sh /tmp/ocawe-deploy-state", runtime: {shell: "bash"}
+end
