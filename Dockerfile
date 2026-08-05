@@ -1,4 +1,4 @@
-FROM crystallang/crystal:1.13.3
+FROM crystallang/crystal:1.19.1
 
 WORKDIR /ocawe
 
@@ -9,11 +9,9 @@ RUN apt-get update \
 # Install CLIs that users may add on canvas (no runtime installs).
 RUN npm install -g opencode-ai && test -f /usr/local/bin/opencode
 
-COPY shard.yml shard.lock ./
+COPY shard.yml shard.lock scripts/patch_nbchannel.cr ./
 RUN shards install --production --skip-postinstall --skip-executables \
-  && if [ -f lib/nbchannel/src/nbchannel.cr ]; then \
-      perl -pi -e 's/Crystal::Scheduler\\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr \
-    ; fi
+  && crystal run patch_nbchannel.cr
 
 COPY . .
 RUN shards build ocawe --release --no-debug
