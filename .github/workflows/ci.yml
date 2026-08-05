@@ -18,14 +18,26 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.19.1
 
       - name: Install shards
-        run: shards update
+        run: shards install --skip-postinstall --skip-executables
+
+      - name: Patch Ameba dependency compatibility
+        run: |
+          if [ -f lib/ameba/src/ameba/tokenizer.cr ]; then
+            sed -i 's/next_string_array_token/next_token/g' lib/ameba/src/ameba/tokenizer.cr
+            if rg -n "next_string_array_token" lib/ameba/src/ameba/tokenizer.cr; then
+              echo "Ameba tokenizer still has Crystal-incompatible next_string_array_token call"
+              exit 1
+            fi
+          fi
 
       - name: Build Ameba
         run: |
           mkdir -p bin
-          crystal build -Dpreview_mt -o bin/ameba lib/ameba/src/cli.cr
+          crystal build -o bin/ameba lib/ameba/src/cli.cr
       - name: Run Ameba
         run: bin/ameba
 
@@ -37,12 +49,13 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
-
-      - name: Crystal version
-        run: crystal --version
+        with:
+          crystal: 1.19.1
 
       - name: Install shards
-        run: shards update --production
+        run: shards install --production --skip-postinstall --skip-executables
+      - name: Patch dependency Crystal compatibility
+        run: crystal run scripts/patch_nbchannel.cr
 
       - name: Run Crystal syntax smoke-check
         run: crystal build src/ocawe.cr --no-codegen
@@ -68,9 +81,13 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.19.1
 
       - name: Install shards
-        run: shards update --production
+        run: shards install --production --skip-postinstall --skip-executables
+      - name: Patch dependency Crystal compatibility
+        run: crystal run scripts/patch_nbchannel.cr
 
       - name: Run E2E integration specs
         run: |
@@ -95,6 +112,8 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.19.1
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -106,11 +125,10 @@ jobs:
           corepack enable pnpm
           corepack prepare pnpm@11.9.0 --activate
 
-      - name: Crystal version
-        run: crystal --version
-
       - name: Install shards
-        run: shards update --production
+        run: shards install --production --skip-postinstall --skip-executables
+      - name: Patch dependency Crystal compatibility
+        run: crystal run scripts/patch_nbchannel.cr
 
       - name: Build playground
         working-directory: packages/playground

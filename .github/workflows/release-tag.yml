@@ -38,6 +38,8 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.19.1
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v14
@@ -56,7 +58,10 @@ jobs:
           corepack prepare pnpm@11.9.0 --activate
 
       - name: Install shards
-        run: shards update --production
+        run: shards install --production --skip-postinstall --skip-executables
+
+      - name: Patch dependency Crystal compatibility
+        run: crystal run scripts/patch_nbchannel.cr
 
       - name: Build runtime binary
         run: |

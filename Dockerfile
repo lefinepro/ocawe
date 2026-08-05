@@ -1,4 +1,4 @@
-FROM crystallang/crystal:1.13.3
+FROM crystallang/crystal:1.19.1
 
 WORKDIR /ocawe
 
@@ -10,9 +10,10 @@ RUN apt-get update \
 RUN npm install -g opencode-ai && test -f /usr/local/bin/opencode
 
 COPY shard.yml shard.lock ./
-RUN shards update --production
+RUN shards install --production --skip-postinstall --skip-executables
 
 COPY . .
+RUN crystal run scripts/patch_nbchannel.cr
 RUN shards build ocawe --release --no-debug
 RUN cc -Os -s src/tools/rootfs_tar.c -o /ocawe/bin/rootfs_tar
 RUN chmod +x /ocawe/entrypoint.sh

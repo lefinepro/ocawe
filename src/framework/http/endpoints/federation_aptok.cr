@@ -276,11 +276,12 @@ module ACD
 
       private def federation_actor_tags : Array(String)
         raw = ENV["OCAWE_FEDERATION_TAGS"]? || ""
-        raw.split(',')
+        tags = raw.split(',')
           .map(&.strip)
           .reject(&.empty?)
           .map { |tag| tag.starts_with?('#') ? tag[1..] : tag }
-          .uniq
+        tags.uniq!
+        tags
       end
 
       private def federation_actor_capability(tags : Array(String)) : Hash(String, String | Array(String))?

@@ -126,7 +126,7 @@ The bootstrap script downloads a platform Crystal archive into =./.tools/crystal
 only when =crystal= is missing.
 
 You can control bootstrap with env vars:
-- =OCAWE_CRYSTAL_VERSION= (default =1.13.3=)
+- =OCAWE_CRYSTAL_VERSION= (default =1.19.1=)
 - =OCAWE_CRYSTAL_BASE_URL= (default Crystal GitHub releases URL)
 - =OCAWE_CRYSTAL_FORCE_BOOTSTRAP=1= (force local toolchain even if system =crystal= exists)
 - =OCAWE_CRYSTAL_VERBOSE=1= (print toolchain version during bootstrap)
