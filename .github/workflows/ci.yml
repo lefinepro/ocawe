@@ -24,9 +24,8 @@ jobs:
       - name: Install shards
         run: shards install --skip-postinstall --skip-executables
 
-      - name: Patch dependency Crystal compatibility
+      - name: Patch Ameba dependency compatibility
         run: |
-          crystal run scripts/patch_nbchannel.cr
           if [ -f lib/ameba/src/ameba/tokenizer.cr ]; then
             sed -i 's/next_string_array_token/next_token/g' lib/ameba/src/ameba/tokenizer.cr
             if rg -n "next_string_array_token" lib/ameba/src/ameba/tokenizer.cr; then
@@ -52,9 +51,6 @@ jobs:
         uses: crystal-lang/install-crystal@v1
         with:
           crystal: 1.19.1
-
-      - name: Crystal version
-        run: crystal --version
 
       - name: Install shards
         run: shards install --production --skip-postinstall --skip-executables
@@ -128,9 +124,6 @@ jobs:
         run: |
           corepack enable pnpm
           corepack prepare pnpm@11.9.0 --activate
-
-      - name: Crystal version
-        run: crystal --version
 
       - name: Install shards
         run: shards install --production --skip-postinstall --skip-executables
