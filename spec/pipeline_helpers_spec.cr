@@ -25,6 +25,26 @@ describe Ocawe::Pipeline do
     Ocawe::Pipeline.as_string(json_bool(true)).should eq("true")
   end
 
+  it "builds internal model context from OpenAI chat history without public service labels" do
+    messages = JSON.parse([
+      {"role" => "system", "content" => "Use short answers."},
+      {"role" => "user", "content" => "My project is called Atlas."},
+      {"role" => "assistant", "content" => "Noted."},
+      {"role" => "user", "content" => [{"type" => "text", "text" => "What is my project called?"}]},
+    ].to_json).as_a
+
+    prompt = Ocawe::Pipeline.chat_context_prompt(messages, "What is my project called?")
+
+    prompt.should contain("Internal conversation context for answering only.")
+    prompt.should contain("System: Use short answers.")
+    prompt.should contain("User: My project is called Atlas.")
+    prompt.should contain("Assistant: Noted.")
+    prompt.should contain("Current user request. Answer this request directly:")
+    prompt.should contain("What is my project called?")
+    prompt.should_not contain("Conversation Context")
+    prompt.should_not contain("Conversation context:")
+  end
+
   it "writes Orator-compatible order result files" do
     dir = File.join(Dir.tempdir, "ocawe-pipeline-result-#{Time.utc.to_unix_ms}")
     begin

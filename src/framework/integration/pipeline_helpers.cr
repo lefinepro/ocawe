@@ -15,6 +15,103 @@ module Ocawe
         ""
     end
 
+    def chat_context_prompt(
+      messages : Array(JSON::Any)?,
+      current_user_text : String,
+      intro : String = "Internal conversation context for answering only. Do not mention, quote, summarize, or expose this context section unless the user explicitly asks about prior messages.",
+      current_label : String = "Current user request. Answer this request directly:",
+    ) : String
+      return current_user_text unless messages && messages.size > 1
+
+      history = [] of String
+      messages[0, messages.size - 1].each do |message|
+        role = message["role"]?.try(&.as_s?).to_s.downcase
+        next unless {"system", "user", "assistant"}.includes?(role)
+        content = text_from_chat_content(message["content"]?).strip
+        next if content.empty?
+        history << "#{role.capitalize}: #{content}"
+      end
+
+      return current_user_text if history.empty?
+
+      String.build do |io|
+        io << intro << "\n"
+        io << history.join("\n\n")
+        io << "\n\n" << current_label << "\n"
+        io << current_user_text
+      end
+    end
+
+    def marketplace_request_activity(
+      id : String,
+      actor : String,
+      target : String,
+      title : String,
+      content : String,
+      resource_conforms_to : String,
+    ) : String
+      JSON.build do |json|
+        json.object do
+          json.field "@context" do
+            json.array do
+              json.string "https://www.w3.org/ns/activitystreams"
+              json.string "https://forgefed.org/ns"
+              json.string "https://w3id.org/fep/0837"
+              json.object do
+                json.field "resourceConformsTo" do
+                  json.object do
+                    json.field "@id", "https://w3id.org/valueflows#resourceConformsTo"
+                    json.field "@type", "@id"
+                  end
+                end
+                json.field "resourceQuantity", "https://w3id.org/valueflows#resourceQuantity"
+              end
+            end
+          end
+          json.field "id", id
+          json.field "type", "Offer"
+          json.field "actor", actor
+          json.field "to" do
+            json.array { json.string target }
+          end
+          json.field "object" do
+            json.object do
+              json.field "id", "#{id}#proposal"
+              json.field "type", "Proposal"
+              json.field "purpose", "request"
+              json.field "attributedTo", actor
+              json.field "to" do
+                json.array { json.string target }
+              end
+              json.field "name", title
+              json.field "content", content
+              json.field "mediaType", "text/plain"
+              json.field "publishes" do
+                json.object do
+                  json.field "type", "Intent"
+                  json.field "id", "#{id}#intent"
+                  json.field "action", "deliverService"
+                  json.field "resourceConformsTo", resource_conforms_to
+                  json.field "resourceQuantity" do
+                    json.object do
+                      json.field "hasUnit", "task"
+                      json.field "hasNumericalValue", "1"
+                    end
+                  end
+                end
+              end
+              json.field "source" do
+                json.object do
+                  json.field "mediaType", "text/plain"
+                  json.field "content", content
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+
     def first_string(activity : AnyHash, object : AnyHash?, names : Enumerable(String)) : String?
       names.each do |name|
         value = as_string(activity[name]?)
@@ -111,6 +208,22 @@ module Ocawe
         "Accept-Encoding" => "identity",
         "User-Agent"      => "ocawe-pipeline/1.0",
       }
+    end
+
+    private def text_from_chat_content(content : JSON::Any?) : String
+      return "" unless content
+      return content.as_s if content.as_s?
+      if items = content.as_a?
+        return items.compact_map { |item| text_from_chat_content_item(item) }.join("\n")
+      end
+      ""
+    end
+
+    private def text_from_chat_content_item(item : JSON::Any) : String?
+      item["text"]?.try(&.as_s?) ||
+        item["content"]?.try(&.as_s?) ||
+        item["filename"]?.try(&.as_s?) ||
+        item["file_id"]?.try(&.as_s?)
     end
   end
 end
