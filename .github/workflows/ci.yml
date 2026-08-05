@@ -24,12 +24,12 @@ jobs:
           crystal: ${{ env.CRYSTAL_VERSION }}
 
       - name: Install shards
-        run: shards update --skip-postinstall
+        run: shards update --skip-postinstall --skip-executables
 
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/ameba/src/ameba/tokenizer.cr ]; then
-            perl -pi -e 's/lexer\.next_string_array_token/token = @lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
+            perl -pi -e 's/lexer\.next_string_array_token/token = \@lexer.next_token/' lib/ameba/src/ameba/tokenizer.cr
           fi
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then
             perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
@@ -57,7 +57,7 @@ jobs:
         run: crystal --version
 
       - name: Install shards
-        run: shards update --production --skip-postinstall
+        run: shards update --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then
@@ -92,7 +92,7 @@ jobs:
           crystal: ${{ env.CRYSTAL_VERSION }}
 
       - name: Install shards
-        run: shards update --production --skip-postinstall
+        run: shards update --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then
@@ -139,7 +139,7 @@ jobs:
         run: crystal --version
 
       - name: Install shards
-        run: shards update --production --skip-postinstall
+        run: shards update --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
         run: |
           if [ -f lib/nbchannel/src/nbchannel.cr ]; then
