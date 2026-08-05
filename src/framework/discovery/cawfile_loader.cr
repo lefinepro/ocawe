@@ -1136,9 +1136,6 @@ module ACD
           image = img_match[1]
         end
         mode = packages.empty? ? ContainerMode::Static : ContainerMode::Nix
-        if mode_match = inner.match(/mode\s*[:=]\s*"([^"]+)"/)
-          mode = mode_match[1].downcase == "nix" ? ContainerMode::Nix : ContainerMode::Static
-        end
         CawfileContainer.new(mode: mode, packages: packages, image: image, files: files)
       end
 
