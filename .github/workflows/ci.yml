@@ -18,21 +18,21 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.19.1
 
       - name: Install shards
         run: shards install --skip-postinstall --skip-executables
 
       - name: Patch dependency Crystal compatibility
         run: |
+          crystal run scripts/patch_nbchannel.cr
           if [ -f lib/ameba/src/ameba/tokenizer.cr ]; then
             sed -i 's/next_string_array_token/next_token/g' lib/ameba/src/ameba/tokenizer.cr
             if rg -n "next_string_array_token" lib/ameba/src/ameba/tokenizer.cr; then
               echo "Ameba tokenizer still has Crystal-incompatible next_string_array_token call"
               exit 1
             fi
-          fi
-          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
-            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
           fi
 
       - name: Build Ameba
@@ -50,6 +50,8 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.19.1
 
       - name: Crystal version
         run: crystal --version
@@ -57,10 +59,7 @@ jobs:
       - name: Install shards
         run: shards install --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
-        run: |
-          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
-            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
-          fi
+        run: crystal run scripts/patch_nbchannel.cr
 
       - name: Run Crystal syntax smoke-check
         run: crystal build src/ocawe.cr --no-codegen
@@ -86,14 +85,13 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.19.1
 
       - name: Install shards
         run: shards install --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
-        run: |
-          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
-            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
-          fi
+        run: crystal run scripts/patch_nbchannel.cr
 
       - name: Run E2E integration specs
         run: |
@@ -118,6 +116,8 @@ jobs:
 
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.19.1
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -135,10 +135,7 @@ jobs:
       - name: Install shards
         run: shards install --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
-        run: |
-          if [ -f lib/nbchannel/src/nbchannel.cr ]; then
-            perl -pi -e 's/Crystal::Scheduler\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr
-          fi
+        run: crystal run scripts/patch_nbchannel.cr
 
       - name: Build playground
         working-directory: packages/playground
