@@ -4,6 +4,29 @@ module ACD
       CHAT_COMPLETION_TASKS_DATASET = "chat_completion_tasks"
 
       private def mount_compat_endpoints
+        post "/v1/messages" do |env|
+          body = json_body(env)
+          begin
+            raise "streaming Anthropic messages are not supported" if stream_requested?(body)
+            Ocawe::Translation.detect("/v1/messages", body)
+            completion = build_chat_completion(Ocawe::Translation.anthropic_request_as_chat(body))
+            response = Ocawe::Translation.chat_response_as_anthropic(completion, body)
+            env.response.status_code = 200
+            env.response.content_type = "application/json"
+            response.to_json
+          rescue ex
+            env.response.status_code = completion_error_status(ex)
+            env.response.content_type = "application/json"
+            {
+              "type"  => "error",
+              "error" => {
+                "type"    => "invalid_request_error",
+                "message" => ex.message || "message request failed",
+              },
+            }.to_json
+          end
+        end
+
         post "/v1/responses" do |env|
           body = json_body(env)
           begin
