@@ -1,0 +1,52 @@
+services:
+  rotator:
+    image: rotator:latest
+    container_name: rotator
+    entrypoint: ["/app/ocawecore"]
+    command: ["--port", "8080"]
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      ROTATOR_ORIGIN: "http://rotator:8080"
+      ROTATOR_IDENTIFIER: "rotator"
+      ROTATOR_ACTOR_ID: "http://rotator:8080/actors/rotator"
+      ROTATOR_FOLLOW_TARGET: "@orator@fmatch.internal.fedi"
+      ROTATOR_MODELS_DEV_URL: "https://models.dev/api.json"
+      ROTATOR_GONKA_PRICING_URL: "https://gonkagate.com/en/pricing"
+      ROTATOR_DATASET_ROOT: "/data/datasets"
+      ROTATOR_MARKETPLACE_PROPOSALS_ENABLED: "true"
+      ROTATOR_QUESTION_MODEL: "chat_completion/minimaxai/minimax-m2.7"
+      ROTATOR_PROVIDER_TIMEOUT_SECONDS: "12"
+      ROTATOR_FALLBACK_MODEL_CANDIDATES: "openrouter/free@openrouter"
+      ROTATOR_POSTGRES_DSN: "${ROTATOR_POSTGRES_DSN:-}"
+      OPENAI_BASE_URL: "${GONKA_BASE_URL}"
+      OPENAI_API_KEY: "${GONKA_API_KEY}"
+      SSL_CERT_FILE: "${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}"
+      NIX_SSL_CERT_FILE: "${NIX_SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}"
+      OCAWE_FEDERATION_SIGNATURES_REQUIRED: "false"
+      OCAWE_FEDERATION_RESOURCE_CONFORMS_TO: "https://fmatch/marketplace/resources/model"
+      OCAWE_FEDERATION_ACTION: "deliverService"
+      OCAWE_FEDERATION_PURPOSE: "request"
+      OCAWE_WORKFLOWS_ROOT: "/data/workflows/rotator"
+      ROTATOR_WORKSPACE_DIR: "/project"
+      OCAWE_RESULTS_DIR: "/results"
+      OCAWE_SECRETS_FILE: "/results/secrets/secrets.json"
+      GONKA_API_KEY: "${GONKA_API_KEY}"
+      GONKA_BASE_URL: "${GONKA_BASE_URL}"
+    ports:
+      - "8092:8080"
+    volumes:
+      - /opt/orator/results:/results
+      - /opt/rotator/data:/data
+      - /opt/rotator/secrets:/run/secrets/rotator:ro
+      - /root/deployments/sireng-rotator-ocawe:/project
+      - ./workflows:/workflows:ro
+    networks:
+      lefine-net:
+        aliases:
+          - rotator
+
+networks:
+  lefine-net:
+    external: true
+    name: lefine-net
