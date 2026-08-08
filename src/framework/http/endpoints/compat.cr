@@ -85,9 +85,14 @@ module ACD
         files = resolve_file_resources(body)
         metadata["files"] = JSON.parse(files.to_json) unless files.empty?
 
-        # Check if model is a workflow reference (e.g. "workflow/my-workflow")
-        if model.starts_with?("workflow/")
-          workflow_id = model.sub("workflow/", "")
+        # Account handles may be public model aliases for transport workflows.
+        workflow_id = if model.starts_with?("workflow/")
+                         model.sub("workflow/", "")
+                       elsif model == "acct:orator@lefine.pro"
+                         "orator"
+                       end
+
+        if workflow_id
           workflow = workflow_by_id(workflow_id)
 
           unless workflow
