@@ -136,6 +136,22 @@ module Ocawe
       normalized.to_json
     end
 
+    # Normalize any supported request format to the internal Chat Completions
+    # envelope. This is deliberately JSON based so workflows and plugins can
+    # use it without depending on one provider's wire structs.
+    def request_as_chat(path : String, body : String) : String
+      case detect(path, body)
+      when Format::ChatCompletions
+        body
+      when Format::AnthropicMessages
+        anthropic_request_as_chat(body)
+      when Format::OpenResponses
+        open_responses_request_as_chat(body)
+      else
+        raise "unsupported translation format"
+      end
+    end
+
     def chat_response_as_anthropic(completion : String, request : String) : String
       response = ChatCompletion.from_json(completion)
       input = AnthropicRequest.from_json(request)
@@ -155,9 +171,92 @@ module Ocawe
       output.to_json
     end
 
+    def open_responses_request_as_chat(body : String) : String
+      parsed = JSON.parse(body).as_h
+      messages = [] of JSON::Any
+      if input = parsed["input"]?
+        if text = input.as_s?
+          messages << message_json("user", text)
+        elsif items = input.as_a?
+          items.each do |item|
+            if text = item.as_s?
+              messages << message_json("user", text)
+            elsif hash = item.as_h?
+              role = hash["role"]?.try(&.as_s?) || "user"
+              content = hash["content"]?.try(&.as_s?) || hash["text"]?.try(&.as_s?) || hash["input_text"]?.try(&.as_s?)
+              messages << message_json(role, content) if content && !content.empty?
+            end
+          end
+        end
+      end
+      parsed["messages"] = JSON::Any.new(messages)
+      parsed.delete("input")
+      parsed.to_json
+    end
+
+    def chat_response_as_open_responses(completion : String, request : String = "{}") : String
+      response = JSON.parse(completion).as_h
+      request_json = JSON.parse(request).as_h
+      choices = response["choices"]?.try(&.as_a?) || [] of JSON::Any
+      choice = choices.first?.try(&.as_h?) || {} of String => JSON::Any
+      message = choice["message"]?.try(&.as_h?) || {} of String => JSON::Any
+      text = message["content"]?.try(&.as_s?) || ""
+      model = response["model"]?.try(&.as_s?) || request_json["model"]?.try(&.as_s?) || "unknown"
+      id = response["id"]?.try(&.as_s?) || "resp_#{Random::Secure.hex(12)}"
+      finish = choice["finish_reason"]?.try(&.as_s?) || "stop"
+      output = {
+        "id" => id,
+        "object" => "response",
+        "created_at" => response["created"]?.try(&.as_i64?) || Time.utc.to_unix,
+        "status" => "completed",
+        "model" => model,
+        "output" => [{
+          "type" => "message",
+          "role" => "assistant",
+          "content" => [{"type" => "output_text", "text" => text}],
+        }],
+        "output_text" => text,
+        "finish_reason" => finish,
+      }
+      output.to_json
+    end
+
+    def open_responses_response_as_chat(body : String, request : String = "{}") : String
+      parsed = JSON.parse(body).as_h
+      request_json = JSON.parse(request).as_h
+      text = parsed["output_text"]?.try(&.as_s?) || extract_output_text(parsed["output"]?)
+      model = parsed["model"]?.try(&.as_s?) || request_json["model"]?.try(&.as_s?)
+      {
+        "id" => parsed["id"]?.try(&.as_s?) || "chatcmpl_#{Random::Secure.hex(12)}",
+        "object" => "chat.completion",
+        "created" => parsed["created_at"]?.try(&.as_i64?) || Time.utc.to_unix,
+        "model" => model || "unknown",
+        "choices" => [{
+          "index" => 0,
+          "message" => {"role" => "assistant", "content" => text},
+          "finish_reason" => parsed["status"]?.try(&.as_s?) == "completed" ? "stop" : "length",
+        }],
+      }.to_json
+    end
+
     private def text_from(content : String | Array(ContentBlock)) : String
       return content if content.is_a?(String)
       content.compact_map(&.text).join("\n")
+    end
+
+    private def message_json(role : String, content : String) : JSON::Any
+      JSON.parse({"role" => role, "content" => content}.to_json)
+    end
+
+    private def extract_output_text(output : JSON::Any?) : String
+      return "" unless output
+      items = output.as_a? || [] of JSON::Any
+      items.flat_map do |item|
+        hash = item.as_h?
+        next [] of String unless hash
+        content = hash["content"]?.try(&.as_a?) || [] of JSON::Any
+        content.compact_map { |part| part.as_h?.try(&.["text"]?).try(&.as_s?) }
+      end.join("\n")
     end
   end
 end

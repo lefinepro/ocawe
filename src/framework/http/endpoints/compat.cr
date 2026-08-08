@@ -10,7 +10,7 @@ module ACD
             raise "streaming Anthropic messages are not supported" if stream_requested?(body)
             request_json = body.to_json
             Ocawe::Translation.detect("/v1/messages", request_json)
-            chat_body = Ocawe::Translation.anthropic_request_as_chat(request_json)
+            chat_body = Ocawe::Translation.request_as_chat("/v1/messages", request_json)
             completion = build_chat_completion(JSON.parse(chat_body).as_h)
             response = Ocawe::Translation.chat_response_as_anthropic(completion.to_json, request_json)
             env.response.status_code = 200
@@ -32,7 +32,9 @@ module ACD
         post "/v1/responses" do |env|
           body = json_body(env)
           begin
-            response = build_open_response(body)
+            chat_body = Ocawe::Translation.request_as_chat("/v1/responses", body.to_json)
+            completion = build_chat_completion(JSON.parse(chat_body).as_h)
+            response = JSON.parse(Ocawe::Translation.chat_response_as_open_responses(completion.to_json, body.to_json)).as_h
             env.response.status_code = 200
             env.response.content_type = "application/json"
             response.to_json

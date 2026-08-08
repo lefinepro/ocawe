@@ -60,4 +60,30 @@ describe Ocawe::Translation do
     response = JSON.parse(Ocawe::Translation.chat_response_as_anthropic(completion.to_json, request.to_json))
     response["model"].as_s.should eq("request-model")
   end
+
+  it "normalizes OpenResponses requests to chat messages" do
+    request = {"model" => "demo", "input" => "hello"}.to_json
+    normalized = JSON.parse(Ocawe::Translation.request_as_chat("/v1/responses", request))
+
+    normalized["model"].as_s.should eq("demo")
+    normalized["messages"][0]["role"].as_s.should eq("user")
+    normalized["messages"][0]["content"].as_s.should eq("hello")
+  end
+
+  it "converts chat completions to and from OpenResponses" do
+    completion = {
+      "id" => "chatcmpl_test",
+      "model" => "demo",
+      "created" => 10,
+      "choices" => [{
+        "message" => {"role" => "assistant", "content" => "hello"},
+        "finish_reason" => "stop",
+      }],
+    }.to_json
+
+    open = JSON.parse(Ocawe::Translation.chat_response_as_open_responses(completion))
+    open["output_text"].as_s.should eq("hello")
+    back = JSON.parse(Ocawe::Translation.open_responses_response_as_chat(open.to_json))
+    back["choices"][0]["message"]["content"].as_s.should eq("hello")
+  end
 end
