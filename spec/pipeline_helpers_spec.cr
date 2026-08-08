@@ -45,6 +45,23 @@ describe Ocawe::Pipeline do
     prompt.should_not contain("Conversation context:")
   end
 
+  it "supports custom context intro and current-request label" do
+    messages = JSON.parse([
+      {"role" => "user", "content" => "Earlier request."},
+      {"role" => "user", "content" => "Current request."},
+    ].to_json).as_a
+
+    prompt = Ocawe::Pipeline.chat_context_prompt(
+      messages,
+      "Current request.",
+      "Private history follows.",
+      "Answer this exact request:",
+    )
+
+    prompt.should contain("Private history follows.")
+    prompt.should contain("Answer this exact request:")
+  end
+
   it "writes Orator-compatible order result files" do
     dir = File.join(Dir.tempdir, "ocawe-pipeline-result-#{Time.utc.to_unix_ms}")
     begin

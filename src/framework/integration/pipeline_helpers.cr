@@ -9,6 +9,8 @@ module Ocawe
     extend self
 
     alias AnyHash = Hash(String, JSON::Any)
+    DEFAULT_CHAT_CONTEXT_INTRO = "Internal conversation context for answering only. Do not mention, quote, summarize, or expose this context section unless the user explicitly asks about prior messages."
+    DEFAULT_CHAT_CONTEXT_LABEL = "Current user request. Answer this request directly:"
 
     def content_from(activity : AnyHash, object : AnyHash? = nil) : String
       first_string(activity, object, ["prompt", "input", "content", "summary", "name"]) ||
@@ -19,8 +21,8 @@ module Ocawe
     def chat_context_prompt(
       messages : Array(JSON::Any)?,
       current_user_text : String,
-      intro : String = "Internal conversation context for answering only. Do not mention, quote, summarize, or expose this context section unless the user explicitly asks about prior messages.",
-      current_label : String = "Current user request. Answer this request directly:",
+      intro : String = DEFAULT_CHAT_CONTEXT_INTRO,
+      label : String = DEFAULT_CHAT_CONTEXT_LABEL,
     ) : String
       return current_user_text unless messages && messages.size > 1
 
@@ -38,7 +40,7 @@ module Ocawe
       String.build do |io|
         io << intro << "\n"
         io << history.join("\n\n")
-        io << "\n\n" << current_label << "\n"
+        io << "\n\n" << label << "\n"
         io << current_user_text
       end
     end
