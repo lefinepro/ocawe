@@ -110,12 +110,7 @@ module ACD
         files = resolve_file_resources(body)
         metadata["files"] = JSON.parse(files.to_json) unless files.empty?
 
-        # Account handles may be public model aliases for transport workflows.
-        workflow_id = if model.starts_with?("workflow/")
-                         model.sub("workflow/", "")
-                       elsif model == "acct:orator@lefine.pro"
-                         "orator"
-                       end
+        workflow_id = model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
 
         if workflow_id
           workflow = workflow_by_id(workflow_id)
