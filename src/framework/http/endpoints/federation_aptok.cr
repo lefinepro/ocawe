@@ -243,7 +243,7 @@ module ACD
         public_key = key ? Aptok.public_key(key) : nil
 
         actor = Aptok.actor(
-          "Application",
+          @settings.federation.actor_type,
           actor_uri,
           workflow_id,
           ctx.get_inbox_uri(workflow_id),

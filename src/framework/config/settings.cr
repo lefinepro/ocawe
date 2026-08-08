@@ -111,6 +111,8 @@ module Ocawe
       getter local_actor : String
       getter local_key_id : String
       getter local_private_key_path : String
+      getter actor_type : String
+      getter internal_origins : Hash(String, String)
 
       def initialize(
         @auto_subscribe : Array(String) = [] of String,
@@ -120,7 +122,12 @@ module Ocawe
         @local_actor : String = "http://127.0.0.1:4111/actors/server",
         @local_key_id : String = "http://127.0.0.1:4111/actors/server#main-key",
         @local_private_key_path : String = "./.ocawe/federation-private.pem",
+        actor_type : String = "Application",
+        @internal_origins : Hash(String, String) = {} of String => String,
       )
+        normalized_actor_type = actor_type.strip
+        raise ArgumentError.new("federation.actor_type must be Application or Service") unless ["Application", "Service"].includes?(normalized_actor_type)
+        @actor_type = normalized_actor_type
       end
     end
 
