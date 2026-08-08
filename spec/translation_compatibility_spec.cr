@@ -3,9 +3,9 @@ require "../src/framework/translation/compatibility"
 
 describe Ocawe::Translation do
   it "detects formats from paths and request shapes" do
-    Ocawe::Translation.detect("/v1/messages", {} of String => JSON::Any).should eq(Ocawe::Translation::Format::AnthropicMessages)
-    Ocawe::Translation.detect("/v1/responses", {} of String => JSON::Any).should eq(Ocawe::Translation::Format::OpenResponses)
-    Ocawe::Translation.detect("/v1/unknown", JSON.parse({"messages" => [] of String}.to_json).as_h).should eq(Ocawe::Translation::Format::ChatCompletions)
+    Ocawe::Translation.detect("/v1/messages", "{}").should eq(Ocawe::Translation::Format::AnthropicMessages)
+    Ocawe::Translation.detect("/v1/responses", "{}").should eq(Ocawe::Translation::Format::OpenResponses)
+    Ocawe::Translation.detect("/v1/unknown", {"messages" => [] of String}.to_json).should eq(Ocawe::Translation::Format::ChatCompletions)
   end
 
   it "normalizes Anthropic system and content blocks to chat messages" do
@@ -18,8 +18,8 @@ describe Ocawe::Translation do
       "max_tokens" => 32,
     }.to_json).as_h
 
-    normalized = Ocawe::Translation.anthropic_request_as_chat(body)
-    messages = normalized["messages"].as_a
+    normalized = Ocawe::Translation.anthropic_request_as_chat(body.to_json)
+    messages = JSON.parse(normalized)["messages"].as_a
 
     messages.size.should eq(2)
     messages[0]["role"].as_s.should eq("system")
@@ -39,10 +39,10 @@ describe Ocawe::Translation do
       "usage" => {"prompt_tokens" => 3, "completion_tokens" => 1},
     }.to_json).as_h
 
-    response = Ocawe::Translation.chat_response_as_anthropic(
-      completion,
-      JSON.parse({"model" => "request-model"}.to_json).as_h,
-    )
+    response = JSON.parse(Ocawe::Translation.chat_response_as_anthropic(
+      completion.to_json,
+      {"model" => "request-model"}.to_json,
+    ))
 
     response["id"].as_s.should eq("chatcmpl_test")
     response["type"].as_s.should eq("message")
@@ -53,11 +53,11 @@ describe Ocawe::Translation do
 
   it "uses the request model when a completion omits one" do
     completion = JSON.parse({
-      "choices" => [{"message" => {"content" => "Hi"}}],
+      "choices" => [{"message" => {"role" => "assistant", "content" => "Hi"}}],
     }.to_json).as_h
     request = JSON.parse({"model" => "request-model"}.to_json).as_h
 
-    response = Ocawe::Translation.chat_response_as_anthropic(completion, request)
+    response = JSON.parse(Ocawe::Translation.chat_response_as_anthropic(completion.to_json, request.to_json))
     response["model"].as_s.should eq("request-model")
   end
 end

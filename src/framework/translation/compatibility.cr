@@ -4,99 +4,160 @@ module Ocawe
   module Translation
     extend self
 
-    alias AnyHash = Hash(String, JSON::Any)
-
     enum Format
       ChatCompletions
       OpenResponses
       AnthropicMessages
     end
 
-    def detect(path : String, body : AnyHash) : Format
+    struct ContentBlock
+      include JSON::Serializable
+      property type : String
+      property text : String?
+
+      def initialize(@type : String, @text : String? = nil)
+      end
+    end
+
+    struct Message
+      include JSON::Serializable
+      property role : String
+      property content : String | Array(ContentBlock)
+
+      def initialize(@role : String, @content : String | Array(ContentBlock))
+      end
+    end
+
+    struct AnthropicRequest
+      include JSON::Serializable
+      property model : String?
+      property messages : Array(Message) = [] of Message
+      property system : String | Array(ContentBlock)?
+      property max_tokens : Int32?
+      property max_tokens_to_sample : Int32?
+      property stream : Bool?
+    end
+
+    struct ChatRequest
+      include JSON::Serializable
+      property model : String?
+      property messages : Array(Message)
+      property max_tokens : Int32?
+      property stream : Bool?
+
+      def initialize(@model : String?, @messages : Array(Message), @max_tokens : Int32? = nil, @stream : Bool? = nil)
+      end
+    end
+
+    struct ChatUsage
+      include JSON::Serializable
+      property prompt_tokens : Int32
+      property completion_tokens : Int32
+    end
+
+    struct ChatChoice
+      include JSON::Serializable
+      property message : Message
+      property finish_reason : String?
+    end
+
+    struct ChatCompletion
+      include JSON::Serializable
+      property id : String?
+      property model : String?
+      property choices : Array(ChatChoice)
+      property usage : ChatUsage?
+    end
+
+    struct AnthropicUsage
+      include JSON::Serializable
+      property input_tokens : Int32
+      property output_tokens : Int32
+
+      def initialize(@input_tokens : Int32, @output_tokens : Int32)
+      end
+    end
+
+    struct AnthropicResponse
+      include JSON::Serializable
+      property id : String
+      property type : String
+      property role : String
+      property model : String
+      property content : Array(ContentBlock)
+      property stop_reason : String?
+      property stop_sequence : String?
+      property usage : AnthropicUsage?
+
+      def initialize(
+        @id : String,
+        @type : String,
+        @role : String,
+        @model : String,
+        @content : Array(ContentBlock),
+        @stop_reason : String?,
+        @stop_sequence : String?,
+        @usage : AnthropicUsage?,
+      )
+      end
+    end
+
+    def detect(path : String, body : String) : Format
       normalized_path = path.downcase
       return Format::AnthropicMessages if normalized_path.ends_with?("/messages")
       return Format::OpenResponses if normalized_path.ends_with?("/responses")
       return Format::ChatCompletions if normalized_path.ends_with?("/chat/completions")
-      return Format::OpenResponses if body["input"]? && !body["messages"]?
-      return Format::ChatCompletions if body["messages"]?
+
+      parsed = JSON.parse(body)
+      return Format::OpenResponses if parsed["input"]? && !parsed["messages"]?
+      return Format::ChatCompletions if parsed["messages"]?
 
       raise "unable to detect API format"
     end
 
-    # Converts an Anthropic Messages request into the common Chat Completions
-    # request shape used by the existing Ocawe execution path.
-    def anthropic_request_as_chat(body : AnyHash) : AnyHash
-      copy = JSON.parse(body.to_json).as_h
-      messages = [] of AnyHash
+    def anthropic_request_as_chat(body : String) : String
+      request = AnthropicRequest.from_json(body)
+      messages = [] of Message
 
-      if system = copy["system"]?
+      if system = request.system
         system_text = text_from(system)
-        unless system_text.empty?
-          messages << {
-            "role"    => JSON.parse("system".to_json),
-            "content" => JSON.parse(system_text.to_json),
-          } of String => JSON::Any
-        end
+        messages << Message.new(role: "system", content: system_text) unless system_text.empty?
       end
 
-      if raw_messages = copy["messages"]?.try(&.as_a?)
-        raw_messages.each do |entry|
-          hash = entry.as_h
-          content = text_from(hash["content"]?)
-          messages << {
-            "role"    => JSON.parse((hash["role"]?.try(&.as_s?) || "user").to_json),
-            "content" => JSON.parse(content.to_json),
-          } of String => JSON::Any
-        end
+      request.messages.each do |message|
+        messages << Message.new(role: message.role, content: text_from(message.content))
       end
-
-      copy["messages"] = JSON.parse(messages.to_json)
-      copy["max_tokens"] = copy["max_tokens_to_sample"] if copy["max_tokens"]?.nil? && copy["max_tokens_to_sample"]?
-      copy
+      normalized = ChatRequest.new(
+        model: request.model,
+        messages: messages,
+        max_tokens: request.max_tokens || request.max_tokens_to_sample,
+        stream: request.stream,
+      )
+      normalized.to_json
     end
 
-    # Converts an Ocawe Chat Completions response into Anthropic Messages.
-    def chat_response_as_anthropic(completion : AnyHash, request : AnyHash) : AnyHash
-      choice = completion["choices"]?.try(&.as_a?).try(&.first?).try(&.as_h?) || {} of String => JSON::Any
-      message = choice["message"]?.try(&.as_h?) || {} of String => JSON::Any
-      text = message["content"]?.try(&.as_s?) || ""
-      usage = completion["usage"]?.try(&.as_h?)
-      model = completion["model"]?.try(&.as_s?) || request["model"]?.try(&.as_s?) || "ocawe"
-
-      content = [{
-        "type" => JSON.parse("text".to_json),
-        "text" => JSON.parse(text.to_json),
-      } of String => JSON::Any]
-
-      response = {
-        "id"            => completion["id"]? || JSON.parse("msg_#{Random::Secure.hex(12)}".to_json),
-        "type"          => JSON.parse("message".to_json),
-        "role"          => JSON.parse("assistant".to_json),
-        "model"         => JSON.parse(model.to_json),
-        "content"       => JSON.parse(content.to_json),
-        "stop_reason"   => JSON.parse("end_turn".to_json),
-        "stop_sequence" => JSON::Any.new(nil),
-      } of String => JSON::Any
-
-      if usage
-        response["usage"] = JSON.parse({
-          "input_tokens"  => usage["prompt_tokens"]? || JSON.parse("0"),
-          "output_tokens" => usage["completion_tokens"]? || JSON.parse("0"),
-        }.to_json)
-      end
-      response
+    def chat_response_as_anthropic(completion : String, request : String) : String
+      response = ChatCompletion.from_json(completion)
+      input = AnthropicRequest.from_json(request)
+      choice = response.choices.first?
+      text = choice ? text_from(choice.message.content) : ""
+      stop_reason = choice.try(&.finish_reason) == "tool_calls" ? "tool_use" : "end_turn"
+      output = AnthropicResponse.new(
+        id: response.id || "msg_#{Random::Secure.hex(12)}",
+        type: "message",
+        role: "assistant",
+        model: response.model.to_s.empty? ? input.model.to_s : response.model.to_s,
+        content: [ContentBlock.new(type: "text", text: text)],
+        stop_reason: stop_reason,
+        stop_sequence: nil,
+        usage: response.usage.try { |usage| AnthropicUsage.new(input_tokens: usage.prompt_tokens, output_tokens: usage.completion_tokens) },
+      )
+      output.to_json
     end
 
-    private def text_from(value : JSON::Any?) : String
-      return "" unless value
-      return value.as_s if value.as_s?
-      if array = value.as_a?
-        return array.compact_map { |item| text_from(item) unless item.as_h?.try(&.[]?("type")).try(&.as_s?) == "tool_use" }.join("\n")
-      end
-      if hash = value.as_h?
-        return hash["text"].try(&.as_s?) || hash["content"].try(&.as_s?) || ""
-      end
-      ""
+    private def text_from(content : String | Array(ContentBlock)) : String
+      return content if content.is_a?(String)
+      content.compact_map(&.text).join("\n")
     end
   end
 end

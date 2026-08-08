@@ -136,22 +136,20 @@ module Api
       property text : String?
       property id : String?
       property name : String?
-      property input : JSON::Any?
     end
 
     struct Message
       include JSON::Serializable
       property role : String
-      property content : JSON::Any
+      property content : String | Array(ContentBlock)
     end
 
     module Request
       include BaseRequest
       property messages : Array(Message)
-      property system : JSON::Any?
+      property system : String | Array(ContentBlock)?
       property max_tokens : Int32?
       property temperature : Float64?
-      property tools : Array(Hash(String, JSON::Any))?
     end
 
     struct Usage

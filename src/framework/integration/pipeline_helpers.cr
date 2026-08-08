@@ -2,6 +2,7 @@ require "file_utils"
 require "http/client"
 require "json"
 require "uri"
+require "aptok"
 
 module Ocawe
   module Pipeline
@@ -50,66 +51,32 @@ module Ocawe
       content : String,
       resource_conforms_to : String,
     ) : String
-      JSON.build do |json|
-        json.object do
-          json.field "@context" do
-            json.array do
-              json.string "https://www.w3.org/ns/activitystreams"
-              json.string "https://forgefed.org/ns"
-              json.string "https://w3id.org/fep/0837"
-              json.object do
-                json.field "resourceConformsTo" do
-                  json.object do
-                    json.field "@id", "https://w3id.org/valueflows#resourceConformsTo"
-                    json.field "@type", "@id"
-                  end
-                end
-                json.field "resourceQuantity", "https://w3id.org/valueflows#resourceQuantity"
-              end
-            end
-          end
-          json.field "id", id
-          json.field "type", "Offer"
-          json.field "actor", actor
-          json.field "to" do
-            json.array { json.string target }
-          end
-          json.field "object" do
-            json.object do
-              json.field "id", "#{id}#proposal"
-              json.field "type", "Proposal"
-              json.field "purpose", "request"
-              json.field "attributedTo", actor
-              json.field "to" do
-                json.array { json.string target }
-              end
-              json.field "name", title
-              json.field "content", content
-              json.field "mediaType", "text/plain"
-              json.field "publishes" do
-                json.object do
-                  json.field "type", "Intent"
-                  json.field "id", "#{id}#intent"
-                  json.field "action", "deliverService"
-                  json.field "resourceConformsTo", resource_conforms_to
-                  json.field "resourceQuantity" do
-                    json.object do
-                      json.field "hasUnit", "task"
-                      json.field "hasNumericalValue", "1"
-                    end
-                  end
-                end
-              end
-              json.field "source" do
-                json.object do
-                  json.field "mediaType", "text/plain"
-                  json.field "content", content
-                end
-              end
-            end
-          end
-        end
-      end
+      intent = Aptok.marketplace_intent(
+        id: "#{id}#intent",
+        action: "deliverService",
+        quantity: Aptok.marketplace_quantity(value: "1"),
+        resource_conforms_to: resource_conforms_to,
+      )
+      proposal = Aptok.marketplace_proposal(
+        id: "#{id}#proposal",
+        purpose: "request",
+        attributed_to: actor,
+        publishes: intent,
+        name: title,
+        content: content,
+        to: [target],
+      )
+      proposal["mediaType"] = Aptok.json("text/plain")
+      proposal["source"] = Aptok.json({
+        "mediaType" => "text/plain",
+        "content"   => content,
+      })
+      Aptok.object("Offer", id, {
+        "@context" => Aptok.marketplace_context,
+        "actor"    => Aptok.json(actor),
+        "to"       => Aptok.json([target]),
+        "object"   => Aptok.json(proposal),
+      }).to_json
     end
 
     def first_string(activity : AnyHash, object : AnyHash?, names : Enumerable(String)) : String?
