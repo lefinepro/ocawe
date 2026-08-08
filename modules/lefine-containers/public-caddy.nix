@@ -158,38 +158,6 @@ let
         }
       }
 
-      handle /designer {
-        reverse_proxy https://185.14.29.15 {
-          header_up Host ${frontendHostHeader}
-          transport http {
-            tls_server_name ${frontendPrimaryHost}
-          }
-        }
-      }
-
-      handle /designer/* {
-        reverse_proxy https://185.14.29.15 {
-          header_up Host ${frontendHostHeader}
-          transport http {
-            tls_server_name ${frontendPrimaryHost}
-          }
-        }
-      }
-
-      @open_design_authenticated_paths {
-        header Authorization "Basic *"
-        path /_next/* /app-icon.png /api/* /artifacts/* /frames/* /plugin-previews/* /live-artifacts/* /powered/* /projects* /onboarding* /automations* /plugins* /design-systems* /marketplace* /library* /integrations*
-      }
-
-      handle @open_design_authenticated_paths {
-        reverse_proxy https://185.14.29.15 {
-          header_up Host ${frontendHostHeader}
-          transport http {
-            tls_server_name ${frontendPrimaryHost}
-          }
-        }
-      }
-
       handle {
         reverse_proxy __FRONTEND_UPSTREAM__ {
           lb_try_duration 10s

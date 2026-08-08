@@ -31,7 +31,6 @@ let
         ../../fmatch/deployment/sireng-compose.nix
         ../../kefine2/deployment/sireng-compose.nix
         ./lefine-containers/orator.nix
-        ./lefine-containers/open-design.nix
         ./lefine-containers/planner.nix
         ./lefine-containers/weather.nix
         ./lefine-containers/executor.nix
