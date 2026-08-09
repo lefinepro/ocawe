@@ -60,7 +60,16 @@ module Ocawe
 
         executor = Ocawe::Workflow::ExecExecutor.new
         return WorkflowNode.new(id, NodeKind::Exec, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(executor.exec(id, ctx, runtime: runtime, env: env, workflow_root: workflow_root))
+          WorkflowNodeResult.continue(
+            executor.exec(
+              id,
+              ctx,
+              runtime: runtime,
+              env: env,
+              workflow_root: workflow_root,
+              workspace: workspace,
+            )
+          )
         end
       when "agent"
         metadata = {} of String => JSON::Any

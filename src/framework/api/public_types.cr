@@ -128,6 +128,49 @@ module Api
     end
   end
 
+  # Mirrors POST /v1/messages request and response bodies.
+  module AnthropicMessages
+    struct ContentBlock
+      include JSON::Serializable
+      property type : String
+      property text : String?
+      property id : String?
+      property name : String?
+    end
+
+    struct Message
+      include JSON::Serializable
+      property role : String
+      property content : String | Array(ContentBlock)
+    end
+
+    module Request
+      include BaseRequest
+      property messages : Array(Message)
+      property system : String | Array(ContentBlock)?
+      property max_tokens : Int32?
+      property temperature : Float64?
+    end
+
+    struct Usage
+      include JSON::Serializable
+      property input_tokens : Int32
+      property output_tokens : Int32
+    end
+
+    module Response
+      include JSON::Serializable
+      property id : String
+      property type : String
+      property role : String
+      property model : String
+      property content : Array(ContentBlock)
+      property stop_reason : String?
+      property stop_sequence : String?
+      property usage : Usage?
+    end
+  end
+
   # Models API opt-in marker.
   # Including this in a Cawfile struct enables GET /v1/models endpoint.
   # Usage in Cawfile:

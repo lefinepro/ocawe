@@ -41,7 +41,7 @@ describe "E2E: ACP Protocol Support" do
       workflow = Ocawe::Workflow.create_workflow("e2e-acp-input", "ACP agent input test")
       workflow
         .exec(
-          "codex",
+          "agent",
           runtime: {
             "acp" => json_h({
               "command" => "crystal",
@@ -73,7 +73,7 @@ describe "E2E: ACP Protocol Support" do
       workflow = Ocawe::Workflow.create_workflow("e2e-acp-env", "ACP with env")
       workflow
         .exec(
-          "codex",
+          "agent",
           runtime: {
             "acp" => json_h({
               "command" => "crystal",

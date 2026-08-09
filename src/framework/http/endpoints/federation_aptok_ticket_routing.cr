@@ -160,7 +160,7 @@ module ACD
           activity_doc["repo_url"]?.try(&.as_s?)
         )
         repo_ref = activity_doc["repo_ref"]?.try(&.as_s?) || "main"
-        provider = activity_doc["provider"]?.try(&.as_s?) || "codex"
+        provider = activity_doc["provider"]?.try(&.as_s?) || "acp-agent"
         ticket_id = ticket["id"]?.try(&.as_s?) || activity_doc["id"]?.try(&.as_s?) || ""
 
         suffix = Random.rand(UInt64::MAX).to_s(16)

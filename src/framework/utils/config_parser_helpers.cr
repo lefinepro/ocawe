@@ -86,14 +86,24 @@ module OcaweCore
             local_actor = string_or_nil(fed["local_actor"]?) || federation.local_actor
             local_key_id = string_or_nil(fed["local_key_id"]?) || federation.local_key_id
             local_private_key_path = string_or_nil(fed["local_private_key_path"]?) || federation.local_private_key_path
+            actor_type = string_or_nil(fed["actor_type"]?) || federation.actor_type
             allow_private_address = bool_or_nil(fed["allow_private_address"]?)
             allow_private_address = federation.allow_private_address if allow_private_address.nil?
             internal_domain = string_or_nil(fed["internal_domain"]?) || federation.internal_domain
             internal_peers = Ocawe::Federation::InternalDomain.parse_peers(parse_string_list_value(fed["internal_peers"]?))
             internal_peers = federation.internal_peers if internal_peers.empty?
             federation = Ocawe::Config::FederationSettings.new(
-              auto_subscribe, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path,
-              allow_private_address.not_nil!, internal_domain, internal_peers
+              auto_subscribe: auto_subscribe,
+              s2s_poll_interval_seconds: poll_interval,
+              s2s_http_timeout_seconds: http_timeout,
+              signatures_required: signatures_required.not_nil!,
+              local_actor: local_actor,
+              local_key_id: local_key_id,
+              local_private_key_path: local_private_key_path,
+              actor_type: actor_type,
+              allow_private_address: allow_private_address.not_nil!,
+              internal_domain: internal_domain,
+              internal_peers: internal_peers,
             )
           end
         end
@@ -271,16 +281,17 @@ module OcaweCore
           node_kinds: base.node_kinds,
           datasets: base.datasets,
           federation: Ocawe::Config::FederationSettings.new(
-            federation.auto_subscribe,
-            federation.s2s_poll_interval_seconds,
-            federation.s2s_http_timeout_seconds,
-            federation.signatures_required,
-            local_actor,
-            local_key_id,
-            federation.local_private_key_path,
-            federation.allow_private_address,
-            federation.internal_domain,
-            federation.internal_peers,
+            auto_subscribe: federation.auto_subscribe,
+            s2s_poll_interval_seconds: federation.s2s_poll_interval_seconds,
+            s2s_http_timeout_seconds: federation.s2s_http_timeout_seconds,
+            signatures_required: federation.signatures_required,
+            local_actor: local_actor,
+            local_key_id: local_key_id,
+            local_private_key_path: federation.local_private_key_path,
+            actor_type: federation.actor_type,
+            allow_private_address: federation.allow_private_address,
+            internal_domain: federation.internal_domain,
+            internal_peers: federation.internal_peers,
           ),
           api: base.api,
           scheduler: base.scheduler,

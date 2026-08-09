@@ -112,6 +112,7 @@ module Ocawe
       getter local_actor : String
       getter local_key_id : String
       getter local_private_key_path : String
+      getter actor_type : String
       # Opt-in escape hatch for loopback/private-network peers. Aptok refuses to
       # dereference remote documents on private addresses by default (SSRF
       # protection), which also blocks resolving a peer's public key during
@@ -135,10 +136,14 @@ module Ocawe
         @local_actor : String = "http://127.0.0.1:4111/actors/server",
         @local_key_id : String = "http://127.0.0.1:4111/actors/server#main-key",
         @local_private_key_path : String = "./.ocawe/federation-private.pem",
+        actor_type : String = "Application",
         @allow_private_address : Bool = false,
         @internal_domain : String = Ocawe::Federation::InternalDomain::DEFAULT_DOMAIN,
         @internal_peers : Hash(String, String) = {} of String => String,
       )
+        normalized_actor_type = actor_type.strip
+        raise ArgumentError.new("federation.actor_type must be Application or Service") unless ["Application", "Service"].includes?(normalized_actor_type)
+        @actor_type = normalized_actor_type
       end
 
       # Peer map with the environment override applied. Read this instead of

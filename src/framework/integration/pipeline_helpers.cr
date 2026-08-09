@@ -2,17 +2,83 @@ require "file_utils"
 require "http/client"
 require "json"
 require "uri"
+require "aptok"
 
 module Ocawe
   module Pipeline
     extend self
 
     alias AnyHash = Hash(String, JSON::Any)
+    DEFAULT_CHAT_CONTEXT_INTRO = "Internal conversation context for answering only. Do not mention, quote, summarize, or expose this context section unless the user explicitly asks about prior messages."
+    DEFAULT_CHAT_CONTEXT_LABEL = "Current user request. Answer this request directly:"
 
     def content_from(activity : AnyHash, object : AnyHash? = nil) : String
       first_string(activity, object, ["prompt", "input", "content", "summary", "name"]) ||
         object.try(&.[]?("source")).try(&.as_h?).try { |source| as_string(source["content"]?) || as_string(source["value"]?) } ||
         ""
+    end
+
+    def chat_context_prompt(
+      messages : Array(JSON::Any)?,
+      current_user_text : String,
+      intro : String = DEFAULT_CHAT_CONTEXT_INTRO,
+      label : String = DEFAULT_CHAT_CONTEXT_LABEL,
+    ) : String
+      return current_user_text unless messages && messages.size > 1
+
+      history = [] of String
+      messages[0, messages.size - 1].each do |message|
+        role = message["role"]?.try(&.as_s?).to_s.downcase
+        next unless {"system", "user", "assistant"}.includes?(role)
+        content = text_from_chat_content(message["content"]?).strip
+        next if content.empty?
+        history << "#{role.capitalize}: #{content}"
+      end
+
+      return current_user_text if history.empty?
+
+      String.build do |io|
+        io << intro << "\n"
+        io << history.join("\n\n")
+        io << "\n\n" << label << "\n"
+        io << current_user_text
+      end
+    end
+
+    def marketplace_request_activity(
+      id : String,
+      actor : String,
+      target : String,
+      title : String,
+      content : String,
+      resource_conforms_to : String,
+    ) : String
+      intent = Aptok.marketplace_intent(
+        id: "#{id}#intent",
+        action: "deliverService",
+        quantity: Aptok.marketplace_quantity(value: "1"),
+        resource_conforms_to: resource_conforms_to,
+      )
+      proposal = Aptok.marketplace_proposal(
+        id: "#{id}#proposal",
+        purpose: "request",
+        attributed_to: actor,
+        publishes: intent,
+        name: title,
+        content: content,
+        to: [target],
+      )
+      proposal["mediaType"] = Aptok.json("text/plain")
+      proposal["source"] = Aptok.json({
+        "mediaType" => "text/plain",
+        "content"   => content,
+      })
+      Aptok.object("Offer", id, {
+        "@context" => Aptok.marketplace_context,
+        "actor"    => Aptok.json(actor),
+        "to"       => Aptok.json([target]),
+        "object"   => Aptok.json(proposal),
+      }).to_json
     end
 
     def first_string(activity : AnyHash, object : AnyHash?, names : Enumerable(String)) : String?
@@ -111,6 +177,22 @@ module Ocawe
         "Accept-Encoding" => "identity",
         "User-Agent"      => "ocawe-pipeline/1.0",
       }
+    end
+
+    private def text_from_chat_content(content : JSON::Any?) : String
+      return "" unless content
+      return content.as_s if content.as_s?
+      if items = content.as_a?
+        return items.compact_map { |item| text_from_chat_content_item(item) }.join("\n")
+      end
+      ""
+    end
+
+    private def text_from_chat_content_item(item : JSON::Any) : String?
+      item["text"]?.try(&.as_s?) ||
+        item["content"]?.try(&.as_s?) ||
+        item["filename"]?.try(&.as_s?) ||
+        item["file_id"]?.try(&.as_s?)
     end
   end
 end
