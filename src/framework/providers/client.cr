@@ -6,6 +6,7 @@ require "./openai_provider"
 require "./gonka_provider"
 require "./cli_provider"
 require "../telemetry/prompt_metrics"
+require "../utils/time_compat"
 
 module OcaweCore
   module AI
@@ -16,7 +17,7 @@ module OcaweCore
       def generate_text(model_spec : String, prompt : String, system : String? = nil, messages : Array(JSON::Any)? = nil, tools : Array(JSON::Any)? = nil, metadata : AnyHash = {} of String => JSON::Any, api_key : String? = nil, base_url : String? = nil) : TextGenerationResponse
         model = ModelRef.parse(model_spec)
         provider = provider_for(model.provider)
-        started = Time.monotonic
+        started = Ocawe::Utils::TimeCompat.monotonic
         status = "success"
         response = nil.as(TextGenerationResponse?)
         begin
@@ -27,7 +28,7 @@ module OcaweCore
           status = "error"
           raise ex
         ensure
-          latency_ms = (Time.monotonic - started).total_milliseconds
+          latency_ms = Ocawe::Utils::TimeCompat.elapsed_milliseconds(started)
           output_tokens = response ? Ocawe::PromptMetrics.response_tokens(response.text) : 0
           Ocawe::PromptMetrics.record(
             source: "ocawe",

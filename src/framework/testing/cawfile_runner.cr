@@ -3,6 +3,7 @@ require "json"
 require "uuid"
 
 require "../discovery/cawfile_loader"
+require "../utils/time_compat"
 
 module Ocawe
   module Testing
@@ -154,8 +155,8 @@ module Ocawe
         current = response_body
         return current if final_response?(current)
 
-        deadline = Time.monotonic + wait_seconds.seconds
-        while Time.monotonic < deadline
+        deadline = Ocawe::Utils::TimeCompat.monotonic + wait_seconds.seconds
+        while Ocawe::Utils::TimeCompat.monotonic < deadline
           sleep 250.milliseconds
           path = status_path(workflow_id, current)
           return current unless path
