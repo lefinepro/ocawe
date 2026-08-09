@@ -87,7 +87,6 @@ module OcaweCore
             local_key_id = string_or_nil(fed["local_key_id"]?) || federation.local_key_id
             local_private_key_path = string_or_nil(fed["local_private_key_path"]?) || federation.local_private_key_path
             actor_type = string_or_nil(fed["actor_type"]?) || federation.actor_type
-            internal_origins = parse_header_map(fed["internal_origins"]?) || federation.internal_origins
             allow_private_address = bool_or_nil(fed["allow_private_address"]?)
             allow_private_address = federation.allow_private_address if allow_private_address.nil?
             internal_domain = string_or_nil(fed["internal_domain"]?) || federation.internal_domain
@@ -102,7 +101,6 @@ module OcaweCore
               local_key_id: local_key_id,
               local_private_key_path: local_private_key_path,
               actor_type: actor_type,
-              internal_origins: internal_origins,
               allow_private_address: allow_private_address.not_nil!,
               internal_domain: internal_domain,
               internal_peers: internal_peers,
@@ -291,7 +289,6 @@ module OcaweCore
             local_key_id: local_key_id,
             local_private_key_path: federation.local_private_key_path,
             actor_type: federation.actor_type,
-            internal_origins: federation.internal_origins,
             allow_private_address: federation.allow_private_address,
             internal_domain: federation.internal_domain,
             internal_peers: federation.internal_peers,

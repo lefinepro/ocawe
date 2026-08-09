@@ -1,19 +1,14 @@
 require "./spec_helper"
 
 describe "ACD::Kemal::App federation actor document" do
-  it "maps only exact configured federation hosts for transport" do
-    map = Ocawe::Federation::OriginMap.new(
-      {"fmatch.fedi.internal" => "http://127.0.0.1:7277"}
+  it "resolves internal federation handles through the peer model" do
+    peers = Ocawe::Federation::InternalDomain.parse_peers([
+      "fmatch=http://127.0.0.1:7277",
+    ])
+    Ocawe::Federation::InternalDomain.resolve_actor("@fmatch@fedi.internal", peers).should eq(
+      "http://127.0.0.1:7277/actors/fmatch"
     )
-    map.transport_uri("https://fmatch.fedi.internal/actors/orator").to_s.should eq(
-      "http://127.0.0.1:7277/actors/orator"
-    )
-    map.transport_uri("https://unknown.fedi.internal/actors/orator").to_s.should eq(
-      "https://unknown.fedi.internal/actors/orator"
-    )
-    expect_raises(ArgumentError) do
-      Ocawe::Federation::OriginMap.new({"*.fedi.internal" => "http://127.0.0.1:7277"})
-    end
+    Ocawe::Federation::InternalDomain.resolve_actor("@unknown@example.com", peers).should be_nil
   end
 
   it "builds an actor document for a loaded workflow" do
