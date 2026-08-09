@@ -30,7 +30,7 @@ describe "ACD::Kemal::App federation ticket routing" do
     app = ACD::Kemal::App.new(0)
     local_domain = "http://127.0.0.1:4111"
     body = {
-      "@context"    => json_str("https://www.w3.org/ns/activitystreams"),
+      "@context"    => json_str(Aptok::ACTIVITYSTREAMS_CONTEXT),
       "type"        => json_str("Create"),
       "workflow_id" => json_str("prepare-order"),
     } of String => JSON::Any
@@ -57,7 +57,7 @@ describe "ACD::Kemal::App federation ticket routing" do
     app = ACD::Kemal::App.new(0)
     local_domain = "http://127.0.0.1:4111"
     body = {
-      "@context" => json_str("https://www.w3.org/ns/activitystreams"),
+      "@context" => json_str(Aptok::ACTIVITYSTREAMS_CONTEXT),
       "type"     => json_str("Ticket"),
     } of String => JSON::Any
     ticket = {

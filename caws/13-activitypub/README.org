@@ -1,0 +1,137 @@
+#+TITLE: 13 - ActivityPub Send and Receive
+
+Two Cawfiles that federate with each other over ActivityPub server-to-server:
+=sender/= publishes a =Create(Ticket)= and delivers it, HTTP-signed, to every
+actor it follows; =receiver/= accepts the delivery on its public inbox, runs its
+agent once and publishes the answer as a correlated =Create(Note)=.
+
+Everything below is declared in the Cawfiles. There is no script, no manual HTTP
+call, no hand-rolled signature and no key to prepare by hand.
+
+* Actor names come from =#+name:=
+
+The =#+name:= org header of a bundle is the actor identifier, so =sender/Cawfile=
+starts with
+
+#+begin_src org
+#+name: sender
+#+end_src
+
+and serves =/actors/sender=, =/actors/sender/inbox= and =/actors/sender/outbox=.
+The key id is =.../actors/sender#main-key=. The origin comes from the port the
+runtime was started on; nothing else in the bundle declares an actor.
+
+* Following a peer
+
+=follow [...]= inside a workflow makes the runtime follow those actors at
+startup: it dereferences each actor document, discovers the =inbox= and stores a
+follow record.
+
+#+begin_src crystal
+follow ["@receiver@fedi.internal"]
+#+end_src
+
+=fedi.internal= is the reserved domain for peers of the same deployment. It is
+never resolved through WebFinger: =@name@fedi.internal= is looked up in the
+internal peer table, which a deployment pins through
+=OCAWE_FEDERATION_INTERNAL_PEERS= (=name=base_url=, comma separated). Without an
+entry it falls back to =http://<name>.<domain>:4111=, which is what service DNS
+resolves inside a cluster.
+
+A peer that was not listening yet leaves the subscription unresolved; it is
+retried on every poll cycle, so start order does not matter.
+
+* Sending
+
+=publish= emits =federation_output.activity=. The runtime normalizes the
+activity (filling in =actor=, =id= and =@context=), appends it to this actor's
+outbox and POSTs it to every followed inbox, signed with the local actor key.
+
+#+begin_src crystal
+publish "ActivityPub example ticket", to: "@receiver@fedi.internal", content: "Please review the federation docs."
+#+end_src
+
+=to:= becomes the ticket's =assignee=, and that is what selects the workflow that
+runs on the other side. The first positional argument is the ticket =name=; a
+ticket without one is dropped by the receiver.
+
+The sender workflow is =@[Service]=, so the runtime starts it once at boot, after
+the subscriptions exist. It therefore needs no API to be triggered.
+
+* Signatures are generated automatically
+
+Neither bundle ships or references a private key. On first use each runtime
+generates its own RSA key, =chmod 600=, under its own root and publishes the
+matching =publicKey.publicKeyPem= in its actor document. The key is per
+deployment and must never be committed.
+
+=federation.signatures_required = true= stays on in both peers: deliveries are
+verified and an unsigned POST is rejected with 401.
+
+* Enabling federation
+
+There is no =api = [...]= setting. The ActivityPub routes are mounted because
+the workflow declares federation types:
+
+#+begin_src crystal
+struct SenderOutput
+  include Api::Federation::Outbox
+end
+
+struct ReceiverInput
+  include Api::Federation::Inbox
+end
+#+end_src
+
+=Api::Federation::Outbox= says this workflow writes to a federated outbox,
+=Api::Federation::Inbox= that it accepts inbound deliveries. Either one enables
+the actor, inbox and outbox routes; nothing else has to be configured.
+
+* Receiving
+
+=Api::Federation::Inbox= on the receiver's input struct routes inbound tickets
+into the workflow. The agent's =last_response= becomes the =content= of the
+published =Create(Note)=, whose =inReplyTo= is the incoming ticket id. The
+receiver's output stays a plain response type so that answer survives to the
+publisher; the outbox route is served either way.
+
+* Run the demo
+
+Two terminals. Each side is told where the other lives:
+
+#+begin_src bash
+cd caws/13-activitypub/receiver
+OCAWE_FEDERATION_INTERNAL_PEERS="sender=http://127.0.0.1:4111" ocawecore --port 4222
+#+end_src
+
+#+begin_src bash
+cd caws/13-activitypub/sender
+OCAWE_FEDERATION_INTERNAL_PEERS="receiver=http://127.0.0.1:4222" ocawecore --port 4111
+#+end_src
+
+Then read both outboxes - the sender's holds the =Create(Ticket)=, the
+receiver's the =Create(Note)= replying to it:
+
+#+begin_src bash
+curl -sS -H 'Accept: application/activity+json' \
+  'http://127.0.0.1:4111/actors/sender/outbox?page=1'
+curl -sS -H 'Accept: application/activity+json' \
+  'http://127.0.0.1:4222/actors/receiver/outbox?page=1'
+#+end_src
+
+* Loopback caveat
+
+Both Cawfiles set =federation.allow_private_address = true=. Aptok's document
+loader refuses to dereference private addresses by default (SSRF guard), which
+would block both actor discovery and inbound public-key resolution on
+=127.0.0.1=. Keep it =false= in any public deployment.
+
+* Automated test
+
+=spec/e2e/activitypub_cawfile_send_spec.cr= runs exactly this bundle. It copies
+both directories into temporary roots, rewrites only the demo ports, the
+published content marker and the model annotation to per-run values, starts two
+real =ocawecore= processes and then asserts on the public ActivityPub surface
+alone: the sender published exactly one =Create(Ticket)=, the receiver replied
+exactly once with a =Create(Note)= correlated by =inReplyTo=, and both counts are
+still one several poll cycles later.

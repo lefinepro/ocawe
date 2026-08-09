@@ -1,6 +1,14 @@
 module Ocawe
   module Utils
     module TimeCompat
+      # The type `.monotonic` returns, so callers can annotate variables
+      # (e.g. `nil.as(TimeCompat::Instant?)`) without naming either spelling.
+      {% if compare_versions(Crystal::VERSION, "1.19.0") >= 0 %}
+        alias Instant = Time::Instant
+      {% else %}
+        alias Instant = Time::Span
+      {% end %}
+
       def self.monotonic
         {% if compare_versions(Crystal::VERSION, "1.19.0") >= 0 %}
           Time.instant
