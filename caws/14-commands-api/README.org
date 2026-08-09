@@ -1,10 +1,11 @@
 #+TITLE: Commands API
 
-This example demonstrates local Crystal command plugins. The plugin under
-~plugins/commands~ is discovered automatically; the root Cawfile does not
+This example demonstrates local Crystal function plugins. The plugin under
+~plugins/functions~ is discovered automatically; the root Cawfile does not
 require it explicitly.
 
-The workflow invokes ~set_value~ by its bare name. The existing ~agent~ node is
+The workflow invokes the registered ~set_value~ function by its bare name. The
+agent prompt uses the ~#set_value~ convention. The existing ~agent~ node is
 guarded by ~if input.command."generate_code"~. Use the repository mock model
 fixture when running the example so no network service is required.
 
