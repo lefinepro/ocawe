@@ -88,23 +88,4 @@ describe "ACD::Kemal::App federation merge request format" do
     first_patch["mediaType"]?.try(&.as_s?).should eq("application/x-git-patch")
   end
 
-  it "infers plan workflow when ticket activity is plan" do
-    app = ACD::Kemal::App.new(0)
-    activity = JSON.parse(%({"type":"Create"})).as_h
-    ticket = JSON.parse(%({"type":"Ticket","activity":"plan","summary":"Investigate issue"})).as_h
-    app.test_infer_ticket_workflow_activity(activity, ticket, "Create").should eq("plan")
-  end
-
-  it "infers plan workflow from PropertyValue command = #plan" do
-    app = ACD::Kemal::App.new(0)
-    activity = JSON.parse(%({"type":"Create"})).as_h
-    ticket = JSON.parse(%({
-      "type":"Ticket",
-      "content":"Please analyze",
-      "attachment":[
-        {"type":"PropertyValue","name":"command","value":"#plan"}
-      ]
-    })).as_h
-    app.test_infer_ticket_workflow_activity(activity, ticket, "Create").should eq("plan")
-  end
 end

@@ -61,7 +61,6 @@ module ACD
       private def normalize_federation_activity(raw : String?) : String
         value = raw.to_s.strip.downcase
         return "merge" if value == "merge" || value == "mergerequest"
-        return "plan" if value == "plan"
         "ticket"
       end
 
@@ -108,20 +107,6 @@ module ACD
         end
       end
 
-      private def ticket_has_plan_command?(ticket : Hash(String, JSON::Any)) : Bool
-        attachment = ticket["attachment"]?
-        entries = if attachment_hash = attachment.try(&.as_h?)
-                    [attachment_hash]
-                  else
-                    attachment.try(&.as_a?).try(&.compact_map(&.as_h?)) || [] of Hash(String, JSON::Any)
-                  end
-        entries.any? do |entry|
-          next false unless entry["type"]?.try(&.as_s?).to_s.strip.downcase == "propertyvalue"
-          next false unless entry["name"]?.try(&.as_s?).to_s.strip.downcase == "command"
-          entry["value"]?.try(&.as_s?).to_s.strip.downcase == "#plan" || entry["value"]?.try(&.as_s?).to_s.strip.downcase == "plan"
-        end
-      end
-
       private def activity_reference(value : JSON::Any?) : String
         return "" unless value
         if value_hash = value.as_h?
@@ -147,7 +132,6 @@ module ACD
       private def infer_ticket_workflow_activity(activity_doc : Hash(String, JSON::Any), ticket : Hash(String, JSON::Any), incoming_activity_type : String) : String
         explicit = normalize_federation_activity(ticket["activity"]?.try(&.as_s?) || activity_doc["activity"]?.try(&.as_s?))
         return explicit unless explicit == "ticket"
-        return "plan" if ticket_has_plan_command?(ticket)
         return "merge" if incoming_activity_type == "Offer"
         return "merge" if ticket_has_offer_attachment?(ticket)
         "ticket"
