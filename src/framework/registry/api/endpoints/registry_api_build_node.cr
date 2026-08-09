@@ -1,5 +1,6 @@
 require "http/client"
 require "../../../telemetry"
+require "../../../federation/internal_domain"
 
 module Ocawe
   module RegistryApi
@@ -197,6 +198,18 @@ module Ocawe
             raise "unsupported node kind result for #{kind_name}"
           end
         end
+      when "publish"
+        resolved_config = config || ({} of String => JSON::Any)
+        target = resolved_config["to"]?.try(&.as_s?).to_s
+        summary = resolved_config["summary"]?.try(&.as_s?).to_s
+        content = resolved_config["content"]?.try(&.as_s?).to_s
+
+        return WorkflowNode.new(id, NodeKind::Federation, metadata: {
+          "dsl_kind" => JSON.parse("publish".to_json),
+          "to"       => JSON.parse(target.to_json),
+        } of String => JSON::Any, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          WorkflowNodeResult.continue(build_publish_activity(ctx, id, target, summary, content))
+        end
       when "follow"
         resolved_config = config || ({} of String => JSON::Any)
         actors = resolved_config["actors"]?.try(&.as_a?) || [] of JSON::Any
@@ -245,6 +258,67 @@ module Ocawe
       else
         raise "unknown registry node type: #{type}"
       end
+    end
+
+    # Builds the `Create(Ticket)` a `publish` step sends. The activity is only
+    # returned as `federation_output.activity`; the runtime is what signs it,
+    # appends it to the outbox and delivers it to every followed inbox, so no
+    # step ever performs an HTTP call or a signature itself.
+    #
+    # `actor` and the activity `id` are intentionally left out: the runtime fills
+    # them from the configured local actor, which is the only place that knows
+    # this deployment's origin.
+    private def build_publish_activity(
+      ctx : Workflow::NodeContext,
+      id : String,
+      target : String,
+      summary : String,
+      content : String,
+    ) : Workflow::AnyHash
+      resolved_target = resolve_publish_target(target)
+      resolved_summary = resolve_runtime_string(summary, ctx)
+      resolved_content = resolve_runtime_string(content, ctx)
+      resolved_summary = id if resolved_summary.strip.empty?
+      suffix = Random::Secure.hex(8)
+
+      ticket = {
+        "type"    => JSON.parse("Ticket".to_json),
+        "id"      => JSON.parse("urn:ocawe:ticket:#{suffix}".to_json),
+        # `name` is required: a ticket without a task is not routed by the peer.
+        "name"    => JSON.parse(resolved_summary.to_json),
+        "summary" => JSON.parse(resolved_summary.to_json),
+        "content" => JSON.parse(resolved_content.to_json),
+      } of String => JSON::Any
+
+      unless resolved_target.empty?
+        # `assignee` is what selects the workflow that runs on the receiving side.
+        ticket["assignee"] = JSON.parse(resolved_target.to_json)
+        ticket["context"] = JSON.parse(resolved_target.to_json)
+      end
+
+      activity = {
+        "type"   => JSON.parse("Create".to_json),
+        "object" => JSON.parse(ticket.to_json),
+      } of String => JSON::Any
+      activity["to"] = JSON.parse([resolved_target].to_json) unless resolved_target.empty?
+
+      {
+        "federation_output" => JSON.parse({"activity" => activity}.to_json),
+        "published_ticket"  => JSON.parse(ticket.to_json),
+      } of String => JSON::Any
+    end
+
+    # `@name@fedi.internal` names a peer inside this deployment; anything else is
+    # already an actor IRI. Only the environment peer map is visible here, which
+    # is enough for the documented deployment shapes (service DNS by default,
+    # `OCAWE_FEDERATION_INTERNAL_PEERS` when ports are assigned at spawn time).
+    private def resolve_publish_target(target : String) : String
+      normalized = target.strip
+      return "" if normalized.empty?
+      peers = Ocawe::Federation::InternalDomain.peers_from_env(
+        ENV[Ocawe::Federation::InternalDomain::PEERS_ENV_VAR]?
+      )
+      Ocawe::Federation::InternalDomain.resolve_actor(normalized, peers) || normalized
     end
 
     private def run_api_node(ctx : Workflow::NodeContext, method : String, url : String, config : Workflow::AnyHash) : Workflow::AnyHash

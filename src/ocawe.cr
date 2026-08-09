@@ -49,12 +49,19 @@ module OcaweCore
     settings = OcaweCore::Utils::ConfigParser.load_settings(settings, rcl_path: config_rcl)
 
     workflows_root = Dir.current
-    if bundle = ACD::Discovery::CawfileLoader.load_root(workflows_root)
+    root_bundle = ACD::Discovery::CawfileLoader.load_root(workflows_root)
+    if bundle = root_bundle
       settings = OcaweCore::Utils::ConfigParser.apply_cawfile_settings(settings, bundle)
     end
     auto_start_environment(workflows_root)
 
     ENV["OCAWE_PORT"] = port.to_s
+
+    # The actor IRI embeds the port, which is only final once `--port` and the
+    # environment have both been applied - hence after `load_settings`.
+    if bundle = root_bundle
+      settings = OcaweCore::Utils::ConfigParser.apply_federation_identity(settings, bundle, port)
+    end
 
     ACD::Kemal::App.new(
       port,

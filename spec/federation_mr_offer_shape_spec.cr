@@ -46,8 +46,8 @@ describe "ACD::Kemal::App federation merge request format" do
     context = activity["@context"]?.try(&.as_a?)
     context.should_not be_nil
     context.not_nil!.map(&.as_s).should eq([
-      "https://www.w3.org/ns/activitystreams",
-      "https://forgefed.org/ns",
+      Aptok::ACTIVITYSTREAMS_CONTEXT,
+      Aptok::FORGEFED_CONTEXT,
     ])
     activity["type"]?.try(&.as_s?).should eq("Offer")
     activity["actor"]?.try(&.as_s?).should eq("https://forge.example/luke")
@@ -145,7 +145,7 @@ describe "ACD::Kemal::App federation merge request format" do
     events.size.should eq(2)
 
     outbox_json = {
-      "@context"     => json_str("https://www.w3.org/ns/activitystreams"),
+      "@context"     => json_str(Aptok::ACTIVITYSTREAMS_CONTEXT),
       "type"         => json_str("OrderedCollection"),
       "totalItems"   => json_any(events.size),
       "items"        => json_any(events.map { |entry| entry["activity"]? || JSON.parse("{}") }),

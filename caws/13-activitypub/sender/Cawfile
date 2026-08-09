@@ -1,0 +1,59 @@
+#+name: sender
+#
+# Sends a signed ActivityPub `Create(Ticket)` to every actor this runtime
+# follows. Run it together with `../receiver`, which accepts the delivery on its
+# public inbox, executes its agent and replies with a correlated `Create(Note)`.
+#
+# Everything the send needs is declared below - no script, no HTTP call, no
+# hand-rolled signature:
+#
+#   * `#+name:` above becomes the local actor (`/actors/sender`) and its key id.
+#     The origin comes from the port the runtime was started on.
+#   * `follow [...]` makes the runtime follow the receiver at startup: it
+#     dereferences the actor document, discovers the `inbox` and stores a follow
+#     record. `@receiver@fedi.internal` is an internal handle - it resolves
+#     through the internal peer table, never through WebFinger.
+#   * `publish` emits `federation_output.activity`, which the runtime signs,
+#     appends to this actor's outbox and delivers to every followed inbox.
+#   * The signing key is generated on first use; nothing to prepare by hand.
+#
+# `@[Service]` starts the workflow once at boot, after the subscriptions exist,
+# so the runtime needs no API call to be triggered.
+#
+# Usage (two terminals, from this directory and ../receiver):
+#
+#   OCAWE_FEDERATION_INTERNAL_PEERS="receiver=http://127.0.0.1:4222" ocawecore --port 4111
+
+settings do
+  data.adapter = "memory"
+  port = 4111
+
+  # Inbound deliveries must carry a valid HTTP Signature.
+  federation.signatures_required = true
+  federation.s2s_poll_interval_seconds = 1
+
+  # Loopback peers only: Aptok refuses to dereference private addresses by
+  # default (SSRF guard). Keep this `false` in any public deployment.
+  federation.allow_private_address = true
+end
+
+# A `@[Service]` workflow is started by the runtime itself, so its input is the
+# service envelope rather than a request body.
+struct SenderInput
+end
+
+# `Api::Federation::Outbox` is what turns the ActivityPub API on for this
+# runtime: the actor, inbox and outbox routes are mounted because this workflow
+# declares that it writes to a federated outbox. There is no `api = [...]`
+# setting - the declared types are the declaration.
+struct SenderOutput
+  include Api::Federation::Outbox
+end
+
+@[Validate(SenderInput, SenderOutput)]
+@[Service]
+workflow "13-activitypub-sender" do
+  follow ["@receiver@fedi.internal"]
+
+  publish "ActivityPub example ticket", to: "@receiver@fedi.internal", content: "Please review the federation docs."
+end

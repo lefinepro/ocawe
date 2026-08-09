@@ -1,5 +1,6 @@
 require "json"
 require "./default_function_handlers"
+require "../federation/internal_domain"
 
 module Ocawe
   module Config
@@ -113,6 +114,20 @@ module Ocawe
       getter local_private_key_path : String
       getter actor_type : String
       getter internal_origins : Hash(String, String)
+      # Opt-in escape hatch for loopback/private-network peers. Aptok refuses to
+      # dereference remote documents on private addresses by default (SSRF
+      # protection), which also blocks resolving a peer's public key during
+      # inbound HTTP Signature verification. Keep it false for public
+      # deployments; enable it only for local development and tests.
+      getter allow_private_address : Bool
+      # Reserved domain for peers that federate inside a single deployment.
+      # Handles carrying it (`@receiver@fedi.internal`) are resolved through
+      # `internal_peers` instead of WebFinger. See
+      # `Ocawe::Federation::InternalDomain`.
+      getter internal_domain : String
+      # `name => base_url` for internal peers, merged with (and overridden by)
+      # `OCAWE_FEDERATION_INTERNAL_PEERS`.
+      getter internal_peers : Hash(String, String)
 
       def initialize(
         @auto_subscribe : Array(String) = [] of String,
@@ -124,10 +139,21 @@ module Ocawe
         @local_private_key_path : String = "./.ocawe/federation-private.pem",
         actor_type : String = "Application",
         @internal_origins : Hash(String, String) = {} of String => String,
+        @allow_private_address : Bool = false,
+        @internal_domain : String = Ocawe::Federation::InternalDomain::DEFAULT_DOMAIN,
+        @internal_peers : Hash(String, String) = {} of String => String,
       )
         normalized_actor_type = actor_type.strip
         raise ArgumentError.new("federation.actor_type must be Application or Service") unless ["Application", "Service"].includes?(normalized_actor_type)
         @actor_type = normalized_actor_type
+      end
+
+      # Peer map with the environment override applied. Read this instead of
+      # `internal_peers` when resolving a handle.
+      def resolved_internal_peers : Hash(String, String)
+        peers = @internal_peers.dup
+        peers.merge!(Ocawe::Federation::InternalDomain.peers_from_env(ENV[Ocawe::Federation::InternalDomain::PEERS_ENV_VAR]?))
+        peers
       end
     end
 

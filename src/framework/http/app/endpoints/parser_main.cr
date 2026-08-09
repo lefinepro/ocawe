@@ -11,6 +11,9 @@ module ACD
           "include", "extend", "getter", "setter", "property",
           "alias", "enum", "lib", "fun", "require",
           "agent", "skill", "exec", "voice", "rag", "suspend", "dataset",
+          # `follow` is a federation subscription declaration handled by the
+          # Cawfile loader, not a workflow step.
+          "follow", "publish",
           "get", "post", "put",
           "input_type", "output_type", "input_validate", "output_validate",
           "parallel", "if", "elsif", "else", "while", "unless", "until", "loop",
@@ -196,6 +199,20 @@ module ACD
             config = agent_voice.merge(inline_config) { |_k, _left, right| right }
 
             ctx.workflow.voice(voice_id, config: config)
+            next
+          end
+          # `publish "Summary", to: "@peer@fedi.internal", content: "..."` is the
+          # native way to send ActivityPub from a Cawfile - no external script.
+          if match = line.match(/^\s*publish\s+"([^"]*)"(.*)$/)
+            summary = match[1]
+            tail = match[2]? || ""
+            attributes = parse_line_attributes(tail, ctx.workflow_file, "publish #{summary}")
+            config = {
+              "summary" => JSON.parse(summary.to_json),
+              "to"      => JSON.parse((parse_optional_string(attributes["to"]?) || "").to_json),
+              "content" => JSON.parse((parse_optional_string(attributes["content"]?) || "").to_json),
+            } of String => JSON::Any
+            ctx.workflow.step("publish", parse_optional_string(attributes["id"]?) || "publish", config: config)
             next
           end
           if match = line.match(rag_pattern)

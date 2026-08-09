@@ -159,11 +159,18 @@ module ACD
         end
 
         queue = Aptok::InProcessMessageQueue.new
+        # `allow_private_address` also has to be applied to the document loader:
+        # Aptok only derives the loader from that flag when a custom
+        # `document_get_provider` is configured, otherwise it keeps the strict
+        # default loader that refuses private/loopback URLs.
+        allow_private_address = @settings.federation.allow_private_address
         federation = Aptok::Federation.create(
           federation_origin,
           kv: @federation_kv,
           inbox_queue: queue,
           outbox_queue: queue,
+          document_loader: Aptok::Remote.default_document_loader(allow_private_address: allow_private_address),
+          allow_private_address: allow_private_address,
           manually_start_queue: true
         )
 
@@ -308,6 +315,7 @@ module ACD
 
       private def local_actor_key_pair(actor_uri : String) : Aptok::ActorKeyPair?
         key_path = @settings.federation.local_private_key_path
+        ensure_local_private_key(key_path)
         return nil unless File.exists?(key_path)
 
         public_key = local_actor_public_key_pem(key_path)
@@ -319,6 +327,33 @@ module ACD
           public_key_pem: public_key,
           private_key_path: key_path
         )
+      end
+
+      # HTTP Signatures are mandatory, so a runtime without a signing key cannot
+      # federate at all. Generating the key on first use removes the manual
+      # `openssl genrsa` step from every deployment and every example; an existing
+      # key is never touched. The file is created 0600 because it is a private key,
+      # and it must stay out of version control.
+      private def ensure_local_private_key(key_path : String) : Nil
+        return if key_path.strip.empty? || File.exists?(key_path)
+
+        parent = File.dirname(key_path)
+        Dir.mkdir_p(parent) unless parent.empty? || Dir.exists?(parent)
+
+        errors = IO::Memory.new
+        status = Process.run(
+          "openssl",
+          args: ["genrsa", "-out", key_path, "2048"],
+          output: Process::Redirect::Close,
+          error: errors
+        )
+        unless status.success?
+          STDERR.puts "[federation] could not generate signing key at #{key_path}: #{errors.to_s.lines.last?}"
+          return
+        end
+        File.chmod(key_path, 0o600)
+      rescue ex
+        STDERR.puts "[federation] could not generate signing key at #{key_path}: #{ex.message || ex.class.name}"
       end
 
       private def local_actor_public_key_pem(key_path : String) : String
@@ -428,10 +463,23 @@ module ACD
         value.as_s? || ""
       end
 
+      # Keyed by the actor *identifier*, which is what `GET
+      # /actors/{identifier}/outbox` looks up. It is no longer the workflow id:
+      # the identifier comes from the Cawfile `#+name:` header, so keying by
+      # workflow id would publish into a collection nobody can read.
       private def append_aptok_outbox_event(workflow_actor : String, activity : Hash(String, JSON::Any), event_id : String) : Nil
-        workflow_id = workflow_id_from_actor(workflow_actor)
-        workflow_id = "server" if workflow_id.empty?
-        @federation_kv.set("ocawe:federation:outbox:#{workflow_id}:#{event_id}", activity.to_json)
+        identifier = actor_identifier(workflow_actor)
+        identifier = "server" if identifier.empty?
+        @federation_kv.set("ocawe:federation:outbox:#{identifier}:#{event_id}", activity.to_json)
+      end
+
+      private def actor_identifier(actor : String) : String
+        parts = actor.split('/').reject(&.empty?)
+        return "" if parts.empty?
+        actor_index = -1
+        parts.each_with_index { |part, idx| actor_index = idx if part == "actors" }
+        return parts[actor_index + 1] if actor_index >= 0 && actor_index + 1 < parts.size
+        parts.last
       end
 
       private def publish_outbound_federation_output(workflow_id : String, output : Hash(String, JSON::Any)) : Nil

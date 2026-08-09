@@ -1,0 +1,49 @@
+#+name: receiver
+#
+# Accepts a signed ActivityPub `Create(Ticket)` on its public inbox, runs its
+# agent once with the ticket as input, and publishes the agent's answer as a
+# `Create(Note)` on its outbox with `inReplyTo` set to the ticket id.
+#
+# `#+name:` above is the local actor: the S2S routes served here are
+# `/actors/receiver`, `/actors/receiver/inbox` and `/actors/receiver/outbox`,
+# and `@receiver@fedi.internal` on the sender side resolves to exactly that
+# actor. The signing key is generated on first use.
+#
+# `Api::Federation::Inbox` on the input struct below is what mounts the
+# ActivityPub routes - there is no `api = [...]` setting to turn them on.
+# Signature verification is enforced: an unsigned delivery is rejected with 401.
+#
+# Usage (from this directory, alongside ../sender):
+#
+#   ocawecore --port 4222
+#   curl -sS -H 'Accept: application/activity+json' \
+#     http://127.0.0.1:4222/actors/receiver/outbox?page=1
+
+settings do
+  data.adapter = "memory"
+  port = 4222
+
+  federation.signatures_required = true
+  federation.s2s_poll_interval_seconds = 1
+
+  # Loopback peers only; keep this `false` in any public deployment.
+  federation.allow_private_address = true
+end
+
+struct ReceiverInput
+  include Api::Federation::Inbox
+end
+
+# The reply the runtime publishes as a `Create(Note)` is the agent's own answer,
+# so this output stays a plain response type. Federation is already enabled by
+# `Api::Federation::Inbox` above, and the outbox is served by the federation
+# routes regardless of the output type.
+struct ReceiverOutput
+  include Api::MastraAPI::Response
+end
+
+@[Validate(ReceiverInput, ReceiverOutput)]
+@[Model(Kimi)]
+workflow "13-activitypub-receiver" do
+  agent "receiver"
+end

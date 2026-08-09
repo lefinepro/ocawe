@@ -9,8 +9,8 @@ describe "ACD::Kemal::App federation metadata" do
     metadata = app.test_federation_metadata_document
 
     protocols = metadata["protocols"]?.try(&.as_a?) || [] of JSON::Any
-    protocols.any? { |entry| entry.as_s? == "https://www.w3.org/ns/activitystreams" }.should be_true
-    protocols.any? { |entry| entry.as_s? == "https://forgefed.org/ns" }.should be_true
+    protocols.any? { |entry| entry.as_s? == Aptok::ACTIVITYSTREAMS_CONTEXT }.should be_true
+    protocols.any? { |entry| entry.as_s? == Aptok::FORGEFED_CONTEXT }.should be_true
 
     feps = metadata["supported_feps"]?.try(&.as_a?)
     feps.should_not be_nil
