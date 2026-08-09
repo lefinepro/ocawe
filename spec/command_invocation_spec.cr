@@ -1,17 +1,17 @@
 require "./spec_helper"
 
 describe "bare command invocation" do
-  it "resolves a Command.register handler through the function fallback" do
-    Command.register("task3_bare_command", ->(ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
+  it "resolves a registered function through the function fallback" do
+    Ocawe::RegistryApi.register_function("task3_function") do |ctx|
       {
         "command_seen" => json_str(ctx.node_id),
         "carried" => ctx.state["carried"]?,
       }.compact
-    end)
+    end
 
     workflow = Ocawe::Workflow.create_workflow("task3-bare-command")
     workflow
-      .step(Ocawe::NodeKind.new("task3_bare_command"), id: "bare-command")
+      .step(Ocawe::NodeKind.new("task3_function"), id: "bare-function")
       .commit
 
     engine = Ocawe::Workflow::Engine.new
@@ -22,7 +22,7 @@ describe "bare command invocation" do
 
     result.status.should eq("success")
     state = result.state.not_nil!
-    state["command_seen"].as_s.should eq("bare-command")
+    state["command_seen"].as_s.should eq("bare-function")
     state["carried"].as_s.should eq("prior-state")
   end
 
