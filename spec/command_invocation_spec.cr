@@ -22,7 +22,7 @@ describe "bare command invocation" do
 
     result.status.should eq("success")
     state = result.state.not_nil!
-    state["command_seen"].as_s.should eq("bare-command")
+    state["command_seen"].as_s.should eq("bare-function")
     state["carried"].as_s.should eq("prior-state")
   end
 
