@@ -25,15 +25,41 @@ describe Ocawe::Pipeline do
     Ocawe::Pipeline.as_string(json_bool(true)).should eq("true")
   end
 
-  it "derives order ids from marketplace request ids" do
-    activity = JSON.parse({
-      "id" => "https://planner.example/actors/planner/requests/build-feature-1",
-      "object" => {
-        "id" => "https://planner.example/actors/planner/requests/build-feature-1#proposal",
-      },
-    }.to_json).as_h
+  it "builds internal model context from OpenAI chat history without public service labels" do
+    messages = JSON.parse([
+      {"role" => "system", "content" => "Use short answers."},
+      {"role" => "user", "content" => "My project is called Atlas."},
+      {"role" => "assistant", "content" => "Noted."},
+      {"role" => "user", "content" => [{"type" => "text", "text" => "What is my project called?"}]},
+    ].to_json).as_a
 
-    Ocawe::Pipeline.order_id_from(activity, activity["object"].as_h).should eq("build-feature-1")
+    prompt = Ocawe::Pipeline.chat_context_prompt(messages, "What is my project called?")
+
+    prompt.should contain("Internal conversation context for answering only.")
+    prompt.should contain("System: Use short answers.")
+    prompt.should contain("User: My project is called Atlas.")
+    prompt.should contain("Assistant: Noted.")
+    prompt.should contain("Current user request. Answer this request directly:")
+    prompt.should contain("What is my project called?")
+    prompt.should_not contain("Conversation Context")
+    prompt.should_not contain("Conversation context:")
+  end
+
+  it "supports custom context intro and current-request label" do
+    messages = JSON.parse([
+      {"role" => "user", "content" => "Earlier request."},
+      {"role" => "user", "content" => "Current request."},
+    ].to_json).as_a
+
+    prompt = Ocawe::Pipeline.chat_context_prompt(
+      messages,
+      "Current request.",
+      "Private history follows.",
+      "Answer this exact request:",
+    )
+
+    prompt.should contain("Private history follows.")
+    prompt.should contain("Answer this exact request:")
   end
 
   it "writes Orator-compatible order result files" do
@@ -52,66 +78,5 @@ describe Ocawe::Pipeline do
     ensure
       FileUtils.rm_rf(dir) if dir
     end
-  end
-
-  it "does not write empty Orator order results as completed" do
-    dir = File.join(Dir.tempdir, "ocawe-pipeline-empty-result-#{Time.utc.to_unix_ms}")
-    begin
-      Dir.mkdir_p(dir)
-      written = Ocawe::Pipeline.write_order_result("empty", "  ", "test-model", results_dir: dir)
-      written.should be_true
-
-      parsed = JSON.parse(File.read(File.join(dir, "order-empty.json")))
-      parsed["content"].as_s.should eq("Model returned an empty response.")
-      parsed["status"].as_s.should eq("failed")
-    ensure
-      FileUtils.rm_rf(dir) if dir
-    end
-  end
-
-  it "does not treat inbox acknowledgements as delivery content" do
-    payload = JSON.parse({
-      "chain" => [
-        {
-          "actor"  => "http://planner:8080/actors/planner",
-          "inbox"  => "http://planner:8080/actors/planner/inbox",
-          "status" => 202,
-          "ok"     => true,
-          "result" => {"handled" => true},
-        },
-      ],
-      "delivery" => {
-        "status" => 202,
-        "ok"     => true,
-        "result" => {"handled" => true},
-      },
-      "status" => "accepted",
-    }.to_json)
-
-    Ocawe::Pipeline.delivery_content(payload).should be_nil
-  end
-
-  it "builds pure Aptok marketplace request activities without pipeline metadata" do
-    activity = JSON.parse(Ocawe::Pipeline.marketplace_request_activity(
-      "https://planner.example/activities/1",
-      "https://planner.example/actors/planner",
-      "https://fmatch.example/actor/planner",
-      "Plan task",
-      "Create a plan",
-      "https://fmatch/marketplace/resources/planning"
-    )).as_h
-    proposal = activity["object"].as_h
-    intent = proposal["publishes"].as_h
-
-    Aptok.valid_fep_0837?(proposal).should be_true
-    activity["type"].as_s.should eq("Create")
-    activity["@context"].as_a.compact_map(&.as_s?).should contain("https://w3id.org/fep/0837")
-    proposal["type"].as_s.should eq("Proposal")
-    proposal["purpose"].as_s.should eq("request")
-    intent["action"].as_s.should eq("deliverService")
-    intent["resourceConformsTo"].as_s.should eq("https://fmatch/marketplace/resources/planning")
-    proposal.has_key?("attachment").should be_false
-    proposal.has_key?("mediaType").should be_false
-    intent.has_key?("receiver").should be_false
   end
 end

@@ -4,10 +4,37 @@ module ACD
       CHAT_COMPLETION_TASKS_DATASET = "chat_completion_tasks"
 
       private def mount_compat_endpoints
+        post "/v1/messages" do |env|
+          body = json_body(env)
+          begin
+            raise "streaming Anthropic messages are not supported" if stream_requested?(body)
+            request_json = body.to_json
+            Ocawe::Translation.detect("/v1/messages", request_json)
+            chat_body = Ocawe::Translation.request_as_chat("/v1/messages", request_json)
+            completion = build_chat_completion(JSON.parse(chat_body).as_h)
+            response = Ocawe::Translation.chat_response_as_anthropic(completion.to_json, request_json)
+            env.response.status_code = 200
+            env.response.content_type = "application/json"
+            response.to_json
+          rescue ex
+            env.response.status_code = completion_error_status(ex)
+            env.response.content_type = "application/json"
+            {
+              "type"  => "error",
+              "error" => {
+                "type"    => "invalid_request_error",
+                "message" => ex.message || "message request failed",
+              },
+            }.to_json
+          end
+        end
+
         post "/v1/responses" do |env|
           body = json_body(env)
           begin
-            response = build_open_response(body)
+            chat_body = Ocawe::Translation.request_as_chat("/v1/responses", body.to_json)
+            completion = build_chat_completion(JSON.parse(chat_body).as_h)
+            response = JSON.parse(Ocawe::Translation.chat_response_as_open_responses(completion.to_json, body.to_json)).as_h
             env.response.status_code = 200
             env.response.content_type = "application/json"
             response.to_json
@@ -85,9 +112,9 @@ module ACD
         files = resolve_file_resources(body)
         metadata["files"] = JSON.parse(files.to_json) unless files.empty?
 
-        # Check if model is a workflow reference (e.g. "workflow/my-workflow")
-        if model.starts_with?("workflow/")
-          workflow_id = model.sub("workflow/", "")
+        workflow_id = model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
+
+        if workflow_id
           workflow = workflow_by_id(workflow_id)
 
           unless workflow

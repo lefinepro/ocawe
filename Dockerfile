@@ -1,4 +1,4 @@
-FROM crystallang/crystal:1.13.3
+FROM crystallang/crystal:1.19.1
 
 WORKDIR /ocawe
 
@@ -10,14 +10,11 @@ RUN apt-get update \
 RUN npm install -g opencode-ai && test -f /usr/local/bin/opencode
 
 COPY shard.yml shard.lock ./
-RUN shards update --production --skip-postinstall --skip-executables \
-  && if [ -f lib/nbchannel/src/nbchannel.cr ]; then \
-      perl -pi -e 's/Crystal::Scheduler\\.reschedule/Fiber.yield/' lib/nbchannel/src/nbchannel.cr \
-    ; fi
+RUN shards install --production --skip-postinstall --skip-executables
 
 COPY . .
-RUN shards build ocawe --release --no-debug \
-  && crystal build src/ocawe.cr -Docawe_runtime_main --release --no-debug -o /ocawe/bin/ocawecore
+RUN crystal run scripts/patch_nbchannel.cr
+RUN shards build ocawe --release --no-debug
 RUN cc -Os -s src/tools/rootfs_tar.c -o /ocawe/bin/rootfs_tar
 RUN chmod +x /ocawe/entrypoint.sh
 

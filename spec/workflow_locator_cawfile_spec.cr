@@ -66,7 +66,7 @@ end
 
 @[Validate(Input, Output)]
 workflow "chat-completions" do
-  exec "codex", runtime: {acp: {command: "codex"}}
+  exec "agent", runtime: {acp: {command: "agent"}}
 end
 RCL
         locator = ACD::Discovery::WorkflowLocator.new(root)

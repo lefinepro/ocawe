@@ -547,7 +547,7 @@ end
 @[Validate(Input, Output)]
 workflow "chat-task" do
   follow ["@fmatch.example"]
-  exec "codex", runtime: {acp: {command: "codex"}}
+exec "agent", runtime: {acp: {command: "agent"}}
 end
 RCL
         bundles = ACD::Discovery::CawfileLoader.load_all(dir)

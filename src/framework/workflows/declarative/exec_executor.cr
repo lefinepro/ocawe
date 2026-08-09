@@ -11,7 +11,14 @@ require "./acp_executor"
 module Ocawe
   module Workflow
     class ExecExecutor
-      def exec(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil) : AnyHash
+      def exec(
+        ref : String,
+        ctx : NodeContext,
+        runtime : AnyHash? = nil,
+        env : AnyHash? = nil,
+        workflow_root : String? = nil,
+        workspace : AnyHash? = nil,
+      ) : AnyHash
         started = Ocawe::Utils::TimeCompat.monotonic
         status = "success"
         span = Ocawe::Telemetry.start_span(
@@ -32,7 +39,8 @@ module Ocawe
 
           # Check for ACP runtime
           if acp_config = runtime["acp"]?
-            return exec_acp(ref, ctx, acp_config, runtime, env, workflow_root)
+            placement = runtime["placement"]?.try(&.as_h?)
+            return exec_acp(ref, ctx, acp_config, placement, env, workflow_root, workspace)
           end
 
           if runtime.has_key?("git+https")
@@ -58,73 +66,30 @@ module Ocawe
         end
       end
 
-      private def exec_acp(ref : String, ctx : NodeContext, acp_config : JSON::Any, runtime : AnyHash, env : AnyHash?, workflow_root : String?) : AnyHash
+      private def exec_acp(
+        ref : String,
+        ctx : NodeContext,
+        acp_config : JSON::Any,
+        placement : AnyHash?,
+        env : AnyHash?,
+        workflow_root : String?,
+        workspace : AnyHash?,
+      ) : AnyHash
         config = acp_config.as_h? || {} of String => JSON::Any
-        config = config.dup
-        if placement = runtime["placement"]?
-          config["placement"] = merge_workspace_placement(placement, ctx)
-        end
         input = acp_prompt_input(ctx.input_data)
 
         # Build environment
         exec_env = build_exec_env(env) || {} of String => String
 
         # Resolve working directory
-        cwd = resolve_acp_cwd(config, ctx, workflow_root)
-        fs_policy = build_filesystem_policy(ctx, cwd)
+        cwd = workflow_root || Dir.current
 
-        executor = ACPExecutor.new(ref, cwd, exec_env, fs_policy)
-        executor.run(ref, input, config)
+        executor = ACPExecutor.new(ref, ctx.run_id, cwd, exec_env)
+        executor.run(ref, input, config, placement: placement, workspace: workspace)
       end
 
       private def acp_prompt_input(input_data : AnyHash) : String
-        if prompt = input_data["prompt"]?.try(&.as_s?)
-          prompt
-        else
-          input_data.to_json
-        end
-      end
-
-      private def resolve_acp_cwd(config : Hash(String, JSON::Any), ctx : NodeContext, workflow_root : String?) : String
-        if cwd = config["cwd"]?.try(&.as_s?)
-          return File.expand_path(cwd)
-        end
-        if env_workspace_path = ENV["OCAWE_AGENT_WORKSPACE_PATH"]?
-          return File.expand_path(env_workspace_path) unless env_workspace_path.empty?
-        end
-        if workspace = ctx.input_data["workspace"]?.try(&.as_h?)
-          if workspace_path = workspace["path"]?.try(&.as_s?)
-            return File.expand_path(workspace_path)
-          end
-        end
-        File.expand_path(workflow_root || Dir.current)
-      end
-
-      private def build_filesystem_policy(ctx : NodeContext, cwd : String) : ACP::Client::FilesystemPolicy
-        workspace = ctx.input_data["workspace"]?.try(&.as_h?)
-        root = ENV["OCAWE_AGENT_WORKSPACE_PATH"]? || workspace.try { |value| value["path"]?.try(&.as_s?) } || cwd
-        write_policy = ENV["OCAWE_AGENT_WRITE_POLICY"]? || workspace.try { |value| value["write_policy"]?.try(&.as_s?) || value["writePolicy"]?.try(&.as_s?) } || "write"
-        ACP::Client::FilesystemPolicy.new(root, write_policy)
-      end
-
-      private def merge_workspace_placement(placement : JSON::Any, ctx : NodeContext) : JSON::Any
-        merged = placement.as_h?.try(&.dup) || {} of String => JSON::Any
-        workspace = ctx.input_data["workspace"]?.try(&.as_h?)
-        if env_path = ENV["OCAWE_AGENT_WORKSPACE_PATH"]?
-          merged["path"] = JSON.parse(env_path.to_json) unless env_path.empty?
-        elsif workspace
-          if path = workspace.not_nil!["path"]?
-            merged["path"] ||= path
-          end
-        end
-        if env_host_path = ENV["OCAWE_AGENT_HOST_PATH"]?
-          merged["host_path"] = JSON.parse(env_host_path.to_json) unless env_host_path.empty?
-        elsif workspace
-          if host_path = workspace.not_nil!["host_path"]? || workspace.not_nil!["hostPath"]?
-            merged["host_path"] ||= host_path
-          end
-        end
-        JSON.parse(merged.to_json)
+        input_data["prompt"]?.try(&.as_s?) || input_data.to_json
       end
 
       private def exec_mcp_tool(ref : String, ctx : NodeContext) : AnyHash

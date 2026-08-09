@@ -60,18 +60,6 @@ module ACD
           env.response.content_type = "application/json"
           federation_metadata_document.to_json
         end
-        get "/resources/:identifier" do |env|
-          identifier = env.params.url["identifier"]
-          resource = local_federation_resource_document(identifier)
-          if resource.empty?
-            env.response.status_code = 404
-            env.response.content_type = "text/plain"
-            next "resource not found"
-          end
-
-          env.response.content_type = "application/activity+json"
-          resource.to_json
-        end
 
         get "/FEDERATION.md" do |env|
           metadata_path = federation_markdown_path
@@ -94,6 +82,7 @@ module ACD
 
       private def unsigned_registered_inbox_response(env) : String?
         return nil if inbox_signature_verification_required?
+        return nil unless Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
 
         raw = env.request.body.try(&.gets_to_end).to_s
         activity = JSON.parse(raw).as_h
@@ -107,7 +96,7 @@ module ACD
           env.response.content_type = "application/json"
           return {"handled" => true, "status" => "accepted"}.to_json
         end
-        handled = process_aptok_inbox_activity(activity)
+        handled = process_registered_aptok_inbox_activity(activity)
 
         env.response.status_code = handled ? 202 : 204
         env.response.content_type = "application/json"
@@ -170,11 +159,18 @@ module ACD
         end
 
         queue = Aptok::InProcessMessageQueue.new
+        # `allow_private_address` also has to be applied to the document loader:
+        # Aptok only derives the loader from that flag when a custom
+        # `document_get_provider` is configured, otherwise it keeps the strict
+        # default loader that refuses private/loopback URLs.
+        allow_private_address = @settings.federation.allow_private_address
         federation = Aptok::Federation.create(
           federation_origin,
           kv: @federation_kv,
           inbox_queue: queue,
           outbox_queue: queue,
+          document_loader: Aptok::Remote.default_document_loader(allow_private_address: allow_private_address),
+          allow_private_address: allow_private_address,
           manually_start_queue: true
         )
 
@@ -191,11 +187,7 @@ module ACD
           resolve_aptok_signature_key(key_id)
         end
 
-        if inbox_signature_verification_required?
-          federation.inbox_signature_verification
-        else
-          federation.inbox_verifier ->(_request : Aptok::Request, _activity : Aptok::JsonMap) { true }
-        end
+        federation.inbox_signature_verification if inbox_signature_verification_required?
 
         federation.inbox "/actors/{identifier}/inbox", "/inbox" do |routes|
           routes.with_idempotency(Time::Span.new(hours: 24), "per-inbox")
@@ -258,98 +250,61 @@ module ACD
         public_key = key ? Aptok.public_key(key) : nil
 
         actor = Aptok.actor(
-          local_actor_type,
+          @settings.federation.actor_type,
           actor_uri,
           workflow_id,
           ctx.get_inbox_uri(workflow_id),
           ctx.get_outbox_uri(workflow_id),
-          name: workflow_actor_name(workflow_id),
+          name: ENV["OCAWE_FEDERATION_ACTOR_NAME"]? || workflow_id,
           shared_inbox: "#{ctx.origin}/inbox",
           alias_uri: ENV["OCAWE_FEDERATION_ALIAS_URI"]?,
           public_key: public_key
         )
-        decorate_local_actor_document(actor, workflow_id)
+        decorate_local_actor_document(actor)
         actor
       end
 
-      private def decorate_local_actor_document(actor : Aptok::JsonMap, workflow_id : String) : Nil
-        resources = workflow_federation_resources(workflow_id)
-        if summary = resources.first?.try(&.[:description])
+      private def decorate_local_actor_document(actor : Aptok::JsonMap) : Nil
+        if summary = ENV["OCAWE_FEDERATION_ACTOR_SUMMARY"]?
+          summary = summary.strip
           actor["summary"] = JSON.parse(summary.to_json) unless summary.empty?
         end
 
-        tags = resources.flat_map { |resource| resource[:tags] }
-        tags.uniq!
+        tags = federation_actor_tags
         unless tags.empty?
           actor["tag"] = JSON.parse(tags.map { |tag|
             {"type" => "Hashtag", "name" => "##{tag}"}
           }.to_json)
         end
 
-        capabilities = resources.map { |resource| federation_actor_resource_capability(actor, resource) }
-        actor["attachment"] = JSON.parse(capabilities.to_json) unless capabilities.empty?
+        capability = federation_actor_capability(tags)
+        actor["attachment"] = JSON.parse([capability].to_json) if capability
       end
 
-      private def federation_actor_resource_capability(actor : Aptok::JsonMap, resource) : Hash(String, String | Array(String))
-        name = resource[:name].empty? ? resource[:id] : resource[:name]
-        description = resource[:description]
-        actor_id = actor["id"]?.try(&.as_s?).to_s
-        configured_resource = ENV["OCAWE_FEDERATION_RESOURCE_CONFORMS_TO"]?.to_s.strip
-        resource_iri = configured_resource.empty? ? federation_resource_iri(actor_id, resource[:id]) : configured_resource
-        configured_action = ENV["OCAWE_FEDERATION_ACTION"]?.to_s.strip
-        action = configured_action.empty? ? resource[:action] : configured_action
-        configured_purpose = ENV["OCAWE_FEDERATION_PURPOSE"]?.to_s.strip
-        purpose = configured_purpose.empty? ? resource[:purpose] : configured_purpose
+      private def federation_actor_tags : Array(String)
+        raw = ENV["OCAWE_FEDERATION_TAGS"]? || ""
+        tags = raw.split(',')
+          .map(&.strip)
+          .reject(&.empty?)
+          .map { |tag| tag.starts_with?('#') ? tag[1..] : tag }
+        tags.uniq!
+        tags
+      end
+
+      private def federation_actor_capability(tags : Array(String)) : Hash(String, String | Array(String))?
+        resource = (ENV["OCAWE_FEDERATION_RESOURCE_CONFORMS_TO"]? || "").strip
+        return nil if resource.empty?
+
         capability = {
           "type"               => "PropertyValue",
-          "id"                 => resource[:id],
-          "name"               => name,
-          "value"              => description.empty? ? resource_iri : description,
-          "resourceConformsTo" => resource_iri,
-          "action"             => action,
-          "purpose"            => purpose,
+          "name"               => "Marketplace capability",
+          "value"              => resource,
+          "resourceConformsTo" => resource,
+          "action"             => (ENV["OCAWE_FEDERATION_ACTION"]? || "deliverService").strip,
+          "purpose"            => (ENV["OCAWE_FEDERATION_PURPOSE"]? || "request").strip,
         } of String => String | Array(String)
-        capability["summary"] = description unless description.empty?
-        capability["tag"] = resource[:tags] unless resource[:tags].empty?
+        capability["tag"] = tags unless tags.empty?
         capability
-      end
-
-      private def local_federation_resource_document(resource_id : String) : Aptok::JsonMap
-        found_workflow = ""
-        found_resource = nil
-        @cache_lock.synchronize do
-          @workflow_federation_resources.each do |workflow_id, resources|
-            if resource = resources.find { |entry| entry[:id] == resource_id }
-              found_workflow = workflow_id
-              found_resource = resource
-              break
-            end
-          end
-        end
-        return Aptok::JsonMap.new unless resource = found_resource
-
-        actor_id = aptok_federation.create_context.get_actor_uri(found_workflow)
-        resource_iri = federation_resource_iri(actor_id, resource[:id])
-        document = JSON.parse({
-          "@context"           => [Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::MARKETPLACE_CONTEXT],
-          "id"                 => resource_iri,
-          "type"               => "Resource",
-          "name"               => resource[:name],
-          "summary"            => resource[:description],
-          "attributedTo"       => actor_id,
-          "resourceConformsTo" => resource_iri,
-          "action"             => resource[:action],
-          "purpose"            => resource[:purpose],
-        }.to_json).as_h
-        tags = resource[:tags]
-        unless tags.empty?
-          document["tag"] = JSON.parse(tags.map { |tag| {"type" => "Hashtag", "name" => "##{tag}"} }.to_json)
-        end
-        document
-      end
-
-      private def federation_resource_iri(actor_id : String, resource_id : String) : String
-        "#{local_domain_from_actor_url(actor_id)}/resources/#{resource_id}"
       end
 
       private def configured_local_actor_identifier : String
@@ -358,29 +313,47 @@ module ACD
         tail.empty? ? "server" : tail
       end
 
-      private def local_actor_type : String
-        actor_type = @settings.federation.actor_type.strip
-        actor_type.empty? ? "Application" : actor_type
-      end
-
       private def local_actor_key_pair(actor_uri : String) : Aptok::ActorKeyPair?
         key_path = @settings.federation.local_private_key_path
+        ensure_local_private_key(key_path)
         return nil unless File.exists?(key_path)
 
         public_key = local_actor_public_key_pem(key_path)
         return nil if public_key.empty?
 
         Aptok::ActorKeyPair.new(
-          id: local_actor_key_id(actor_uri),
+          id: "#{actor_uri}#main-key",
           owner: actor_uri,
           public_key_pem: public_key,
           private_key_path: key_path
         )
       end
 
-      private def local_actor_key_id(actor_uri : String) : String
-        configured = @settings.federation.local_key_id.strip
-        configured.empty? ? "#{actor_uri}#main-key" : configured
+      # HTTP Signatures are mandatory, so a runtime without a signing key cannot
+      # federate at all. Generating the key on first use removes the manual
+      # `openssl genrsa` step from every deployment and every example; an existing
+      # key is never touched. The file is created 0600 because it is a private key,
+      # and it must stay out of version control.
+      private def ensure_local_private_key(key_path : String) : Nil
+        return if key_path.strip.empty? || File.exists?(key_path)
+
+        parent = File.dirname(key_path)
+        Dir.mkdir_p(parent) unless parent.empty? || Dir.exists?(parent)
+
+        errors = IO::Memory.new
+        status = Process.run(
+          "openssl",
+          args: ["genrsa", "-out", key_path, "2048"],
+          output: Process::Redirect::Close,
+          error: errors
+        )
+        unless status.success?
+          STDERR.puts "[federation] could not generate signing key at #{key_path}: #{errors.to_s.lines.last?}"
+          return
+        end
+        File.chmod(key_path, 0o600)
+      rescue ex
+        STDERR.puts "[federation] could not generate signing key at #{key_path}: #{ex.message || ex.class.name}"
       end
 
       private def local_actor_public_key_pem(key_path : String) : String
@@ -490,10 +463,23 @@ module ACD
         value.as_s? || ""
       end
 
+      # Keyed by the actor *identifier*, which is what `GET
+      # /actors/{identifier}/outbox` looks up. It is no longer the workflow id:
+      # the identifier comes from the Cawfile `#+name:` header, so keying by
+      # workflow id would publish into a collection nobody can read.
       private def append_aptok_outbox_event(workflow_actor : String, activity : Hash(String, JSON::Any), event_id : String) : Nil
-        workflow_id = workflow_id_from_actor(workflow_actor)
-        workflow_id = "server" if workflow_id.empty?
-        @federation_kv.set("ocawe:federation:outbox:#{workflow_id}:#{event_id}", activity.to_json)
+        identifier = actor_identifier(workflow_actor)
+        identifier = "server" if identifier.empty?
+        @federation_kv.set("ocawe:federation:outbox:#{identifier}:#{event_id}", activity.to_json)
+      end
+
+      private def actor_identifier(actor : String) : String
+        parts = actor.split('/').reject(&.empty?)
+        return "" if parts.empty?
+        actor_index = -1
+        parts.each_with_index { |part, idx| actor_index = idx if part == "actors" }
+        return parts[actor_index + 1] if actor_index >= 0 && actor_index + 1 < parts.size
+        parts.last
       end
 
       private def publish_outbound_federation_output(workflow_id : String, output : Hash(String, JSON::Any)) : Nil

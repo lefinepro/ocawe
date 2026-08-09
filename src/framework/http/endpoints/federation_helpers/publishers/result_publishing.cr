@@ -90,6 +90,11 @@ module ACD
                        effective_output["result_text"]?.try(&.as_s?),
                        effective_output["message"]?.try(&.as_s?),
                        effective_output["agent_output"]?.try(&.as_s?),
+                       # Agent nodes publish their answer as `last_response`; it has to be
+                       # preferred over `content`, which still holds the inbound ticket text
+                       # copied into the run input. Without it a plain agent workflow echoes
+                       # the request back instead of publishing its own result.
+                       effective_output["last_response"]?.try(&.as_s?),
                        effective_output["content"]?.try(&.as_s?),
                      )
                      return if result_text.empty? && status == "ok"

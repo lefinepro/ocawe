@@ -9,7 +9,7 @@ if command -v crystal >/dev/null 2>&1 && [[ "${OCAWE_CRYSTAL_FORCE_BOOTSTRAP:-0}
   exit 0
 fi
 
-VERSION="${OCAWE_CRYSTAL_VERSION:-1.13.3}"
+VERSION="${OCAWE_CRYSTAL_VERSION:-1.19.1}"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 

@@ -1,8 +1,8 @@
 module ACD
   module Kemal
     class App
-      private def process_aptok_inbox_activity(activity : Aptok::JsonMap) : Bool
-        return true if process_registered_aptok_inbox_activity(activity)
+      private def process_aptok_inbox_activity(activity : Aptok::JsonMap) : Nil
+        return if process_registered_aptok_inbox_activity(activity)
 
         remote_actor = activity["actor"]?.try(&.as_s?).to_s
         follow = if remote_actor.empty?
@@ -45,16 +45,14 @@ module ACD
         activity_type = activity["type"]?.try(&.as_s?).to_s
         remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
         status = follow["status"]?.try(&.as_s?).to_s
-        STDERR.puts "[federation] inbox activity type=#{activity_type} actor=#{remote_actor} follow_status=#{status}"
 
         if activity_type == "Accept"
           update_aptok_follow_state(remote_actor, status: "active", error: "") unless remote_actor.empty?
           return true
         end
 
-        return false unless status.empty? || status == "active" || status == "following" || status == "pending"
+        return false unless status.empty? || status == "active"
         ticket_payload = extract_ticket_activity_payload(activity)
-        STDERR.puts "[federation] inbox activity ignored: no ticket payload type=#{activity_type}" unless ticket_payload
         return false unless ticket_payload
 
         process_ticket_create_activity(follow, activity, ticket_payload[:ticket], ticket_payload[:activity_type])
@@ -63,7 +61,6 @@ module ACD
       private def normalize_federation_activity(raw : String?) : String
         value = raw.to_s.strip.downcase
         return "merge" if value == "merge" || value == "mergerequest"
-        return "plan" if value == "plan"
         "ticket"
       end
 
@@ -137,44 +134,7 @@ module ACD
         return explicit unless explicit == "ticket"
         return "merge" if incoming_activity_type == "Offer"
         return "merge" if ticket_has_offer_attachment?(ticket)
-        return "plan" if ticket_has_plan_command?(ticket)
         "ticket"
-      end
-
-      private def ticket_has_plan_command?(ticket : Hash(String, JSON::Any)) : Bool
-        return true if ticket["command"]?.try(&.as_s?).to_s.strip == "#plan"
-        return true if attachment_value(ticket["command"]?) == "#plan"
-        return true if attachment_value(ticket["attachment"]?) == "#plan"
-
-        attachment = ticket["attachment"]?
-        attachments = attachment.try(&.as_a?)
-        return false unless attachments
-        attachments.any? do |entry|
-          next false unless entry_hash = entry.as_h?
-          next false unless entry_hash["type"]?.try(&.as_s?).to_s.strip.downcase == "propertyvalue"
-          next false unless entry_hash["name"]?.try(&.as_s?).to_s == "command"
-          entry_hash["value"]?.try(&.as_s?).to_s.strip == "#plan"
-        end
-      end
-
-      private def attachment_value(value : JSON::Any?) : String
-        return "" unless value
-        return value.as_s? || "" if value.as_s?
-        if value_hash = value.as_h?
-          return pick_first_non_empty(
-            value_hash["content"]?.try(&.as_s?),
-            value_hash["value"]?.try(&.as_s?),
-            value_hash["name"]?.try(&.as_s?),
-            value_hash["id"]?.try(&.as_s?),
-          )
-        end
-        if values = value.as_a?
-          values.each do |entry|
-            value_text = attachment_value(entry)
-            return value_text unless value_text.empty?
-          end
-        end
-        ""
       end
 
       private def process_ticket_create_activity(follow : Hash(String, JSON::Any), activity_doc : Hash(String, JSON::Any), ticket : Hash(String, JSON::Any), incoming_activity_type : String) : Bool
@@ -184,24 +144,15 @@ module ACD
         local_actor = @settings.federation.local_actor if local_actor.empty?
         local_domain = local_domain_from_actor_url(local_actor)
         workflow_actor = resolve_ticket_workflow_actor(activity_doc, ticket, local_domain, local_actor)
-        STDERR.puts "[federation] ticket ignored: empty workflow actor" if workflow_actor.empty?
         return false if workflow_actor.empty?
 
         workflow_id = workflow_id_from_actor(workflow_actor)
-        # Activity is inferred before workflow selection, so explicit `plan` keeps a dedicated planner path when present.
-        activity = infer_ticket_workflow_activity(activity_doc, ticket, incoming_activity_type)
-        workflow_id = registered_ticket_workflow_id(workflow_id, local_actor, activity)
-        STDERR.puts "[federation] ticket ignored: empty workflow id actor=#{workflow_actor}" if workflow_id.empty?
         return false if workflow_id.empty?
 
-        content = ticket["content"]?.try(&.as_s?) || ""
-        task = pick_first_non_empty(
-          ticket["name"]?.try(&.as_s?),
-          ticket["summary"]?.try(&.as_s?),
-          content,
-        )
-        STDERR.puts "[federation] ticket ignored: empty task ticket=#{ticket["id"]?.try(&.as_s?) || ""}" if task.strip.empty?
+        task = ticket["name"]?.try(&.as_s?) || ticket["summary"]?.try(&.as_s?) || ""
         return false if task.strip.empty?
+        content = ticket["content"]?.try(&.as_s?) || ""
+        activity = infer_ticket_workflow_activity(activity_doc, ticket, incoming_activity_type)
         repo_url = pick_first_non_empty(
           ticket["source"]?.try(&.as_s?),
           ticket_offer_attachment_field(ticket, "target"),
@@ -209,7 +160,7 @@ module ACD
           activity_doc["repo_url"]?.try(&.as_s?)
         )
         repo_ref = activity_doc["repo_ref"]?.try(&.as_s?) || "main"
-        provider = activity_doc["provider"]?.try(&.as_s?) || "codex"
+        provider = activity_doc["provider"]?.try(&.as_s?) || "acp-agent"
         ticket_id = ticket["id"]?.try(&.as_s?) || activity_doc["id"]?.try(&.as_s?) || ""
 
         suffix = Random.rand(UInt64::MAX).to_s(16)
@@ -269,9 +220,7 @@ module ACD
           published_at: received_at,
         )
         true
-      rescue ex
-        STDERR.puts "[federation] ticket activity processing failed: #{ex.message || ex.class.name}"
-        ex.backtrace?.try(&.each { |line| STDERR.puts line })
+      rescue
         false
       end
 
@@ -281,33 +230,18 @@ module ACD
         return "" if parts.empty?
         actor_index = -1
         parts.each_with_index { |part, idx| actor_index = idx if part == "actors" }
-        if actor_index >= 0 && actor_index + 1 < parts.size
-          candidate = parts[actor_index + 1]
-          ids = workflow_ids
-          return ids.first if ids.size == 1 && !ids.includes?(candidate)
-          return candidate
-        end
-        fallback = parts.last? || ""
+        # The actor identifier is derived from the Cawfile `#+name:` header, which
+        # need not match the workflow id, so an unknown identifier still routes to
+        # the single workflow this runtime serves instead of being dropped.
+        fallback = if actor_index >= 0 && actor_index + 1 < parts.size
+                     parts[actor_index + 1]
+                   else
+                     parts.last? || ""
+                   end
         ids = workflow_ids
         return fallback if fallback.empty? || ids.empty? || ids.includes?(fallback)
         return ids.first if ids.size == 1
         fallback
-      end
-
-      private def registered_ticket_workflow_id(candidate : String, local_actor : String, requested_activity : String) : String
-        ids = workflow_ids
-        if requested_activity == "plan"
-          planner = ids.find { |id| id == "planner" || id.ends_with?("-planner") || id.includes?("plan") || id == "lefine-planner" }
-          return planner unless planner.nil?
-        end
-
-        return candidate if ids.empty? || ids.includes?(candidate)
-
-        local_candidate = workflow_id_from_actor(local_actor)
-        return local_candidate if ids.includes?(local_candidate)
-
-        preferred = ids.find { |id| id != "actor" && id != "server" }
-        preferred || ids.first? || candidate
       end
 
       private def infer_queue_from_actor(remote_actor : String) : String
