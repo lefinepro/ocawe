@@ -1,0 +1,17 @@
+#+TITLE: Commands API
+
+This example demonstrates local Crystal command plugins. The plugin under
+~plugins/commands~ is discovered automatically; the root Cawfile does not
+require it explicitly.
+
+The workflow invokes ~set_value~ by its bare name. The existing ~agent~ node is
+guarded by ~if input.command."generate_code"~. Use the repository mock model
+fixture when running the example so no network service is required.
+
+#+begin_src sh
+COGNICORE_MOCK_LLM=1 ocawe up caws/14-commands-api
+#+end_src
+
+Send an input containing ~{"value":"demo","command":{"generate_code":true}}~
+to exercise both the command and guarded agent. False or missing
+~generate_code~ values still run ~set_value~ but skip the agent.
