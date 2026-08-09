@@ -3,6 +3,12 @@ module ACD
     class App
       private def openapi_components
         {
+            "securitySchemes" => {
+              "bearerAuth" => {
+                "type" => "http",
+                "scheme" => "bearer",
+              },
+            },
             "parameters" => {
               "WorkflowId" => {
                 "name" => "workflowId",
@@ -52,7 +58,7 @@ module ACD
               },
               "WorkflowResponse" => {
                 "type" => "object",
-                "required" => ["workflow_id", "source_root_type", "workflow_file", "agents", "skills", "tools"],
+                "required" => ["workflow_id", "source_root_type", "workflow_file", "agents", "skills", "tools", "triggers"],
                 "properties" => {
                   "workflow_id" => {"type" => "string"},
                   "source_root_type" => {"type" => "string"},
@@ -61,6 +67,64 @@ module ACD
                   "skills" => {"type" => "array", "items" => {"type" => "string"}},
                   "tools" => {"type" => "array", "items" => {"type" => "string"}},
                   "default_model" => {"type" => "string", "nullable" => true},
+                  "triggers" => {"$ref" => "#/components/schemas/WorkflowTriggers"},
+                },
+              },
+              "WorkflowTriggers" => {
+                "type" => "object",
+                "description" => "Stored trigger configuration metadata. Configured does not imply active execution.",
+                "required" => ["status", "schedule", "trigger_message", "tags"],
+                "properties" => {
+                  "status" => {"type" => "string", "enum" => ["configured", "not_configured"]},
+                  "schedule" => {"type" => "string", "nullable" => true},
+                  "trigger_message" => {"type" => "string", "nullable" => true},
+                  "tags" => {"type" => "array", "items" => {"type" => "string"}},
+                },
+              },
+              "GeneratedWorkflowCreateRequest" => {
+                "type" => "object",
+                "additionalProperties" => false,
+                "required" => ["name", "prompt"],
+                "properties" => {
+                  "id" => {"type" => "string", "pattern" => "^[a-z0-9][a-z0-9_-]{0,63}$"},
+                  "workflow_id" => {"type" => "string", "description" => "Compatibility alias for id"},
+                  "name" => {"type" => "string", "maxLength" => 160},
+                  "description" => {"type" => "string", "nullable" => true, "maxLength" => 2000},
+                  "prompt" => {"type" => "string", "maxLength" => 65536},
+                  "schedule" => {"type" => "string", "nullable" => true},
+                  "tag" => {"type" => "string", "nullable" => true},
+                  "trigger_message" => {"type" => "string", "nullable" => true},
+                  "trigger" => {"type" => "string", "nullable" => true, "description" => "Compatibility alias for trigger_message"},
+                  "model" => {"type" => "string", "nullable" => true},
+                  "conversation_id" => {"type" => "string", "nullable" => true},
+                  "user_id" => {"type" => "string", "nullable" => true},
+                  "environment_id" => {"type" => "string", "nullable" => true},
+                },
+              },
+              "GeneratedWorkflowCreateResponse" => {
+                "type" => "object",
+                "required" => ["status", "workflow_id", "cawfile_path", "cawfile_content", "nodes", "edges", "metadata"],
+                "properties" => {
+                  "status" => {"type" => "string", "example" => "created"},
+                  "workflow_id" => {"type" => "string"},
+                  "name" => {"type" => "string"},
+                  "conversation_id" => {"type" => "string", "nullable" => true},
+                  "user_id" => {"type" => "string", "nullable" => true},
+                  "environment_id" => {"type" => "string", "nullable" => true},
+                  "cawfile_path" => {"type" => "string", "description" => "Path relative to the generated workflows root"},
+                  "cawfile_content" => {"type" => "string"},
+                  "nodes" => {"type" => "array", "items" => {"type" => "object"}},
+                  "edges" => {"type" => "array", "items" => {"type" => "object"}},
+                  "metadata" => {"type" => "object"},
+                },
+              },
+              "GeneratedWorkflowDeleteResponse" => {
+                "type" => "object",
+                "required" => ["status", "workflow_id", "cawfile_path"],
+                "properties" => {
+                  "status" => {"type" => "string", "example" => "deleted"},
+                  "workflow_id" => {"type" => "string"},
+                  "cawfile_path" => {"type" => "string", "description" => "Deleted path relative to the generated workflows root"},
                 },
               },
               "ToolItem" => {

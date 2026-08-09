@@ -6,6 +6,27 @@ module ACP
   # ACP Client for stdio transport
   # Manages communication with an ACP agent over stdin/stdout
   class Client
+    class FilesystemPolicy
+      getter root : String
+      getter write_policy : String
+
+      def initialize(root : String, @write_policy : String = "write")
+        @root = File.expand_path(root)
+      end
+
+      def writable? : Bool
+        @write_policy != "read_only"
+      end
+
+      def resolve(path : String) : String
+        candidate = path.starts_with?("/") ? File.expand_path(path) : File.expand_path(path, @root)
+        unless candidate == @root || candidate.starts_with?(@root + File::SEPARATOR)
+          raise ProtocolError.new("path escapes workspace", ErrorCode::INVALID_PARAMS, JSON.parse({"path" => path, "root" => @root}.to_json))
+        end
+        candidate
+      end
+    end
+
     getter agent_info : AgentInfo?
     getter agent_capabilities : AgentCapabilities?
     getter session_id : String?
@@ -17,7 +38,13 @@ module ACP
     @reader_fiber : Fiber?
     @closed : Bool
 
-    def initialize(@command : String, @args : Array(String) = [] of String, @env : Hash(String, String) = {} of String => String)
+    def initialize(
+      @command : String,
+      @args : Array(String) = [] of String,
+      @env : Hash(String, String) = {} of String => String,
+      @filesystem_policy : FilesystemPolicy? = nil,
+      @process_cwd : String? = nil
+    )
       @request_id = 0
       @pending_responses = {} of Int32 => Channel(JsonRpcResponse)
       @notification_channel = Channel(JsonRpcNotification).new(10000)
@@ -35,6 +62,7 @@ module ACP
         @command,
         args: @args,
         env: @env,
+        chdir: @process_cwd,
         input: Process::Redirect::Pipe,
         output: Process::Redirect::Pipe,
         error: Process::Redirect::Pipe
@@ -247,8 +275,9 @@ module ACP
     private def handle_message(line : String)
       json = JSON.parse(line)
 
-      if json["id"]?
-        # Response
+      if json["id"]? && json["method"]?
+        handle_request(json)
+      elsif json["id"]?
         response = JsonRpcResponse.from_json(line)
         if id = response.id
           if id.is_a?(Int64)
@@ -272,6 +301,83 @@ module ACP
       end
     rescue ex
       STDERR.puts "ACP client message parse error: #{ex.message}"
+    end
+
+    private def handle_request(json : JSON::Any) : Nil
+      id = json["id"]
+      method = json["method"].as_s
+      params = json["params"]?
+      result = dispatch_request(method, params)
+      send_message_json({
+        "jsonrpc" => "2.0",
+        "id"      => id,
+        "result"  => result,
+      })
+    rescue ex : ProtocolError
+      send_error_response(json["id"]?, ex.code, ex.message || "ACP request failed", ex.data)
+    rescue ex
+      send_error_response(json["id"]?, ErrorCode::INTERNAL_ERROR, ex.message || ex.class.name)
+    end
+
+    private def dispatch_request(method : String, params : JSON::Any?) : JSON::Any
+      case method
+      when "fs/readTextFile"
+        handle_read_text_file(params)
+      when "fs/writeTextFile"
+        handle_write_text_file(params)
+      else
+        raise ProtocolError.new("Method not found: #{method}", ErrorCode::METHOD_NOT_FOUND)
+      end
+    end
+
+    private def handle_read_text_file(params : JSON::Any?) : JSON::Any
+      policy = @filesystem_policy || raise ProtocolError.new("filesystem access is not configured", ErrorCode::INVALID_REQUEST)
+      path = extract_path_param(params)
+      content = File.read(policy.resolve(path))
+      JSON.parse({"content" => content}.to_json)
+    rescue ex : File::NotFoundError
+      raise ProtocolError.new("file not found", ErrorCode::INVALID_PARAMS, JSON.parse({"path" => extract_path_param(params)}.to_json))
+    end
+
+    private def handle_write_text_file(params : JSON::Any?) : JSON::Any
+      policy = @filesystem_policy || raise ProtocolError.new("filesystem access is not configured", ErrorCode::INVALID_REQUEST)
+      unless policy.writable?
+        raise ProtocolError.new("workspace is read-only", ErrorCode::INVALID_REQUEST)
+      end
+      path = extract_path_param(params)
+      content = extract_content_param(params)
+      resolved = policy.resolve(path)
+      parent = File.dirname(resolved)
+      Dir.mkdir_p(parent) unless Dir.exists?(parent)
+      File.write(resolved, content)
+      JSON.parse({"path" => resolved}.to_json)
+    end
+
+    private def extract_path_param(params : JSON::Any?) : String
+      value = params.try(&.as_h?) || raise ProtocolError.new("params must be an object", ErrorCode::INVALID_PARAMS)
+      path = value["path"]?.try(&.as_s?) || value["uri"]?.try(&.as_s?)
+      raise ProtocolError.new("path is required", ErrorCode::INVALID_PARAMS) unless path
+      path
+    end
+
+    private def extract_content_param(params : JSON::Any?) : String
+      value = params.try(&.as_h?) || raise ProtocolError.new("params must be an object", ErrorCode::INVALID_PARAMS)
+      content = value["content"]?.try(&.as_s?) || value["text"]?.try(&.as_s?)
+      raise ProtocolError.new("content is required", ErrorCode::INVALID_PARAMS) unless content
+      content
+    end
+
+    private def send_error_response(id : JSON::Any?, code : Int32, message : String, data : JSON::Any? = nil) : Nil
+      error = {
+        "code"    => JSON.parse(code.to_json),
+        "message" => JSON.parse(message.to_json),
+      } of String => JSON::Any
+      error["data"] = data if data
+      send_message_json({
+        "jsonrpc" => "2.0",
+        "id"      => id || JSON.parse("null"),
+        "error"   => JSON.parse(error.to_json),
+      })
     end
 
     private def parse_session_update(notification : JsonRpcNotification) : SessionUpdate?

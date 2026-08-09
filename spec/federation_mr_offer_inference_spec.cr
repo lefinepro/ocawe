@@ -87,4 +87,5 @@ describe "ACD::Kemal::App federation merge request format" do
     first_patch["attributedTo"]?.try(&.as_s?).should eq("https://local.example/actors/solver")
     first_patch["mediaType"]?.try(&.as_s?).should eq("application/x-git-patch")
   end
+
 end

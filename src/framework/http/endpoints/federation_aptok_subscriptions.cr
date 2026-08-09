@@ -73,7 +73,7 @@ module ACD
         raise "subscription target is required" if normalized.empty?
 
         if normalized.includes?("|")
-          raise "subscription target must be an actor IRI or handle; inbox is discovered through ActivityPub Follow"
+          raise "subscription target must be an actor IRI or handle; resources are published by the local ActivityPub actor document"
         end
 
         if normalized.starts_with?("http://") || normalized.starts_with?("https://")
@@ -114,12 +114,25 @@ module ACD
         interval = @settings.federation.s2s_poll_interval_seconds
         return if interval <= 0
 
+        STDERR.puts "[federation] starting pollers interval=#{interval}s"
+
+        spawn do
+          loop do
+            begin
+              context = aptok_federation.create_context
+              context.process_queued_inbox_activities(limit: 25)
+              context.process_queued_activities(limit: 25)
+            rescue ex
+              STDERR.puts "[federation] queue cycle failed: #{ex.message}"
+            end
+            sleep interval.seconds
+          end
+        end
+
         spawn do
           loop do
             begin
               run_federation_poll_cycle
-              aptok_federation.create_context.process_queued_inbox_activities(limit: 25)
-              aptok_federation.create_context.process_queued_activities(limit: 25)
             rescue ex
               STDERR.puts "[federation] poll cycle failed: #{ex.message}"
             end

@@ -15,6 +15,7 @@ module ACD
       getter input_schema_dsl : String?
       getter output_schema_dsl : String?
       getter resume_schema_dsl : String?
+      getter output_ui_template : String?
 
       def initialize(
         @id : String,
@@ -28,6 +29,7 @@ module ACD
         @input_schema_dsl : String? = nil,
         @output_schema_dsl : String? = nil,
         @resume_schema_dsl : String? = nil,
+        @output_ui_template : String? = nil,
       )
       end
     end
@@ -67,6 +69,7 @@ module ACD
             input_schema_dsl: schema_blocks[:input_schema_dsl],
             output_schema_dsl: schema_blocks[:output_schema_dsl],
             resume_schema_dsl: schema_blocks[:resume_schema_dsl],
+            output_ui_template: schema_blocks[:output_ui_template],
           )
         end
         agents
@@ -97,16 +100,18 @@ module ACD
         end
       end
 
-      private def extract_schema_blocks(body : String) : NamedTuple(prompt: String, input_schema_dsl: String?, output_schema_dsl: String?, resume_schema_dsl: String?)
+      private def extract_schema_blocks(body : String) : NamedTuple(prompt: String, input_schema_dsl: String?, output_schema_dsl: String?, resume_schema_dsl: String?, output_ui_template: String?)
         prompt_lines = [] of String
         input_schema_dsl = nil.as(String?)
         output_schema_dsl = nil.as(String?)
         resume_schema_dsl = nil.as(String?)
+        output_ui_template = nil.as(String?)
 
         in_schema_block = false
         schema_kind = nil.as(String?)
         schema_end = nil.as(String?)
         schema_opener = nil.as(String?)
+        output_ui_block = false
         buffer = [] of String
 
         body.each_line do |line|
@@ -129,6 +134,24 @@ module ACD
               next
             end
 
+            if line.match(/^\s*<output-ui>\s*$/)
+              in_schema_block = true
+              output_ui_block = true
+              schema_end = "</output-ui>"
+              schema_opener = line
+              buffer.clear
+              next
+            end
+
+            if line.match(/^\s*#\+begin_output\s+ui\s*$/)
+              in_schema_block = true
+              output_ui_block = true
+              schema_end = "#+end_output"
+              schema_opener = line
+              buffer.clear
+              next
+            end
+
             prompt_lines << line
             next
           end
@@ -136,7 +159,9 @@ module ACD
           if line.strip == schema_end
             snippet = buffer.join.strip
             unless snippet.empty?
-              if schema_kind == "input" && input_schema_dsl.nil?
+              if output_ui_block && output_ui_template.nil?
+                output_ui_template = snippet
+              elsif schema_kind == "input" && input_schema_dsl.nil?
                 input_schema_dsl = snippet
               elsif schema_kind == "output" && output_schema_dsl.nil?
                 output_schema_dsl = snippet
@@ -149,6 +174,7 @@ module ACD
             schema_kind = nil
             schema_end = nil
             schema_opener = nil
+            output_ui_block = false
             buffer.clear
             next
           end
@@ -162,10 +188,11 @@ module ACD
         end
 
         {
-          prompt:            prompt_lines.join.strip,
-          input_schema_dsl:  input_schema_dsl,
-          output_schema_dsl: output_schema_dsl,
-          resume_schema_dsl: resume_schema_dsl,
+          prompt:             prompt_lines.join.strip,
+          input_schema_dsl:   input_schema_dsl,
+          output_schema_dsl:  output_schema_dsl,
+          resume_schema_dsl:  resume_schema_dsl,
+          output_ui_template: output_ui_template,
         }
       end
     end

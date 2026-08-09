@@ -80,3 +80,7 @@ shards:
     git: https://github.com/wyhaines/time-ext.cr.git
     version: 1.0.1
 
+  to_html:
+    git: https://github.com/sbsoftware/to_html.cr.git
+    version: 1.7.1
+

@@ -1,4 +1,5 @@
 require "option_parser"
+require "file_utils"
 require "../../framework/discovery/cawfile_loader"
 require "../../framework/discovery/git_https_puller"
 require "../../framework/builder"
@@ -112,7 +113,10 @@ module OcaweCore
         end
 
         workflows_root = resolve_workflows_root(args.first?)
+        FileUtils.mkdir_p(workflows_root)
         runtime_bin = runtime_bin()
+        puts "[ocawe] preparing #{dev_mode ? "dev" : "up"} runtime binary=#{runtime_bin} workflows_root=#{workflows_root}"
+        STDOUT.flush
 
         port ||= read_port_from_cawfile(workflows_root)
 
@@ -158,7 +162,9 @@ module OcaweCore
         end
 
         effective_port = (port || DEFAULT_PORT).not_nil!
-        runtime_args = ["--port", "#{effective_port}"]
+        puts "[ocawe] starting #{dev_mode ? "dev" : "up"} runtime port=#{effective_port} workflows_root=#{workflows_root}"
+        STDOUT.flush
+        runtime_args = ["--port=#{effective_port}"]
         runtime_command = nil.as(String?)
         if image = container_tag
           if container_runtime_available?
@@ -200,7 +206,11 @@ module OcaweCore
             terminate(runtime)
             exit(0)
           end
-          runtime.wait
+          status = runtime.wait
+          unless status.success?
+            STDERR.puts "[ocawe] runtime exited"
+            exit(1)
+          end
         end
       end
 
@@ -229,6 +239,38 @@ module OcaweCore
         container_name = container_name_for_workflows_root(workflows_root)
         command = container_exec_command(detect_runtime, container_name, args, interactive: false)
         abort_unless_success(run_interactive_cmd(command))
+      end
+
+      private def test(args : Array(String)) : Nil
+        workflow_path = args.shift?
+        workflows_root = resolve_workflows_root(workflow_path)
+        bundle = ACD::Discovery::CawfileLoader.load_root(workflows_root)
+        unless bundle
+          STDERR.puts "Error: no Cawfile workflow found for #{workflows_root}"
+          exit(1)
+        end
+
+        tests = bundle.tests
+        if tests.empty?
+          puts "[ocawe] no Cawfile tests found"
+          return
+        end
+
+        runner = Ocawe::Testing::CawfileRunner.new(Ocawe::Testing::CawfileRunner.default_base_url)
+        results = runner.run(bundle)
+        failed = results.count { |result| !result.passed }
+        results.each do |result|
+          if result.passed
+            puts "ok #{result.name} assert #{result.workflow_id}"
+          else
+            puts "not ok #{result.name} assert #{result.workflow_id}"
+            puts "  expected: #{result.expected}"
+            puts "  actual: #{result.actual}" unless result.actual.empty?
+            puts "  missing tags: #{result.missing_tags.join(", ")}" unless result.missing_tags.empty?
+            puts "  error: #{result.error}" if result.error
+          end
+        end
+        exit(1) if failed > 0
       end
 
       private def pull(args : Array(String)) : Nil
@@ -309,7 +351,7 @@ module OcaweCore
           if resolved = candidates.find { |path| ACD::Discovery::CawfileLoader.find_cawfile(path) }
             resolved
           else
-            File.join(File.expand_path(Dir.current), workflow_path)
+            File.expand_path(workflow_path)
           end
         else
           Dir.current
@@ -432,7 +474,11 @@ module OcaweCore
       end
 
       private def ensure_runtime_binary(output : String) : Bool
-        return true if File.file?(output)
+        if File.file?(output)
+          puts "[ocawe] using existing runtime: #{output}"
+          STDOUT.flush
+          return true
+        end
 
         unless system("command -v crystal > /dev/null 2>&1")
           STDERR.puts "Error: runtime binary not found: #{output}"
@@ -440,13 +486,48 @@ module OcaweCore
           return false
         end
 
+        puts "[ocawe] building runtime: #{output}"
+        STDOUT.flush
         Dir.cd(project_root) do
           run_cmd("mkdir -p build && crystal build #{runtime_entry} -D ocawe_runtime_main --release --no-debug -o #{output}")
         end
       end
 
       private def build_runtime_entrypoint : String
-        runtime_entry
+        cawfile = ACD::Discovery::CawfileLoader.find_cawfile(Dir.current)
+        return runtime_entry unless cawfile
+
+        cawfile_bundle = ACD::Discovery::CawfileLoader.load(Dir.current, "root")
+        crystal_loader = cawfile_bundle.try(&.crystal_loader)
+        return runtime_entry unless crystal_loader
+
+        entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
+        entrypoint_dir = File.dirname(entrypoint)
+        lines = [] of String
+        lines << %(require "#{require_path(entrypoint_dir, runtime_entry)}")
+        crystal_loader.code.each do |line|
+          lines << runtime_entry_line(line, entrypoint_dir)
+        end
+        crystal_loader.registry_files.each do |path|
+          lines << %(require "#{require_path(entrypoint_dir, path)}")
+        end
+        lines << ""
+        lines << "OcaweCore.run"
+        FileUtils.mkdir_p(File.dirname(entrypoint))
+        write_file_if_changed(entrypoint, lines.join("\n"))
+        entrypoint
+      end
+
+      private def runtime_entry_line(line : String, entrypoint_dir : String) : String
+        stripped = line.strip
+        if match = stripped.match(/^require\s+"([^"]+)"/)
+          required = match[1]
+          if required.starts_with?(".")
+            target = File.expand_path(required, Dir.current)
+            return %(require "#{require_path(entrypoint_dir, target)}")
+          end
+        end
+        line
       end
 
       private def write_file_if_changed(path : String, content : String) : Nil

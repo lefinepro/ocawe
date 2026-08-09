@@ -75,8 +75,8 @@ module ACD
           env.response.status_code = 202
           env.response.content_type = "application/json"
           {
-            "task_id" => task_id,
-            "status" => "queued",
+            "task_id"    => task_id,
+            "status"     => "queued",
             "status_url" => "/v1/chat/completions/tasks/#{task_id}",
           }.to_json
         rescue ex
@@ -100,7 +100,7 @@ module ACD
       end
 
       private def build_chat_completion(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
-        model = body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL
+        model = normalize_chat_model(body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
         messages = extract_chat_messages(body)
         prompt = chat_prompt_from_messages(messages, body)
         system_message = chat_system_message(messages, body)
@@ -123,11 +123,12 @@ module ACD
 
           # Execute workflow with chat input
           input_data = {
-            "prompt" => JSON.parse(prompt.to_json),
+            "prompt"   => JSON.parse(prompt.to_json),
             "messages" => JSON.parse(messages.to_json),
           } of String => JSON::Any
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
           input_data["files"] = JSON.parse(files.to_json) unless files.empty?
+          copy_chat_identity_fields(body, input_data)
           resources = files.empty? ? nil : {"files" => JSON.parse(files.to_json)} of String => JSON::Any
 
           run_result = @workflow_service.start_run(workflow_id, input_data: input_data, resources: resources)
@@ -138,27 +139,34 @@ module ACD
                         else
                           run_result.to_json
                         end
+          output_blocks = if snap = snapshot
+                            workflow_chat_output_blocks(workflow_id, snap)
+                          else
+                            [] of JSON::Any
+                          end
           now = Time.utc.to_unix
+          message = {
+            "role"    => JSON.parse("assistant".to_json),
+            "content" => JSON.parse(output_text.to_json),
+          } of String => JSON::Any
+          message["output_blocks"] = JSON.parse(output_blocks.to_json) unless output_blocks.empty?
 
           return JSON.parse({
-            "id" => "chatcmpl_#{Random::Secure.hex(12)}",
-            "object" => "chat.completion",
+            "id"      => "chatcmpl_#{Random::Secure.hex(12)}",
+            "object"  => "chat.completion",
             "created" => now,
-            "model" => model,
+            "model"   => model,
             "choices" => [
               {
-                "index" => 0,
-                "message" => {
-                  "role" => "assistant",
-                  "content" => output_text,
-                },
+                "index"         => 0,
+                "message"       => message,
                 "finish_reason" => "stop",
               },
             ],
             "usage" => {
-              "prompt_tokens" => 0,
+              "prompt_tokens"     => 0,
               "completion_tokens" => 0,
-              "total_tokens" => 0,
+              "total_tokens"      => 0,
             },
           }.to_json).as_h
         end
@@ -185,23 +193,36 @@ module ACD
         end
 
         JSON.parse({
-          "id" => "chatcmpl_#{Random::Secure.hex(12)}",
-          "object" => "chat.completion",
+          "id"      => "chatcmpl_#{Random::Secure.hex(12)}",
+          "object"  => "chat.completion",
           "created" => now,
-          "model" => response.model,
+          "model"   => response.model,
           "choices" => [
             {
-              "index" => 0,
-              "message" => message,
+              "index"         => 0,
+              "message"       => message,
               "finish_reason" => finish_reason,
             },
           ],
           "usage" => {
-            "prompt_tokens" => 0,
+            "prompt_tokens"     => 0,
             "completion_tokens" => 0,
-            "total_tokens" => 0,
+            "total_tokens"      => 0,
           },
         }.to_json).as_h
+      end
+
+      private def normalize_chat_model(model : String) : String
+        normalized = model.strip
+        return "workflow/orator" if normalized == "orator" || normalized == "workflow-orator"
+        normalized
+      end
+
+      private def copy_chat_identity_fields(source : Ocawe::Workflow::AnyHash, target : Ocawe::Workflow::AnyHash) : Nil
+        ["user_actor", "user_handle"].each do |field|
+          value = source[field]?.try(&.as_s?)
+          target[field] = JSON.parse(value.to_json) if value && !value.strip.empty?
+        end
       end
 
       private def build_open_response(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
@@ -213,15 +234,15 @@ module ACD
         created = completion_json["created"]?.try(&.as_i64?) || Time.utc.to_unix
 
         JSON.parse({
-          "id" => "resp_#{Random::Secure.hex(12)}",
-          "object" => "response",
+          "id"         => "resp_#{Random::Secure.hex(12)}",
+          "object"     => "response",
           "created_at" => created,
-          "status" => "completed",
-          "model" => model,
-          "output" => [
+          "status"     => "completed",
+          "model"      => model,
+          "output"     => [
             {
-              "type" => "message",
-              "role" => "assistant",
+              "type"    => "message",
+              "role"    => "assistant",
               "content" => [
                 {
                   "type" => "output_text",
@@ -391,16 +412,16 @@ module ACD
         status : String,
         request : Ocawe::Workflow::AnyHash,
         result : Ocawe::Workflow::AnyHash? = nil,
-        error : String? = nil
+        error : String? = nil,
       ) : Ocawe::Workflow::AnyHash
         now = Time.utc.to_s
         JSON.parse({
-          "id" => task_id,
-          "task_id" => task_id,
-          "status" => status,
-          "request" => request,
-          "result" => result,
-          "error" => error,
+          "id"         => task_id,
+          "task_id"    => task_id,
+          "status"     => status,
+          "request"    => request,
+          "result"     => result,
+          "error"      => error,
           "updated_at" => now,
         }.to_json).as_h
       end
@@ -433,10 +454,10 @@ module ACD
 
         # First chunk: role
         role_chunk = {
-          "id" => id,
-          "object" => "chat.completion.chunk",
+          "id"      => id,
+          "object"  => "chat.completion.chunk",
           "created" => created,
-          "model" => model,
+          "model"   => model,
           "choices" => [
             {
               "index" => 0,
@@ -452,10 +473,10 @@ module ACD
         # Content chunks
         if content && !content.empty?
           content_chunk = {
-            "id" => id,
-            "object" => "chat.completion.chunk",
+            "id"      => id,
+            "object"  => "chat.completion.chunk",
             "created" => created,
-            "model" => model,
+            "model"   => model,
             "choices" => [
               {
                 "index" => 0,
@@ -480,21 +501,21 @@ module ACD
             tc_args = tc_function.try(&.["arguments"]?.try(&.as_s?)) || "{}"
 
             tool_chunk = {
-              "id" => id,
-              "object" => "chat.completion.chunk",
+              "id"      => id,
+              "object"  => "chat.completion.chunk",
               "created" => created,
-              "model" => model,
+              "model"   => model,
               "choices" => [
                 {
                   "index" => 0,
                   "delta" => {
                     "tool_calls" => [
                       {
-                        "index" => 0,
-                        "id" => tc_id,
-                        "type" => tc_type,
+                        "index"    => 0,
+                        "id"       => tc_id,
+                        "type"     => tc_type,
                         "function" => {
-                          "name" => tc_name,
+                          "name"      => tc_name,
                           "arguments" => tc_args,
                         },
                       },
@@ -512,14 +533,14 @@ module ACD
         final_delta = {"content" => nil}.to_h
         if finish_reason_val
           final_chunk = {
-            "id" => id,
-            "object" => "chat.completion.chunk",
+            "id"      => id,
+            "object"  => "chat.completion.chunk",
             "created" => created,
-            "model" => model,
+            "model"   => model,
             "choices" => [
               {
-                "index" => 0,
-                "delta" => {} of String => JSON::Any,
+                "index"         => 0,
+                "delta"         => {} of String => JSON::Any,
                 "finish_reason" => finish_reason_val,
               },
             ],
@@ -552,6 +573,24 @@ module ACD
         end
 
         snapshot.to_json
+      end
+
+      private def workflow_chat_output_blocks(workflow_id : String, snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Array(JSON::Any)
+        data = if output = snapshot.output
+                 output
+               elsif state = snapshot.state
+                 state
+               else
+                 {} of String => JSON::Any
+               end
+        blocks = [] of JSON::Any
+        if output = snapshot.output
+          if direct_blocks = output["output_blocks"]?.try(&.as_a?)
+            blocks.concat(direct_blocks)
+          end
+        end
+        blocks.concat(output_ui_blocks(output_ui_template_for_workflow(workflow_id), data))
+        blocks
       end
     end
   end

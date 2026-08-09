@@ -6,6 +6,44 @@ class ACD::Kemal::App
     load_workflow_definition(bundle, loaded_agents)
   end
 
+  def test_create_generated_workflow(
+    request : ACD::Discovery::GeneratedWorkflowRequest,
+  ) : ACD::Discovery::GeneratedWorkflowArtifact
+    create_generated_workflow(request)
+  end
+
+  def test_delete_generated_workflow(
+    workflow_id : String,
+  ) : ACD::Discovery::GeneratedWorkflowDeletionArtifact
+    delete_generated_workflow(workflow_id)
+  end
+
+  def test_generated_workflow_auth_error(env) : String?
+    generated_workflow_auth_error(env)
+  end
+
+  def test_workflow_loaded?(workflow_id : String) : Bool
+    !workflow_by_id(workflow_id).nil?
+  end
+
+  def test_copy_chat_identity_fields(
+    source : Hash(String, JSON::Any),
+    target : Hash(String, JSON::Any),
+  ) : Nil
+    copy_chat_identity_fields(source, target)
+  end
+
+  def test_workflow_details_response(workflow_id : String) : String?
+    workflow_details_response(workflow_id)
+  end
+
+  def test_generated_workflow_response(
+    request : ACD::Discovery::GeneratedWorkflowRequest,
+    artifact : ACD::Discovery::GeneratedWorkflowArtifact,
+  ) : String
+    generated_workflow_response(request, artifact)
+  end
+
   def test_wrap_nodes_in_control(
     nodes : Array(Ocawe::Workflow::WorkflowNode),
     name : String,
@@ -28,6 +66,27 @@ class ACD::Kemal::App
   def test_set_workflow_ids(ids : Array(String)) : Nil
     @cache_lock.synchronize do
       @workflow_ids = ids.dup
+    end
+  end
+
+  def test_set_workflow_federation_resource(
+    workflow_id : String,
+    id : String = "proxy",
+    name : String = "proxy",
+    description : String = "",
+    action : String = "deliverService",
+    purpose : String = "request",
+    tags : Array(String) = [] of String,
+  ) : Nil
+    @cache_lock.synchronize do
+      @workflow_federation_resources[workflow_id] = [{
+        id:          id,
+        name:        name,
+        description: description,
+        action:      action,
+        purpose:     purpose,
+        tags:        tags,
+      }]
     end
   end
 

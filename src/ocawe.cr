@@ -8,7 +8,9 @@ require "./framework/workflows/declarative/run"
 require "./framework/workflows/declarative/api"
 require "./framework/registry/api"
 require "./framework/config/settings"
+require "./framework/telemetry/prompt_metrics"
 require "./framework/discovery/cawfile_loader"
+require "./framework/testing/cawfile_runner"
 require "./framework/integration/pipeline_helpers"
 require "./framework/secrets/store"
 require "./framework/trigger/public_api"
@@ -56,6 +58,8 @@ module OcaweCore
     auto_start_environment(workflows_root)
 
     ENV["OCAWE_PORT"] = port.to_s
+    puts "[ocawecore] starting http port=#{port} workflows_root=#{workflows_root}"
+    STDOUT.flush
 
     # The actor IRI embeds the port, which is only final once `--port` and the
     # environment have both been applied - hence after `load_settings`.

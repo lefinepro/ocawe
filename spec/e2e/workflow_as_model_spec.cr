@@ -52,6 +52,15 @@ describe "E2E: Workflow as Model in Chat Completions" do
       workflow_id2 = model2.sub("workflow/", "")
       workflow_id2.should eq("my-app/v2")
     end
+
+    it "normalizes the short orator alias to the workflow model" do
+      model = "orator"
+      normalized = model == "orator" || model == "workflow-orator" ? "workflow/orator" : model
+      workflow_id = normalized.sub("workflow/", "")
+
+      normalized.should eq("workflow/orator")
+      workflow_id.should eq("orator")
+    end
   end
 
   describe "GET /v1/models lists workflows as models" do

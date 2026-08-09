@@ -4,6 +4,44 @@
 
 This specification defines the workflow-building API exposed by `Ocawe::Workflow`.
 
+## HTTP Creation
+
+`POST /v1/workflows/create` accepts:
+
+```json
+{
+  "id": "daily-summary",
+  "name": "Daily summary",
+  "description": "Optional description",
+  "prompt": "Summarize the conversation",
+  "schedule": "0 9 * * *",
+  "tag": "#summary",
+  "trigger_message": "create a daily summary",
+  "model": "openai/gpt-4.1-mini",
+  "conversation_id": "conversation-id",
+  "user_id": "user-id",
+  "environment_id": "environment-id"
+}
+```
+
+Only `name` and `prompt` are required. If `id` is omitted, Ocawe derives a safe slug. The endpoint rejects unknown fields, unsafe ids, and duplicates. A successful `201` response includes the workflow id, generated Cawfile content and relative path, trigger metadata, and an initial `assistant -> output` canvas graph. `output` is an implicit visual result node; the generated Cawfile DSL still contains only the `assistant` agent. The workflow is registered before the response is returned.
+
+Generated workflow mutation endpoints require `Authorization: Bearer <OCAWE_API_KEY>` and return `503` when `OCAWE_API_KEY` is not configured.
+
+## HTTP Compensation
+
+`DELETE /v1/workflows/generated/{id}` unregisters and removes a workflow created by this API. It only operates on an exact `Cawfile` below `OCAWE_GENERATED_WORKFLOWS_ROOT` containing the `#+ocawe-generated: true` marker. The Cawfile is staged atomically, the runtime cache is reloaded, and the staged artifact is restored if reload or finalization fails. Other files in the workflow directory are preserved.
+
+A successful response is:
+
+```json
+{
+  "status": "deleted",
+  "workflow_id": "daily-summary",
+  "cawfile_path": "daily-summary/Cawfile"
+}
+```
+
 ## Core Type
 
 - `Ocawe::Workflow::WorkflowDefinition`

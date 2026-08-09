@@ -85,6 +85,94 @@ RCL
       end
     end
 
+    it "parses configured trigger metadata without activating it" do
+      dir = File.tempname("cawfile_triggers")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+#+name: Daily summary
+#+tags: summary; reports
+#+ocawe-schedule: 0 9 * * *
+#+ocawe-trigger-message: summarize this conversation
+
+workflow "daily-summary" do
+  agent "assistant"
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "daily-summary").not_nil!
+        triggers = bundle.triggers
+
+        triggers.status.should eq("configured")
+        triggers.schedule.should eq("0 9 * * *")
+        triggers.trigger_message.should eq("summarize this conversation")
+        triggers.tags.should eq(["summary", "reports"])
+        triggers.to_json.should_not contain("active")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "marks workflows without trigger metadata as not configured" do
+      dir = File.tempname("cawfile_no_triggers")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), %(workflow "manual" do\nend\n))
+        triggers = ACD::Discovery::CawfileLoader.load(dir, "manual").not_nil!.triggers
+
+        triggers.status.should eq("not_configured")
+        triggers.configured?.should be_false
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "extracts Cawfile workflow test blocks" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+workflow "hello" do
+end
+
+test "answers directly" do
+  assert "hello", input: "ping", equality: "pong", wait: 15
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "hello")
+        bundle.should_not be_nil
+        tests = bundle.not_nil!.tests
+        tests.size.should eq(1)
+        tests.first.name.should eq("answers directly")
+        tests.first.assertions.size.should eq(1)
+        tests.first.assertions.first.workflow_id.should eq("hello")
+        tests.first.assertions.first.input.should eq("ping")
+        tests.first.assertions.first.equality.should eq("pong")
+        tests.first.assertions.first.wait_seconds.should eq(15)
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "loads Cawfile tests through load_root" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+workflow "hello" do
+end
+
+test "answers directly" do
+  assert "workflow/orator", input: "ping", equality: "pong", wait: 15
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load_root(dir)
+        bundle.should_not be_nil
+        bundle.not_nil!.tests.first.assertions.first.workflow_id.should eq("workflow/orator")
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it "keeps workflow body lines after nested conditionals" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)
@@ -166,6 +254,30 @@ RCL
         bundle = ACD::Discovery::CawfileLoader.load(dir, "nested-test")
         bundle.should_not be_nil
         bundle.not_nil!.config_federation["auto_subscribe"].should eq(["@user@example.com"])
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
+    it "publishes resource metadata from org comments" do
+      dir = File.tempname("cawfile_test")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+#+name: proxy(name @proxy@example.test)
+#+description: Generates active proxy links
+#+tags: proxy; xray; mtproto
+
+workflow "proxy" do
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "proxy")
+        bundle.should_not be_nil
+        resource = bundle.not_nil!.resources.first
+        resource.id.should eq("proxy")
+        resource.name.should eq("proxy(name @proxy@example.test)")
+        resource.description.should eq("Generates active proxy links")
+        resource.tags.should eq(["proxy", "xray", "mtproto"])
       ensure
         FileUtils.rm_rf(dir)
       end

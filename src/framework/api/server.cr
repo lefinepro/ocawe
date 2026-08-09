@@ -12,6 +12,8 @@ module OcaweCore
           "POST /v1/chat/completions",
           "GET /v1/chat/completions/:completion_id",
           "GET /v1/workflows",
+          "POST /v1/workflows/create",
+          "DELETE /v1/workflows/generated/:id",
           "GET /v1/workflows/:workflowId",
           "POST /v1/workflows/:workflowId/runs",
           "GET /v1/workflows/:workflowId/runs",
