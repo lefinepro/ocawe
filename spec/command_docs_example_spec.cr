@@ -11,6 +11,7 @@ describe "Commands API example" do
       "plugins/functions/set_value.cr",
     ])
     bundle.dsl_source.not_nil!.join.should contain("input.command.\"generate_code\"")
+    bundle.dsl_source.not_nil!.join.should contain("#set_value")
     File.read(File.join(root, "README.org")).should contain("COGNICORE_MOCK_LLM")
   end
 end

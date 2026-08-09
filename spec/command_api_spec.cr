@@ -28,7 +28,7 @@ describe "RegistryApi.register_function" do
     result["input"].as_s.should eq("from-input")
   end
 
-  it "replays command registrations after a registry reset" do
+  it "replays function registrations after a registry reset" do
     handler = ->(_ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
       {"status" => json_str("ok")}
     end
@@ -47,7 +47,7 @@ describe "RegistryApi.register_function" do
     Ocawe::RegistryApi.call_function("persisted_function", ctx)["status"].as_s.should eq("ok")
   end
 
-  it "rejects empty and duplicate command names" do
+  it "rejects empty function names and preserves collision behavior" do
     handler = ->(_ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
       {} of String => JSON::Any
     end
