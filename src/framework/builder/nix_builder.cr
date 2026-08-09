@@ -47,8 +47,16 @@ module Ocawe
                               File.exists?(path) && !f.starts_with?('.') && !ignored_context_entry?(f)
                             end
                           else
-                            files
+                            files.dup
                           end
+
+        # Command plugins are executable application source, not optional
+        # documentation assets. Include them even when a project supplies an
+        # explicit allowlist so release images cannot silently omit commands.
+        command_plugins = File.join(context_dir, "plugins", "commands")
+        if Dir.exists?(command_plugins) && !effective_files.includes?("plugins/commands")
+          effective_files << "plugins/commands"
+        end
 
         # Копируем файлы в контекст сборки
         effective_files.each do |file|
