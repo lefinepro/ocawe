@@ -1,4 +1,5 @@
 require "set"
+require "../../../utils/time_compat"
 
 module ACD
   module Kemal
@@ -71,7 +72,6 @@ module ACD
         @mcp_manager.configure(@settings.mcp)
         register_configured_functions!
         reload_cache!
-        start_service_workflows
         start_reload_watcher
 
         ::Kemal.config.port = @port
@@ -101,6 +101,10 @@ module ACD
           bootstrap_federation_subscriptions
           start_federation_poller
         end
+
+        # After the federation bootstrap: a service workflow that publishes
+        # ActivityPub has nowhere to deliver until its subscriptions exist.
+        start_service_workflows
 
         ::Kemal.run(trap_signal: false)
       end
@@ -286,7 +290,12 @@ module ACD
             } of String => JSON::Any
 
             begin
-              @workflow_service.start_run(workflow_id, run_id: run_id, input_data: input_data)
+              wait_for_deliverable_follow
+              result = @workflow_service.start_run(workflow_id, run_id: run_id, input_data: input_data)
+              # A service workflow has no HTTP response to publish from, so its
+              # `federation_output` is dispatched here - this is what lets a
+              # federation-only runtime send without the classic API.
+              publish_outbound_federation_output(workflow_id, result.output || {} of String => JSON::Any)
               @cache_lock.synchronize { @started_service_workflows.delete(workflow_id) }
               STDERR.puts "[ocawecore] service workflow exited: #{workflow_id}"
             rescue ex
@@ -295,6 +304,35 @@ module ACD
             end
           end
         end
+      end
+
+      # Blocks until at least one subscription has a usable inbox, so a service
+      # workflow that publishes ActivityPub does not fire into an empty follow
+      # table when its peer is still starting. Returns on timeout rather than
+      # raising: a workflow that does not federate must still run.
+      private def wait_for_deliverable_follow(timeout : Time::Span = 60.seconds) : Nil
+        return unless federation_api_enabled?
+        return if @settings.federation.auto_subscribe.empty? && workflow_follow_targets.empty?
+
+        deadline = Ocawe::Utils::TimeCompat.monotonic + timeout
+        until deliverable_follow?
+          if Ocawe::Utils::TimeCompat.monotonic >= deadline
+            STDERR.puts "[federation] no deliverable subscription after #{timeout.total_seconds.to_i}s; starting service workflow anyway"
+            return
+          end
+          sleep 200.milliseconds
+        end
+      end
+
+      private def deliverable_follow? : Bool
+        @federation_kv.list("ocawe:federation:follow:").any? do |entry|
+          record = JSON.parse(entry.value).as_h
+          status = record["status"]?.try(&.as_s?).to_s
+          next false unless status.empty? || status == "active" || status == "following"
+          !record["remote_inbox"]?.try(&.as_s?).to_s.empty?
+        end
+      rescue
+        false
       end
 
       private def workflow_ids : Array(String)

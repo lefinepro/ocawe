@@ -2,6 +2,11 @@ module ACD
   module Kemal
     class App
       private def bootstrap_federation_subscriptions : Nil
+        # The very first outbound activity is the Follow below, and it has to be
+        # signed, so the signing key must exist before any delivery is attempted
+        # rather than being generated lazily under it.
+        ensure_local_private_key(@settings.federation.local_private_key_path)
+
         targets = Set(String).new
         @settings.federation.auto_subscribe.each { |entry| targets << entry.strip unless entry.strip.empty? }
         workflow_follow_targets.each { |entry| targets << entry.strip unless entry.strip.empty? }
@@ -48,6 +53,9 @@ module ACD
           "remote_inbox"   => remote_inbox,
           "remote_outbox"  => remote_outbox,
           "queue"          => target.queue,
+          # Kept so a subscription whose peer was not yet listening can be
+          # resolved again on a later poll cycle.
+          "target"         => target.name,
           "capabilities"   => {"activitypub" => true, "forgefed" => true},
           "cursor"         => "",
           "last_polled_at" => "",
@@ -74,6 +82,19 @@ module ACD
 
         actor, domain = parse_aptok_subscription_handle(normalized)
         resolved_actor = actor.empty? ? "order-queue" : actor
+
+        # `@name@fedi.internal` never resolves through WebFinger: it names a peer
+        # inside this deployment, so it is mapped through the internal peer table.
+        internal_domain = @settings.federation.internal_domain
+        if domain.downcase == internal_domain.strip.downcase
+          actor_url = Ocawe::Federation::InternalDomain.actor_url(
+            resolved_actor,
+            @settings.federation.resolved_internal_peers,
+            internal_domain
+          )
+          return AptokSubscriptionTarget.new(normalized, actor_url, resolved_actor)
+        end
+
         AptokSubscriptionTarget.new(normalized, "https://#{domain}/actors/#{resolved_actor}", resolved_actor)
       end
 
@@ -108,6 +129,9 @@ module ACD
       end
 
       private def run_federation_poll_cycle : Nil
+        retry_unresolved_subscriptions
+        retry_pending_follows
+
         @federation_kv.list("ocawe:federation:follow:").each do |entry|
           follow = JSON.parse(entry.value).as_h
           remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
@@ -131,6 +155,49 @@ module ACD
           rescue ex
             update_aptok_follow_state(remote_actor, error: ex.message || ex.class.name, last_polled_at: Aptok.now)
           end
+        end
+      end
+
+      # A peer that was not listening when subscriptions were bootstrapped leaves
+      # a record without a `remote_inbox`, and an empty inbox is skipped by both
+      # the follow retry and outbound delivery - the subscription would stay dead
+      # until a restart. Re-resolving the stored target on every poll cycle picks
+      # the peer up as soon as it answers.
+      private def retry_unresolved_subscriptions : Nil
+        @federation_kv.list("ocawe:federation:follow:").each do |entry|
+          record = JSON.parse(entry.value).as_h
+          next unless record["remote_inbox"]?.try(&.as_s?).to_s.empty?
+          target = record["target"]?.try(&.as_s?).to_s
+          next if target.empty?
+
+          ensure_aptok_subscription(target)
+        rescue ex
+          STDERR.puts "[federation] subscription re-resolution failed: #{ex.message || ex.class.name}"
+        end
+      end
+
+      # Subscriptions are bootstrapped before `Kemal.run` starts listening, so the
+      # very first Follow is delivered while this runtime cannot yet serve its own
+      # actor document. The peer then fails to resolve the signing key and answers
+      # 401, which parks the record in `pending` - and `pending` records are
+      # skipped by outbound delivery, so a runtime would never send anything again
+      # without a restart. Retrying on every poll cycle recovers as soon as both
+      # sides are listening; a Follow that is already `active`/`following` is left
+      # untouched, so this never re-sends for a healthy subscription.
+      private def retry_pending_follows : Nil
+        @federation_kv.list("ocawe:federation:follow:").each do |entry|
+          record = JSON.parse(entry.value).as_h
+          next unless record["status"]?.try(&.as_s?).to_s == "pending"
+          next if record["remote_inbox"]?.try(&.as_s?).to_s.empty?
+
+          update_aptok_follow_state(
+            record["remote_actor"]?.try(&.as_s?).to_s,
+            status: "following",
+            error: "",
+          )
+          send_aptok_follow(record)
+        rescue ex
+          STDERR.puts "[federation] pending follow retry failed: #{ex.message || ex.class.name}"
         end
       end
 

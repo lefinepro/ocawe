@@ -230,8 +230,14 @@ module ACD
         return "" if parts.empty?
         actor_index = -1
         parts.each_with_index { |part, idx| actor_index = idx if part == "actors" }
-        return parts[actor_index + 1] if actor_index >= 0 && actor_index + 1 < parts.size
-        fallback = parts.last? || ""
+        # The actor identifier is derived from the Cawfile `#+name:` header, which
+        # need not match the workflow id, so an unknown identifier still routes to
+        # the single workflow this runtime serves instead of being dropped.
+        fallback = if actor_index >= 0 && actor_index + 1 < parts.size
+                     parts[actor_index + 1]
+                   else
+                     parts.last? || ""
+                   end
         ids = workflow_ids
         return fallback if fallback.empty? || ids.empty? || ids.includes?(fallback)
         return ids.first if ids.size == 1

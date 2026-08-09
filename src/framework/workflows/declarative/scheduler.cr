@@ -1,5 +1,6 @@
 require "./types"
 require "../../config/settings"
+require "../../utils/time_compat"
 
 module Ocawe
   module Workflow
@@ -137,7 +138,7 @@ module Ocawe
         end
 
         private def worker_loop : Nil
-          idle_since = nil.as(Time::Span?)
+          idle_since = nil.as(Ocawe::Utils::TimeCompat::Instant?)
 
           loop do
             job = nil.as(Job?)
@@ -149,9 +150,9 @@ module Ocawe
                 @running += 1
                 idle_since = nil
               else
-                idle_since ||= Time.monotonic
+                idle_since ||= Ocawe::Utils::TimeCompat.monotonic
                 if @workers > @settings.min_workers &&
-                   Time.monotonic - idle_since.not_nil! >= @settings.scale_down_cooldown_ms.milliseconds
+                   Ocawe::Utils::TimeCompat.monotonic - idle_since.not_nil! >= @settings.scale_down_cooldown_ms.milliseconds
                   @workers -= 1
                   should_exit = true
                 end

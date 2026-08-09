@@ -86,8 +86,14 @@ module OcaweCore
             local_actor = string_or_nil(fed["local_actor"]?) || federation.local_actor
             local_key_id = string_or_nil(fed["local_key_id"]?) || federation.local_key_id
             local_private_key_path = string_or_nil(fed["local_private_key_path"]?) || federation.local_private_key_path
+            allow_private_address = bool_or_nil(fed["allow_private_address"]?)
+            allow_private_address = federation.allow_private_address if allow_private_address.nil?
+            internal_domain = string_or_nil(fed["internal_domain"]?) || federation.internal_domain
+            internal_peers = Ocawe::Federation::InternalDomain.parse_peers(parse_string_list_value(fed["internal_peers"]?))
+            internal_peers = federation.internal_peers if internal_peers.empty?
             federation = Ocawe::Config::FederationSettings.new(
-              auto_subscribe, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path
+              auto_subscribe, poll_interval, http_timeout, signatures_required.not_nil!, local_actor, local_key_id, local_private_key_path,
+              allow_private_address.not_nil!, internal_domain, internal_peers
             )
           end
         end
@@ -202,7 +208,21 @@ module OcaweCore
         tree["scheduler"] = bundle.config_scheduler unless bundle.config_scheduler.empty?
         tree["webhooks"] = bundle.config_webhooks unless bundle.config_webhooks.empty?
 
-        # Auto-enable federation API when Api::Federation types are used in Cawfile
+        # `follow [...]` in the workflow body is a subscription declaration: the
+        # runtime follows those actors at startup, so it feeds `auto_subscribe`
+        # directly. That makes `follow` alone enough to federate - no separate
+        # `federation.auto_subscribe` line is required.
+        unless bundle.follow.empty?
+          fed = tree["federation"]?.as?(Hash(String, RCL::Value)) || ({} of String => RCL::Value)
+          declared = parse_string_list_value(fed["auto_subscribe"]?)
+          merged = (declared + bundle.follow).map(&.strip).reject(&.empty?).uniq!
+          fed["auto_subscribe"] = merged.map(&.as(RCL::Value))
+          tree["federation"] = fed
+        end
+
+        # `Api::Federation::Inbox` / `Api::Federation::Outbox` on a workflow's
+        # types is the only declaration that enables federation - there is no
+        # `api = [...]` setting to repeat it.
         if bundle.enable_federation
           api_value = tree["api"]?
           if api_value.is_a?(Hash(String, RCL::Value))
@@ -217,6 +237,60 @@ module OcaweCore
         end
 
         apply_raw_settings(base, tree)
+      end
+
+      # Derives the local ActivityPub identity from the Cawfile's `#+name:`
+      # header, so a bundle does not have to repeat its own host and port in
+      # `federation.local_actor` / `federation.local_key_id`. The port is only
+      # known after the CLI has parsed `--port`, which is why this is a separate
+      # step from `apply_cawfile_settings`.
+      #
+      # An explicitly declared `local_actor` always wins - deployments that were
+      # written before `#+name:` keep working unchanged.
+      def self.apply_federation_identity(
+        base : Ocawe::Config::Settings,
+        bundle : ACD::Discovery::CawfileBundle,
+        port : Int32,
+      ) : Ocawe::Config::Settings
+        name = bundle.name
+        return base unless name && !name.strip.empty?
+        return base if bundle.config_federation.has_key?("local_actor")
+
+        federation = base.federation
+        identifier = Ocawe::Federation::InternalDomain.slug(name)
+        peers = federation.resolved_internal_peers
+        # A peer map entry for this runtime's own name pins the origin peers will
+        # dereference; without one, loopback is the only origin known to be
+        # correct for a locally started runtime.
+        origin = peers[identifier]? || "http://127.0.0.1:#{port}"
+        local_actor = "#{origin.rstrip('/')}/actors/#{identifier}"
+        local_key_id = bundle.config_federation.has_key?("local_key_id") ? federation.local_key_id : "#{local_actor}#main-key"
+
+        Ocawe::Config::Settings.new(
+          workflows: base.workflows,
+          node_kinds: base.node_kinds,
+          datasets: base.datasets,
+          federation: Ocawe::Config::FederationSettings.new(
+            federation.auto_subscribe,
+            federation.s2s_poll_interval_seconds,
+            federation.s2s_http_timeout_seconds,
+            federation.signatures_required,
+            local_actor,
+            local_key_id,
+            federation.local_private_key_path,
+            federation.allow_private_address,
+            federation.internal_domain,
+            federation.internal_peers,
+          ),
+          api: base.api,
+          scheduler: base.scheduler,
+          webhooks: base.webhooks,
+          functions: base.functions,
+          workspace_bootstrap: base.workspace_bootstrap,
+          mcp: base.mcp,
+          log_settings: base.log_settings,
+          telemetry: base.telemetry,
+        )
       end
 
       private def self.document_to_h(doc : RCL::Document) : Hash(String, RCL::Value)
