@@ -23,6 +23,14 @@ module ACD
         @files : Array(String) = [] of String,
       )
       end
+
+      # `container do end` is valid Cawfile syntax and means that the
+      # workflow does not request any extra image configuration.  Keep the
+      # parsed block available for callers, but do not turn an empty block
+      # into an implicit nested container build.
+      def configured? : Bool
+        !@image.nil? || !@packages.empty? || !@files.empty? || @mode == ContainerMode::Nix
+      end
     end
 
     struct CrystalLoader
