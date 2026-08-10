@@ -103,10 +103,11 @@ module Ocawe
                        ENV["OCAWE_AGENT_WRITE_POLICY"]? || "write"
 
         task_name = "ocawe-acp-#{safe_name(@node_id)}-#{safe_name(@run_id)}-#{Random::Secure.hex(4)}"
-        args = ["run", "--rm", "-i", "--name", task_name,
-                "--label", "ocawe.acp=true",
-                "--label", "ocawe.workflow=#{@node_id}",
-                "--label", "ocawe.run=#{@run_id}"]
+        tool_args = placement["tool_args"]?.try(&.as_a?).try(&.compact_map { |value| value.as_s? }) || [] of String
+        args = tool_args + ["run", "--rm", "-i", "--name", task_name,
+                            "--label", "ocawe.acp=true",
+                            "--label", "ocawe.workflow=#{@node_id}",
+                            "--label", "ocawe.run=#{@run_id}"]
 
         if entrypoint = placement["entrypoint"]?.try(&.as_s?)
           args += ["--entrypoint", entrypoint]
@@ -152,7 +153,8 @@ module Ocawe
           args += ["-e", "#{key}=#{value}"]
         end
 
-        args += ["-w", container_cwd, image, command]
+        args += ["-w", container_cwd, image]
+        args << command unless placement["entrypoint"]?.try(&.as_s?) == command
         args += command_args
         {tool, args, container_cwd, {} of String => String}
       end
