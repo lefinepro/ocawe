@@ -221,7 +221,7 @@ module ACD
         triggers = extract_triggers(raw_lines)
 
         crystal = extract_crystal_code(raw_lines)
-        crystal.registry_files = discover_registry_files(crystal.requires, dir)
+        crystal.registry_files = discover_registry_files(crystal.requires, dir) + discover_function_plugins(dir)
 
         workflow_slices.map do |slice|
           model, input_type, output_type = extract_model_and_validate(slice.annotations, path, dir)
@@ -284,7 +284,7 @@ module ACD
             tests = extract_test_blocks(raw_lines)
 
             crystal = extract_crystal_code(raw_lines)
-            crystal.registry_files = discover_registry_files(crystal.requires, dir)
+          crystal.registry_files = discover_registry_files(crystal.requires, dir) + discover_function_plugins(dir)
 
             return CawfileBundle.new(
               id: workflow_id,
@@ -408,7 +408,7 @@ module ACD
           tests = extract_test_blocks(raw_lines)
 
           crystal = extract_crystal_code(raw_lines)
-          crystal.registry_files = discover_registry_files(crystal.requires, dir)
+          crystal.registry_files = discover_registry_files(crystal.requires, dir) + discover_function_plugins(dir)
 
           CawfileBundle.new(
             id: workflow_id,
@@ -462,7 +462,7 @@ module ACD
             tests = extract_test_blocks(raw_lines)
 
             crystal = extract_crystal_code(raw_lines)
-            crystal.registry_files = discover_registry_files(crystal.requires, dir)
+            crystal.registry_files = discover_registry_files(crystal.requires, dir) + discover_function_plugins(dir)
 
             CawfileBundle.new(
               id: workflow_block.argument || "root",
@@ -578,7 +578,7 @@ module ACD
           tests = extract_test_blocks(raw_lines)
 
           crystal = extract_crystal_code(raw_lines)
-          crystal.registry_files = discover_registry_files(crystal.requires, dir)
+            crystal.registry_files = discover_registry_files(crystal.requires, dir) + discover_function_plugins(dir)
 
           CawfileBundle.new(
             id: workflow_id,
@@ -1487,6 +1487,39 @@ module ACD
         end
 
         registry_files
+      end
+
+      # Discovers local function plugins for the generated runtime entrypoint.
+      # Canonical paths prevent duplicate requires and ensure symlinks cannot
+      # pull source from outside the project being built.
+      private def self.discover_function_plugins(project_dir : String) : Array(String)
+        root = File.realpath(project_dir)
+        root_prefix = "#{root}/"
+        paths = Set(String).new
+
+        Dir.glob(File.join(project_dir, "plugins", "functions", "**", "*.cr")).each do |path|
+          next unless File.file?(path)
+
+          canonical = File.realpath(path)
+          unless canonical == root || canonical.starts_with?(root_prefix)
+            raise "command plugin escapes project root: #{path}"
+          end
+
+          paths << canonical
+        end
+
+        # Keep loading the old directory for existing bundles; new bundles
+        # should use plugins/functions.
+        Dir.glob(File.join(project_dir, "plugins", "commands", "**", "*.cr")).each do |path|
+          next unless File.file?(path)
+          canonical = File.realpath(path)
+          unless canonical == root || canonical.starts_with?(root_prefix)
+            raise "function plugin escapes project root: #{path}"
+          end
+          paths << canonical
+        end
+
+        paths.to_a.sort
       end
     end
   end

@@ -187,6 +187,8 @@ module Ocawe
         raw = value.raw
         return raw if raw.is_a?(Bool)
         return !raw.empty? if raw.is_a?(String)
+        return !raw.empty? if raw.is_a?(Array)
+        return !raw.empty? if raw.is_a?(Hash)
         return raw != 0 if raw.is_a?(Int64)
         return raw != 0.0 if raw.is_a?(Float64)
         !raw.nil?
@@ -219,6 +221,11 @@ module Ocawe
             current = array[match[1].to_i]?
             remaining = match[2]
           elsif match = remaining.match(/^\["([^"]+)"\](.*)$/)
+            hash = current.as_h?
+            return nil unless hash
+            current = hash[match[1]]?
+            remaining = match[2]
+          elsif match = remaining.match(/^\."([^"]+)"(.*)$/)
             hash = current.as_h?
             return nil unless hash
             current = hash[match[1]]?
