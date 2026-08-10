@@ -59,7 +59,9 @@ module Ocawe
         metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
         executor = Ocawe::Workflow::ExecExecutor.new
-        return WorkflowNode.new(id, NodeKind::Exec, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+        node = nil.as(WorkflowNode?)
+        node = WorkflowNode.new(id, NodeKind::Exec, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          effective_workspace = node.try(&.metadata).try(&.["workspace"]?).try(&.as_h?)
           WorkflowNodeResult.continue(
             executor.exec(
               id,
@@ -67,10 +69,11 @@ module Ocawe
               runtime: runtime,
               env: env,
               workflow_root: workflow_root,
-              workspace: workspace,
+              workspace: effective_workspace,
             )
           )
         end
+        node.not_nil!
       when "agent"
         metadata = {} of String => JSON::Any
         metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema
@@ -282,8 +285,8 @@ module Ocawe
       suffix = Random::Secure.hex(8)
 
       ticket = {
-        "type"    => JSON.parse("Ticket".to_json),
-        "id"      => JSON.parse("urn:ocawe:ticket:#{suffix}".to_json),
+        "type" => JSON.parse("Ticket".to_json),
+        "id"   => JSON.parse("urn:ocawe:ticket:#{suffix}".to_json),
         # `name` is required: a ticket without a task is not routed by the peer.
         "name"    => JSON.parse(resolved_summary.to_json),
         "summary" => JSON.parse(resolved_summary.to_json),

@@ -275,9 +275,10 @@ module ACP
     private def handle_message(line : String)
       json = JSON.parse(line)
 
-      if json["id"]? && json["method"]?
+      fields = json.as_h
+      if fields.has_key?("id") && fields.has_key?("method")
         handle_request(json)
-      elsif json["id"]?
+      elsif fields.has_key?("id")
         response = JsonRpcResponse.from_json(line)
         if id = response.id
           if id.is_a?(Int64)
