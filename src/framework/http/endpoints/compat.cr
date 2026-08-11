@@ -132,8 +132,16 @@ module ACD
           resources = files.empty? ? nil : {"files" => JSON.parse(files.to_json)} of String => JSON::Any
 
           run_result = @workflow_service.start_run(workflow_id, input_data: input_data, resources: resources)
+          unless run_result.status == "success"
+            raise workflow_failure_message(workflow_id, run_result.status, run_result.error)
+          end
           publish_outbound_federation_output(workflow_id, run_result.output || {} of String => JSON::Any)
           snapshot = @workflow_service.load_snapshot(workflow_id, run_result.run_id)
+          if snap = snapshot
+            unless snap.status == "success"
+              raise workflow_failure_message(workflow_id, snap.status, snap.error)
+            end
+          end
           output_text = if snap = snapshot
                           workflow_chat_output(snap)
                         else
@@ -585,6 +593,11 @@ module ACD
         end
 
         snapshot.to_json
+      end
+
+      private def workflow_failure_message(workflow_id : String, status : String, error : Ocawe::Workflow::WorkflowError?) : String
+        failure = error.try(&.message) || "workflow completed with status #{status}"
+        "workflow #{workflow_id} failed: #{failure}"
       end
 
       private def workflow_chat_output_blocks(workflow_id : String, snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Array(JSON::Any)

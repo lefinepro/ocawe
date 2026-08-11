@@ -37,6 +37,10 @@ class ACD::Kemal::App
     workflow_chat_output(snapshot)
   end
 
+  def test_workflow_chat_failure(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : String
+    workflow_failure_message(snapshot.workflow_id, snapshot.status, snapshot.error)
+  end
+
   def test_workflow_details_response(workflow_id : String) : String?
     workflow_details_response(workflow_id)
   end
