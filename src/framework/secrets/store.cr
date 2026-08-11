@@ -1,5 +1,6 @@
 require "file_utils"
 require "json"
+require "pg"
 
 module Ocawe
   module Secrets
@@ -20,6 +21,8 @@ module Ocawe
     ) : JSON::Any
       secret_name = validate_name(name)
       raise "secret value must not be empty" if value.empty?
+
+      return postgres_put(secret_name, value, scope, kind, metadata, active) if postgres_dsn
 
       now = Time.utc.to_rfc3339
       records = read_records(path)
@@ -48,6 +51,8 @@ module Ocawe
       active_only : Bool = false,
       path : String = store_path,
     ) : Array(JSON::Any)
+      return postgres_list(scope, kind, include_values, active_only) if postgres_dsn
+
       read_records(path)
         .select { |record| matches?(record, scope, kind, active_only) }
         .map { |record| include_values ? record : public_record(record) }
@@ -55,19 +60,35 @@ module Ocawe
 
     def value(name : String, path : String = store_path) : String?
       secret_name = validate_name(name)
+      if postgres_dsn
+        postgres_list(nil, nil, true, false).find { |record| record["name"]?.try(&.as_s?) == secret_name }
+          .try { |record| record["value"]?.try(&.as_s?) }
+      else
       read_records(path).find { |record| record["name"]?.try(&.as_s?) == secret_name }
         .try(&.["value"]?)
         .try(&.as_s?)
+      end
     end
 
     def delete(name : String, path : String = store_path) : Bool
       secret_name = validate_name(name)
+      if postgres_dsn
+        ensure_postgres_schema
+        db = PG.connect(postgres_dsn.not_nil!)
+        begin
+          result = db.exec("DELETE FROM ocawe_secrets WHERE name = $1", secret_name)
+          result.rows_affected > 0
+        ensure
+          db.close
+        end
+      else
       records = read_records(path)
       remaining = records.reject { |record| record["name"]?.try(&.as_s?) == secret_name }
       return false if remaining.size == records.size
 
       write_records(remaining, path)
       true
+      end
     end
 
     def store_path : String
@@ -81,6 +102,104 @@ module Ocawe
         return File.expand_path(File.join(results, "secrets", "secrets.json")) unless results.empty?
       end
       File.expand_path(DEFAULT_FILE)
+    end
+
+    private def postgres_dsn : String?
+      value = (ENV["OCAWE_SECRETS_DSN"]? || ENV["OCAWE_SECRETS_DATABASE_URL"]?).to_s.strip
+      value.empty? ? nil : value
+    end
+
+    private def ensure_postgres_schema : Nil
+      db = PG.connect(postgres_dsn.not_nil!)
+      begin
+        db.exec(<<-SQL)
+          CREATE TABLE IF NOT EXISTS ocawe_secrets (
+            name TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            scope TEXT NOT NULL DEFAULT '',
+            kind TEXT NOT NULL DEFAULT '',
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        SQL
+      ensure
+        db.close
+      end
+    end
+
+    private def postgres_put(
+      name : String,
+      value : String,
+      scope : String,
+      kind : String,
+      metadata : Metadata,
+      active : Bool,
+    ) : JSON::Any
+      ensure_postgres_schema
+      now = Time.utc.to_rfc3339
+      db = PG.connect(postgres_dsn.not_nil!)
+      begin
+        db.exec(<<-SQL, name, value, scope, kind, metadata.to_json, active, now)
+          INSERT INTO ocawe_secrets
+            (name, value, scope, kind, metadata, active, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7::timestamptz, $7::timestamptz)
+          ON CONFLICT (name) DO UPDATE SET
+            value = EXCLUDED.value,
+            scope = EXCLUDED.scope,
+            kind = EXCLUDED.kind,
+            metadata = EXCLUDED.metadata,
+            active = EXCLUDED.active,
+            updated_at = EXCLUDED.updated_at
+        SQL
+      ensure
+        db.close
+      end
+      public_record(JSON.parse({
+        "name" => name, "scope" => scope, "kind" => kind,
+        "metadata" => metadata, "active" => active,
+        "created_at" => now, "updated_at" => now,
+      }.to_json))
+    end
+
+    private def postgres_list(
+      scope : String?,
+      kind : String?,
+      include_values : Bool,
+      active_only : Bool,
+    ) : Array(JSON::Any)
+      ensure_postgres_schema
+      records = [] of JSON::Any
+      db = PG.connect(postgres_dsn.not_nil!)
+      begin
+        db.query(<<-SQL) do |rs|
+          SELECT name, value, scope, kind, metadata::text,
+                 active, created_at::text, updated_at::text
+          FROM ocawe_secrets
+          ORDER BY name
+        SQL
+          rs.each do
+            record = JSON.parse({
+              "name" => rs.read(String),
+              "value" => rs.read(String),
+              "scope" => rs.read(String),
+              "kind" => rs.read(String),
+              "metadata" => JSON.parse(rs.read(String)),
+              "active" => rs.read(Bool),
+              "created_at" => rs.read(String),
+              "updated_at" => rs.read(String),
+            }.to_json)
+            next if scope && record["scope"].as_s != scope
+            next if kind && record["kind"].as_s != kind
+            next if active_only && !record["active"].as_bool
+            records << (include_values ? record : public_record(record))
+          end
+        end
+      ensure
+        db.close
+      end
+      records
     end
 
     private def read_records(path : String) : Array(JSON::Any)
