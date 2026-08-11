@@ -33,6 +33,14 @@ class ACD::Kemal::App
     copy_chat_identity_fields(source, target)
   end
 
+  def test_workflow_chat_output(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : String
+    workflow_chat_output(snapshot)
+  end
+
+  def test_workflow_chat_failure(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : String
+    workflow_failure_message(snapshot.workflow_id, snapshot.status, snapshot.error)
+  end
+
   def test_workflow_details_response(workflow_id : String) : String?
     workflow_details_response(workflow_id)
   end

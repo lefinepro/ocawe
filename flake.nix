@@ -44,6 +44,7 @@
             pkgs.git
             pkgs.lua5_4
             pkgs.nodejs_22
+            pkgs.openssl
             pkgs.openssh
             pkgs.ruby
             pkgs.sqlite
@@ -156,6 +157,10 @@
             name = "ocawe";
             tag = "latest";
             contents = [ runtimeRoot ];
+            extraCommands = ''
+              mkdir -p tmp
+              chmod 1777 tmp
+            '';
             config = {
               Env = [
                 "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"

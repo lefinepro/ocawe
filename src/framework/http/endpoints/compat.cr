@@ -11,7 +11,7 @@ module ACD
             request_json = body.to_json
             Ocawe::Translation.detect("/v1/messages", request_json)
             chat_body = Ocawe::Translation.request_as_chat("/v1/messages", request_json)
-            completion = build_chat_completion(JSON.parse(chat_body).as_h)
+            completion = build_chat_completion(JSON.parse(chat_body).as_h, env.request.headers)
             response = Ocawe::Translation.chat_response_as_anthropic(completion.to_json, request_json)
             env.response.status_code = 200
             env.response.content_type = "application/json"
@@ -33,7 +33,7 @@ module ACD
           body = json_body(env)
           begin
             chat_body = Ocawe::Translation.request_as_chat("/v1/responses", body.to_json)
-            completion = build_chat_completion(JSON.parse(chat_body).as_h)
+            completion = build_chat_completion(JSON.parse(chat_body).as_h, env.request.headers)
             response = JSON.parse(Ocawe::Translation.chat_response_as_open_responses(completion.to_json, body.to_json)).as_h
             env.response.status_code = 200
             env.response.content_type = "application/json"
@@ -48,7 +48,7 @@ module ACD
         post "/v1/chat/completions" do |env|
           body = json_body(env)
           begin
-            completion = build_chat_completion(body)
+            completion = build_chat_completion(body, env.request.headers)
             write_chat_completion_response(env, completion, stream_requested?(body))
           rescue ex
             env.response.status_code = completion_error_status(ex)
@@ -59,6 +59,7 @@ module ACD
 
         post "/v1/chat/completions/tasks" do |env|
           body = json_body(env)
+          ensure_client_api_key!(workflow_id_for_chat_body(body), env.request.headers)
           task_id = body["task_id"]?.try(&.as_s?) || "chatcmpltask_#{Random::Secure.hex(12)}"
           ensure_chat_completion_tasks_dataset
           queued_payload = chat_completion_task_payload(
@@ -99,7 +100,11 @@ module ACD
         end
       end
 
-      private def build_chat_completion(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
+      private def build_chat_completion(
+        body : Ocawe::Workflow::AnyHash,
+        headers : ::HTTP::Headers? = nil,
+        skip_client_auth : Bool = false,
+      ) : Ocawe::Workflow::AnyHash
         model = normalize_chat_model(body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
         messages = extract_chat_messages(body)
         prompt = chat_prompt_from_messages(messages, body)
@@ -115,6 +120,7 @@ module ACD
         workflow_id = model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
 
         if workflow_id
+          ensure_client_api_key!(workflow_id, headers) unless skip_client_auth
           workflow = workflow_by_id(workflow_id)
 
           unless workflow
@@ -128,12 +134,27 @@ module ACD
           } of String => JSON::Any
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
           input_data["files"] = JSON.parse(files.to_json) unless files.empty?
+          input_data["command"] = JSON.parse(body["command"].to_json) if body["command"]?
+          if workflow_id == "orator" && !input_data["command"]?
+            user_message = messages.reverse.find { |message| message[:role].downcase == "user" }
+            command_source = user_message ? user_message[:content] : prompt
+            inferred_command = orator_command_from_prompt(command_source)
+            input_data["command"] = JSON.parse(inferred_command.to_json) if inferred_command
+          end
           copy_chat_identity_fields(body, input_data)
           resources = files.empty? ? nil : {"files" => JSON.parse(files.to_json)} of String => JSON::Any
 
           run_result = @workflow_service.start_run(workflow_id, input_data: input_data, resources: resources)
+          unless run_result.status == "success"
+            raise workflow_failure_message(workflow_id, run_result.status, run_result.error)
+          end
           publish_outbound_federation_output(workflow_id, run_result.output || {} of String => JSON::Any)
           snapshot = @workflow_service.load_snapshot(workflow_id, run_result.run_id)
+          if snap = snapshot
+            unless snap.status == "success"
+              raise workflow_failure_message(workflow_id, snap.status, snap.error)
+            end
+          end
           output_text = if snap = snapshot
                           workflow_chat_output(snap)
                         else
@@ -152,7 +173,7 @@ module ACD
           message["output_blocks"] = JSON.parse(output_blocks.to_json) unless output_blocks.empty?
 
           return JSON.parse({
-            "id"      => "chatcmpl_#{Random::Secure.hex(12)}",
+            "id"      => "chatcmpl-#{Random::Secure.hex(12)}",
             "object"  => "chat.completion",
             "created" => now,
             "model"   => model,
@@ -193,7 +214,7 @@ module ACD
         end
 
         JSON.parse({
-          "id"      => "chatcmpl_#{Random::Secure.hex(12)}",
+          "id"      => "chatcmpl-#{Random::Secure.hex(12)}",
           "object"  => "chat.completion",
           "created" => now,
           "model"   => response.model,
@@ -218,10 +239,40 @@ module ACD
         normalized
       end
 
+      private def workflow_id_for_chat_body(body : Ocawe::Workflow::AnyHash) : String?
+        model = normalize_chat_model(body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
+        model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
+      end
+
+      private def ensure_client_api_key!(workflow_id : String?, headers : ::HTTP::Headers?) : Nil
+        return unless workflow_id && Ocawe::ClientApiKeys.required_for?(workflow_id)
+
+        authorization = headers.try(&.["Authorization"]?).to_s
+        token = authorization.starts_with?("Bearer ") ? authorization.sub("Bearer ", "").strip : ""
+        return if Ocawe::ClientApiKeys.valid?(token, workflow_id)
+
+        raise "unauthorized: valid lf API key is required"
+      end
+
+      private def orator_command_from_prompt(prompt : String) : Ocawe::Workflow::AnyHash?
+        raw = prompt.strip.sub(/\Auser:\s*/i, "").strip.sub(/\A>\s*/, "").strip
+        match = raw.match(/\A#(plan|bg|background|key|keys|invite)(?:\s+([\s\S]*))?\z/i)
+        return nil unless match
+
+        name = match[1].downcase
+        name = "bg" if name == "background"
+        name = "keys" if name == "key"
+        value = (match[2]? || "").strip
+        JSON.parse({name => (value.empty? ? true : value)}.to_json).as_h
+      end
+
       private def copy_chat_identity_fields(source : Ocawe::Workflow::AnyHash, target : Ocawe::Workflow::AnyHash) : Nil
         ["user_actor", "user_handle"].each do |field|
           value = source[field]?.try(&.as_s?)
           target[field] = JSON.parse(value.to_json) if value && !value.strip.empty?
+        end
+        if command = source["command"]?.try(&.as_h?)
+          target["command"] = JSON.parse(command.to_json)
         end
       end
 
@@ -295,7 +346,9 @@ module ACD
 
       private def completion_error_status(ex : Exception) : Int32
         message = ex.message || ""
+        return 401 if message.includes?("unauthorized:")
         return 404 if message.includes?("not found") || message.includes?("unknown workflow")
+        return 502 if message.includes?("workflow ") || message.includes?("provider") || message.includes?("fmatch")
         422
       end
 
@@ -380,7 +433,7 @@ module ACD
           ),
         )
 
-        result = build_chat_completion(request)
+        result = build_chat_completion(request, nil, skip_client_auth: true)
         update_chat_completion_task(
           task_id,
           chat_completion_task_payload(
@@ -554,25 +607,42 @@ module ACD
 
       private def workflow_chat_output(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : String
         if state = snapshot.state
+          if last_response = state["last_response"]?.try(&.as_s?)
+            return last_response
+          end
           if text = state["text"]?.try(&.as_s?)
             return text
           end
           if content = state["content"]?.try(&.as_s?)
             return content
           end
+          if result = state["result"]?.try(&.as_s?)
+            return result
+          end
         end
 
         if output = snapshot.output
+          if last_response = output["last_response"]?.try(&.as_s?)
+            return last_response
+          end
           if text = output["text"]?.try(&.as_s?)
             return text
           end
           if content = output["content"]?.try(&.as_s?)
             return content
           end
+          if result = output["result"]?.try(&.as_s?)
+            return result
+          end
           return output.to_json
         end
 
         snapshot.to_json
+      end
+
+      private def workflow_failure_message(workflow_id : String, status : String, error : Ocawe::Workflow::WorkflowError?) : String
+        failure = error.try(&.message) || "workflow completed with status #{status}"
+        "workflow #{workflow_id} failed: #{failure}"
       end
 
       private def workflow_chat_output_blocks(workflow_id : String, snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Array(JSON::Any)

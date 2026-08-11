@@ -26,7 +26,7 @@ module OcaweCore
         cawfile = ACD::Discovery::CawfileLoader.find_cawfile(Dir.current)
         if cawfile
           cawfile_bundle = ACD::Discovery::CawfileLoader.load(Dir.current, "root")
-          if cawfile_bundle && cawfile_bundle.container
+          if cawfile_bundle && cawfile_bundle.container && cawfile_bundle.container.not_nil!.configured?
             container_config = cawfile_bundle.container.not_nil!
             container_name = cawfile_bundle.name || cawfile_bundle.id
             container_tag = "#{container_name}:latest"
@@ -140,7 +140,7 @@ module OcaweCore
         container_tag = nil.as(String?)
 
         # Build container if container mode is specified
-        if container_config
+        if container_config && container_config.not_nil!.configured?
           container_name = cawfile_bundle.not_nil!.name || cawfile_bundle.not_nil!.id
           container_tag = "#{container_name}:latest"
           base = case container_config.mode
