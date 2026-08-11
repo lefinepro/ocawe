@@ -554,20 +554,32 @@ module ACD
 
       private def workflow_chat_output(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : String
         if state = snapshot.state
+          if last_response = state["last_response"]?.try(&.as_s?)
+            return last_response
+          end
           if text = state["text"]?.try(&.as_s?)
             return text
           end
           if content = state["content"]?.try(&.as_s?)
             return content
           end
+          if result = state["result"]?.try(&.as_s?)
+            return result
+          end
         end
 
         if output = snapshot.output
+          if last_response = output["last_response"]?.try(&.as_s?)
+            return last_response
+          end
           if text = output["text"]?.try(&.as_s?)
             return text
           end
           if content = output["content"]?.try(&.as_s?)
             return content
+          end
+          if result = output["result"]?.try(&.as_s?)
+            return result
           end
           return output.to_json
         end
