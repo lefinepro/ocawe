@@ -136,7 +136,9 @@ module ACD
           input_data["files"] = JSON.parse(files.to_json) unless files.empty?
           input_data["command"] = JSON.parse(body["command"].to_json) if body["command"]?
           if workflow_id == "orator" && !input_data["command"]?
-            inferred_command = orator_command_from_prompt(prompt)
+            user_message = messages.reverse.find { |message| message[:role].downcase == "user" }
+            command_source = user_message ? user_message[:content] : prompt
+            inferred_command = orator_command_from_prompt(command_source)
             input_data["command"] = JSON.parse(inferred_command.to_json) if inferred_command
           end
           copy_chat_identity_fields(body, input_data)
@@ -253,7 +255,7 @@ module ACD
       end
 
       private def orator_command_from_prompt(prompt : String) : Ocawe::Workflow::AnyHash?
-        raw = prompt.strip.sub(/\Auser:\s*/i, "").strip
+        raw = prompt.strip.sub(/\Auser:\s*/i, "").strip.sub(/\A>\s*/, "").strip
         match = raw.match(/\A#(plan|bg|background|key|keys|invite)(?:\s+([\s\S]*))?\z/i)
         return nil unless match
 
