@@ -14,7 +14,12 @@ module ACD
       end
 
       private def process_registered_aptok_inbox_activity(activity : Aptok::JsonMap) : Bool
-        return false unless Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
+        result = process_registered_aptok_inbox_result(activity)
+        result.try(&.["handled"]?).try(&.as_bool?) || false
+      end
+
+      private def process_registered_aptok_inbox_result(activity : Aptok::JsonMap) : Hash(String, JSON::Any)?
+        return nil unless Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
 
         workflow_id = activity["workflow_id"]?.try(&.as_s?).to_s
         if workflow_id.empty?
@@ -35,10 +40,10 @@ module ACD
           state: input_data,
         )
         result = Ocawe::Workflow.function_registry.call("ocawe_handle_aptok_inbox_activity", ctx)
-        result["handled"]?.try(&.as_bool?) || false
+        result
       rescue ex
         STDERR.puts "[ocawecore] registered inbox handler failed: #{ex.message}"
-        false
+        nil
       end
 
       private def process_polled_activity(follow : Hash(String, JSON::Any), activity : Hash(String, JSON::Any)) : Bool

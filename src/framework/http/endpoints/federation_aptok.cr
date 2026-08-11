@@ -96,11 +96,16 @@ module ACD
           env.response.content_type = "application/json"
           return {"handled" => true, "status" => "accepted"}.to_json
         end
-        handled = process_registered_aptok_inbox_activity(activity)
+        result = process_registered_aptok_inbox_result(activity)
+        handled = result.try(&.["handled"]?).try(&.as_bool?) || false
 
         env.response.status_code = handled ? 202 : 204
         env.response.content_type = "application/json"
-        {"handled" => handled}.to_json
+        # Internal model fan-out callers use the inbox as a synchronous
+        # OpenAI-compatible transport. Preserve the workflow result instead
+        # of reducing it to {"handled": true}; otherwise fmatch cannot see
+        # the generated answer.
+        result ? result.to_json : {"handled" => handled}.to_json
       rescue ex
         env.response.status_code = 400
         env.response.content_type = "application/json"
