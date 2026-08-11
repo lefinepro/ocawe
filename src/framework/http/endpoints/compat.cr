@@ -128,6 +128,7 @@ module ACD
           } of String => JSON::Any
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
           input_data["files"] = JSON.parse(files.to_json) unless files.empty?
+          input_data["command"] = JSON.parse(body["command"].to_json) if body["command"]?
           copy_chat_identity_fields(body, input_data)
           resources = files.empty? ? nil : {"files" => JSON.parse(files.to_json)} of String => JSON::Any
 
@@ -230,6 +231,9 @@ module ACD
         ["user_actor", "user_handle"].each do |field|
           value = source[field]?.try(&.as_s?)
           target[field] = JSON.parse(value.to_json) if value && !value.strip.empty?
+        end
+        if command = source["command"]?.try(&.as_h?)
+          target["command"] = JSON.parse(command.to_json)
         end
       end
 
