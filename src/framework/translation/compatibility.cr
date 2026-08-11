@@ -227,7 +227,7 @@ module Ocawe
       text = parsed["output_text"]?.try(&.as_s?) || extract_output_text(parsed["output"]?)
       model = parsed["model"]?.try(&.as_s?) || request_json["model"]?.try(&.as_s?)
       {
-        "id" => parsed["id"]?.try(&.as_s?) || "chatcmpl_#{Random::Secure.hex(12)}",
+        "id" => parsed["id"]?.try(&.as_s?) || "chatcmpl-#{Random::Secure.hex(12)}",
         "object" => "chat.completion",
         "created" => parsed["created_at"]?.try(&.as_i64?) || Time.utc.to_unix,
         "model" => model || "unknown",

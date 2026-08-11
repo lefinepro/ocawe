@@ -160,7 +160,7 @@ module ACD
           message["output_blocks"] = JSON.parse(output_blocks.to_json) unless output_blocks.empty?
 
           return JSON.parse({
-            "id"      => "chatcmpl_#{Random::Secure.hex(12)}",
+            "id"      => "chatcmpl-#{Random::Secure.hex(12)}",
             "object"  => "chat.completion",
             "created" => now,
             "model"   => model,
@@ -201,7 +201,7 @@ module ACD
         end
 
         JSON.parse({
-          "id"      => "chatcmpl_#{Random::Secure.hex(12)}",
+          "id"      => "chatcmpl-#{Random::Secure.hex(12)}",
           "object"  => "chat.completion",
           "created" => now,
           "model"   => response.model,
@@ -304,6 +304,7 @@ module ACD
       private def completion_error_status(ex : Exception) : Int32
         message = ex.message || ""
         return 404 if message.includes?("not found") || message.includes?("unknown workflow")
+        return 502 if message.includes?("workflow ") || message.includes?("provider") || message.includes?("fmatch")
         422
       end
 
