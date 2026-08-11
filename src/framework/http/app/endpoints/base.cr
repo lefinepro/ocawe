@@ -113,6 +113,7 @@ module ACD
           mount_mcp_endpoints
           mount_mcp_server_endpoint
           mount_keys_endpoints
+          mount_client_api_key_endpoints
         end
         if federation_api_enabled?
           mount_federation_endpoints

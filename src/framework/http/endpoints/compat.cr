@@ -11,7 +11,7 @@ module ACD
             request_json = body.to_json
             Ocawe::Translation.detect("/v1/messages", request_json)
             chat_body = Ocawe::Translation.request_as_chat("/v1/messages", request_json)
-            completion = build_chat_completion(JSON.parse(chat_body).as_h)
+            completion = build_chat_completion(JSON.parse(chat_body).as_h, env.request.headers)
             response = Ocawe::Translation.chat_response_as_anthropic(completion.to_json, request_json)
             env.response.status_code = 200
             env.response.content_type = "application/json"
@@ -33,7 +33,7 @@ module ACD
           body = json_body(env)
           begin
             chat_body = Ocawe::Translation.request_as_chat("/v1/responses", body.to_json)
-            completion = build_chat_completion(JSON.parse(chat_body).as_h)
+            completion = build_chat_completion(JSON.parse(chat_body).as_h, env.request.headers)
             response = JSON.parse(Ocawe::Translation.chat_response_as_open_responses(completion.to_json, body.to_json)).as_h
             env.response.status_code = 200
             env.response.content_type = "application/json"
@@ -48,7 +48,7 @@ module ACD
         post "/v1/chat/completions" do |env|
           body = json_body(env)
           begin
-            completion = build_chat_completion(body)
+            completion = build_chat_completion(body, env.request.headers)
             write_chat_completion_response(env, completion, stream_requested?(body))
           rescue ex
             env.response.status_code = completion_error_status(ex)
@@ -59,6 +59,7 @@ module ACD
 
         post "/v1/chat/completions/tasks" do |env|
           body = json_body(env)
+          ensure_client_api_key!(workflow_id_for_chat_body(body), env.request.headers)
           task_id = body["task_id"]?.try(&.as_s?) || "chatcmpltask_#{Random::Secure.hex(12)}"
           ensure_chat_completion_tasks_dataset
           queued_payload = chat_completion_task_payload(
@@ -99,7 +100,11 @@ module ACD
         end
       end
 
-      private def build_chat_completion(body : Ocawe::Workflow::AnyHash) : Ocawe::Workflow::AnyHash
+      private def build_chat_completion(
+        body : Ocawe::Workflow::AnyHash,
+        headers : ::HTTP::Headers? = nil,
+        skip_client_auth : Bool = false,
+      ) : Ocawe::Workflow::AnyHash
         model = normalize_chat_model(body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
         messages = extract_chat_messages(body)
         prompt = chat_prompt_from_messages(messages, body)
@@ -115,6 +120,7 @@ module ACD
         workflow_id = model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
 
         if workflow_id
+          ensure_client_api_key!(workflow_id, headers) unless skip_client_auth
           workflow = workflow_by_id(workflow_id)
 
           unless workflow
@@ -231,6 +237,21 @@ module ACD
         normalized
       end
 
+      private def workflow_id_for_chat_body(body : Ocawe::Workflow::AnyHash) : String?
+        model = normalize_chat_model(body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
+        model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
+      end
+
+      private def ensure_client_api_key!(workflow_id : String?, headers : ::HTTP::Headers?) : Nil
+        return unless workflow_id && Ocawe::ClientApiKeys.required_for?(workflow_id)
+
+        authorization = headers.try(&.["Authorization"]?).to_s
+        token = authorization.starts_with?("Bearer ") ? authorization.sub("Bearer ", "").strip : ""
+        return if Ocawe::ClientApiKeys.valid?(token, workflow_id)
+
+        raise "unauthorized: valid lf API key is required"
+      end
+
       private def orator_command_from_prompt(prompt : String) : Ocawe::Workflow::AnyHash?
         raw = prompt.strip.sub(/\Auser:\s*/i, "").strip
         match = raw.match(/\A#(plan|bg|background|key|keys|invite)(?:\s+([\s\S]*))?\z/i)
@@ -323,6 +344,7 @@ module ACD
 
       private def completion_error_status(ex : Exception) : Int32
         message = ex.message || ""
+        return 401 if message.includes?("unauthorized:")
         return 404 if message.includes?("not found") || message.includes?("unknown workflow")
         return 502 if message.includes?("workflow ") || message.includes?("provider") || message.includes?("fmatch")
         422
@@ -409,7 +431,7 @@ module ACD
           ),
         )
 
-        result = build_chat_completion(request)
+        result = build_chat_completion(request, nil, skip_client_auth: true)
         update_chat_completion_task(
           task_id,
           chat_completion_task_payload(
