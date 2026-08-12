@@ -1,0 +1,29 @@
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+container do
+  packages = []
+  files = ["plugins/functions"]
+end
+
+struct ReproduciblePipelineInput
+  include JSON::Serializable
+  getter input : String?
+end
+
+struct ReproduciblePipelineOutput
+  include JSON::Serializable
+  getter last_response : String?
+  getter status : String?
+end
+
+@[Validate(ReproduciblePipelineInput, ReproduciblePipelineOutput)]
+workflow "reproducible-pipeline" do
+  pass_input
+end
+
+test "returns its input" do
+  assert "reproducible-pipeline", input: "example", equality: "example"
+end

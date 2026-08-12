@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ocawe Pipeline Writer"
+  short_description: "Write reproducible Ocawe Cawfile pipelines"
+  default_prompt: "Use $ocawe-write-pipelines to design and validate a reproducible Ocawe Cawfile pipeline."
