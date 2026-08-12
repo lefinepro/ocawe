@@ -32,7 +32,7 @@ end
 
 struct PipelineOutput
   include JSON::Serializable
-  getter last_response : String?
+  getter text : String?
   getter status : String?
 end
 
@@ -52,11 +52,14 @@ Register local functions below `plugins/functions/**/*.cr`:
 Ocawe::RegistryApi.register_function("transform_input") do |ctx|
   value = ctx.input_data["input"]?.try(&.as_s?) || ""
   {
-    "last_response" => JSON.parse(value.to_json),
+    "text" => JSON.parse(value.to_json),
     "status" => JSON.parse("ok".to_json),
   }
 end
 ```
+
+Use `text`, `content`, or `result` for deterministic function output asserted by
+`ocawe test`; the runner extracts those state keys before comparing `equality`.
 
 Function files are discovered recursively in lexical order. Keep compatibility files under `plugins/commands` only when maintaining an existing bundle.
 

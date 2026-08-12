@@ -15,7 +15,7 @@ end
 
 struct ReproduciblePipelineOutput
   include JSON::Serializable
-  getter last_response : String?
+  getter text : String?
   getter status : String?
 end
 

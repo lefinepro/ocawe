@@ -1,0 +1,29 @@
+settings do
+  data.adapter = "memory"
+  port = 4111
+end
+
+container do
+  packages = []
+  files = ["plugins/functions"]
+end
+
+struct ReproducibleTextInput
+  include JSON::Serializable
+  getter input : String?
+end
+
+struct ReproducibleTextOutput
+  include JSON::Serializable
+  getter text : String?
+  getter status : String?
+end
+
+@[Validate(ReproducibleTextInput, ReproducibleTextOutput)]
+workflow "15-reproducible-pipeline" do
+  normalize_text
+end
+
+test "normalizes whitespace" do
+  assert "15-reproducible-pipeline", input: "Reproducible   pipeline", equality: "Reproducible pipeline"
+end

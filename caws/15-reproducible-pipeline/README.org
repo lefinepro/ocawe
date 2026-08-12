@@ -1,0 +1,23 @@
+#+TITLE: Reproducible Pipeline
+
+This bundle demonstrates a deterministic Ocawe pipeline. Its public contract is
+typed, the transformation is a local Crystal function, runtime files are
+allowlisted, and the Cawfile contains an executable behavior test. It requires
+no model credentials, network service, clock, randomness, or host-specific
+path.
+
+Start the runtime:
+
+#+begin_src sh
+ocawe up caws/15-reproducible-pipeline
+#+end_src
+
+In another terminal, run the Cawfile test:
+
+#+begin_src sh
+ocawe test caws/15-reproducible-pipeline
+#+end_src
+
+The test sends text with repeated whitespace. The ~normalize_text~ function
+returns a stable ~text~ value with single spaces, preserving Ocawe's generated
+test tag so the runner can verify that the exact request reached the workflow.

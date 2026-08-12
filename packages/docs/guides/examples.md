@@ -21,6 +21,7 @@ ocawe pull git+https://github.com/lefinepro/ocawe/caws/10-acp-agent
 - `09-custom-agent`: custom agents backed by external binaries.
 - `10-acp-agent`: ACP-compatible external agent execution.
 - `14-commands-api`: local function plugins, bare function invocation, and a guarded agent.
+- `15-reproducible-pipeline`: typed, tested local-function pipeline with no external dependencies.
 - `11-git-https-pull`: pulling remote Cawfile bundles with `git+https`.
 - `12-api-nodes`: HTTP `get`, `post`, and `put` steps with `step["name"]` result access.
 
