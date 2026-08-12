@@ -1,3 +1,4 @@
+require "log"
 require "option_parser"
 require "./framework/utils/config_parser"
 require "./framework/api/public_types"
