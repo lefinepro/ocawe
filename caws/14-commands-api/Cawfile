@@ -2,6 +2,6 @@ workflow "14-commands-api" do
   set_value
 
   if input.command."generate_code"
-    agent "coder", model: "openai/gpt-4.1-mini", prompt: "Return a deterministic response."
+    agent "coder", model: "openai/gpt-4.1-mini", prompt: "#set_value Return a deterministic response."
   end
 end
