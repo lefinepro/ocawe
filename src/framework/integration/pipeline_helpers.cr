@@ -73,8 +73,10 @@ module Ocawe
         "mediaType" => "text/plain",
         "content"   => content,
       })
+      marketplace_context = Aptok.marketplace_context.as_a
+      marketplace_context.insert(1, Aptok.json("https://w3id.org/fep/0837"))
       Aptok.object("Offer", id, {
-        "@context" => Aptok.marketplace_context,
+        "@context" => Aptok.json(marketplace_context),
         "actor"    => Aptok.json(actor),
         "to"       => Aptok.json([target]),
         "object"   => Aptok.json(proposal),

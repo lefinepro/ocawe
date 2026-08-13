@@ -32,14 +32,15 @@ module Ocawe
         rootfs = File.join(context, "rootfs")
         Dir.mkdir_p(rootfs)
 
-        dockerfile = generate_dockerfile(image: image, packages: packages, files: files)
-        File.write(File.join(context, "Dockerfile"), dockerfile)
-
         copy_executable(binary_path, File.join(rootfs, "app", "ocawecore"))
         copy_binary_closure(binary_path, rootfs)
         copy_package_tools(packages, rootfs)
         copy_default_tools(rootfs)
+        write_runtime_entrypoint(rootfs)
         copied_workflow_config = copy_workflow_cawfile(context_dir, rootfs)
+
+        dockerfile = generate_dockerfile(image: image, packages: packages, files: files)
+        File.write(File.join(context, "Dockerfile"), dockerfile)
 
         effective_files = if files.empty?
                             Dir.children(context_dir).select do |f|
@@ -97,16 +98,36 @@ module Ocawe
           "ENV PATH=\"/usr/bin:/bin:/app/tools:${PATH}\"",
           "WORKDIR /app",
           "EXPOSE 4111",
-          "ENTRYPOINT [\"/app/ocawecore\"]",
+          # Use the loader exposed in /usr/lib so the generated image does not
+          # depend on the base image's dynamic linker.
+          "ENTRYPOINT [\"/usr/lib/ld-linux-x86-64.so.2\", \"--library-path\", \"/usr/lib:/lib\", \"/app/ocawecore\"]",
           "CMD [\"--port\", \"4111\"]",
         ]
         lines.join("\n")
       end
 
       private def copy_binary_closure(binary : String, rootfs : String) : Nil
-        collect_shared_libraries(binary).each do |library|
+        shared_library_closure(binary).each do |library|
           copy_absolute_file(library, rootfs)
+          expose_shared_library(library, rootfs)
         end
+      end
+
+      private def shared_library_closure(binary : String) : Array(String)
+        pending = collect_shared_libraries(binary)
+        seen = Set(String).new
+        libraries = [] of String
+        until pending.empty?
+          library = pending.shift
+          next if seen.includes?(library)
+
+          seen << library
+          libraries << library
+          collect_shared_libraries(library).each do |dependency|
+            pending << dependency unless seen.includes?(dependency)
+          end
+        end
+        libraries.sort
       end
 
       private def copy_package_tools(packages : Array(String), rootfs : String) : Nil
@@ -139,7 +160,28 @@ module Ocawe
         copy_executable(executable, destination)
         collect_shared_libraries(executable).each do |library|
           copy_absolute_file(library, rootfs)
+          expose_shared_library(library, rootfs)
         end
+      end
+
+      private def expose_shared_library(source : String, rootfs : String) : Nil
+        name = File.basename(source)
+        destination = File.join(rootfs, "usr", "lib", name)
+        Dir.mkdir_p(File.dirname(destination))
+        File.delete(destination) if File.exists?(destination) || File.symlink?(destination)
+        File.symlink(source, destination)
+      end
+
+      private def write_runtime_entrypoint(rootfs : String) : Nil
+        loader = Dir.glob(File.join(rootfs, "nix", "store", "*", "lib64", "ld-linux-x86-64.so.2")).sort.first?
+        loader ||= Dir.glob(File.join(rootfs, "nix", "store", "*", "lib", "ld-linux-x86-64.so.2")).sort.first?
+        raise "Nix dynamic loader was not included in the runtime closure" unless loader
+
+        loader_lib = File.dirname(loader).sub(/\/lib64$/, "/lib")
+        script = "#!/bin/sh\nexec #{loader} --library-path /usr/lib:/lib:#{loader_lib} /app/ocawecore \"$@\"\n"
+        destination = File.join(rootfs, "app", "ocawe-entrypoint.sh")
+        File.write(destination, script)
+        File.chmod(destination, 0o755)
       end
 
       private def copy_nix_package(package : String, rootfs : String) : Nil
@@ -159,6 +201,7 @@ module Ocawe
         package_paths.each do |path|
           copy_nix_closure(path, rootfs)
           link_package_bins(path, rootfs)
+          link_package_shared_libraries(path, rootfs)
         end
       end
 
@@ -173,6 +216,16 @@ module Ocawe
 
         output.to_s.lines.map(&.strip).reject(&.empty?).sort!.each do |store_path|
           copy_absolute_path(store_path, rootfs)
+          expose_store_path_libraries(store_path, rootfs)
+        end
+      end
+
+      private def expose_store_path_libraries(store_path : String, rootfs : String) : Nil
+        lib_dir = File.join(store_path, "lib")
+        return unless Dir.exists?(lib_dir)
+
+        Dir.children(lib_dir).select { |name| name.starts_with?("lib") && name.includes?(".so") }.sort.each do |name|
+          expose_shared_library(File.join(lib_dir, name), rootfs)
         end
       end
 
@@ -188,6 +241,29 @@ module Ocawe
           Dir.mkdir_p(File.dirname(dst))
           File.delete(dst) if File.exists?(dst) || File.symlink?(dst)
           File.symlink(src, dst)
+        end
+      end
+
+      # Nix packages keep shared objects under their store path. The generated
+      # image also contains the closure, but the normal dynamic linker does not
+      # search /nix/store. Expose package libraries in the conventional image
+      # search path while retaining absolute store-backed symlinks.
+      private def link_package_shared_libraries(package_path : String, rootfs : String) : Nil
+        lib_dir = File.join(package_path, "lib")
+        return unless Dir.exists?(lib_dir)
+
+        # Use Dir.children rather than a glob here. Crystal's glob handling
+        # has varied across the runtime versions used by the workflow image,
+        # while children preserves both versioned objects and their symlinks.
+        libraries = Dir.children(lib_dir).select { |name| name.starts_with?("lib") && name.includes?(".so") }.sort
+        puts "[ocawe] exposing #{libraries.size} shared libraries from #{package_path}" unless libraries.empty?
+        libraries.each do |name|
+          source = File.join(lib_dir, name)
+          name = File.basename(source)
+          destination = File.join(rootfs, "usr", "lib", name)
+          Dir.mkdir_p(File.dirname(destination))
+          File.delete(destination) if File.exists?(destination) || File.symlink?(destination)
+          File.symlink(source, destination)
         end
       end
 
