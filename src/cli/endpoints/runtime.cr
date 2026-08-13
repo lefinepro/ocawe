@@ -393,7 +393,13 @@ module OcaweCore
         if mount = mount_workflows_root
           command.concat(["-v", "#{File.expand_path(mount)}:#{workdir}"])
         end
-        command.concat(["-w", workdir, "-p", "#{port}:#{port}", image, "/app/ocawecore"])
+        command.concat(["-w", workdir])
+        if ENV["OCAWE_CONTAINER_NETWORK"]? == "host"
+          command << "--network" << "host"
+        else
+          command.concat(["-p", "#{port}:#{port}"])
+        end
+        command.concat([image, "/app/ocawecore"])
         command.concat(runtime_args)
         "#{cleanup} >/dev/null 2>&1 || true; #{command.map { |part| shell_quote(part) }.join(" ")}"
       end
@@ -509,7 +515,8 @@ module OcaweCore
           lines << runtime_entry_line(line, entrypoint_dir)
         end
         crystal_loader.registry_files.each do |path|
-          lines << %(require "#{require_path(entrypoint_dir, path)}")
+          require_line = %(require "#{require_path(entrypoint_dir, path)}")
+          lines << require_line unless lines.includes?(require_line)
         end
         lines << ""
         lines << "OcaweCore.run"
