@@ -165,6 +165,16 @@ module ACD
                           else
                             [] of JSON::Any
                           end
+          usage = {
+            "prompt_tokens"     => JSON.parse("0"),
+            "completion_tokens" => JSON.parse("0"),
+            "total_tokens"      => JSON.parse("0"),
+          } of String => JSON::Any
+          if snap = snapshot
+            if workflow_usage = workflow_chat_usage(snap)
+              workflow_usage.each { |key, value| usage[key] = value }
+            end
+          end
           now = Time.utc.to_unix
           message = {
             "role"    => JSON.parse("assistant".to_json),
@@ -184,11 +194,7 @@ module ACD
                 "finish_reason" => "stop",
               },
             ],
-            "usage" => {
-              "prompt_tokens"     => 0,
-              "completion_tokens" => 0,
-              "total_tokens"      => 0,
-            },
+            "usage" => usage,
           }.to_json).as_h
         end
 
@@ -504,6 +510,7 @@ module ACD
         message = choices[0]["message"].as_h
         content = message["content"]?.try(&.as_s?) || ""
         finish_reason_val = choices[0]["finish_reason"]?.try(&.as_s?)
+        usage = completion_hash["usage"]?
 
         # First chunk: role
         role_chunk = {
@@ -597,6 +604,7 @@ module ACD
                 "finish_reason" => finish_reason_val,
               },
             ],
+            "usage" => usage,
           }
           env.response.print "data: #{final_chunk.to_json}\n\n"
         end
@@ -638,6 +646,14 @@ module ACD
         end
 
         snapshot.to_json
+      end
+
+      private def workflow_chat_usage(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Ocawe::Workflow::AnyHash?
+        [snapshot.output, snapshot.state].each do |source|
+          usage = source.try(&.["usage"]?).try(&.as_h?)
+          return usage if usage
+        end
+        nil
       end
 
       private def workflow_failure_message(workflow_id : String, status : String, error : Ocawe::Workflow::WorkflowError?) : String

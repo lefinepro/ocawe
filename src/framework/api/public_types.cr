@@ -106,6 +106,9 @@ module Api
       property prompt_tokens : Int32
       property completion_tokens : Int32
       property total_tokens : Int32
+      property cost : Float64?
+      property currency : String?
+      property cost_details : Hash(String, JSON::Any)?
     end
 
     # Mirrors POST /v1/chat/completions request body.
