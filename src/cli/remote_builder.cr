@@ -162,7 +162,10 @@ module OcaweCore
           && rm -rf /var/lib/apt/lists/* \\
           && mkdir -p /out \\
           && shards install --production --skip-postinstall --skip-executables \\
-          && crystal build /src/workflow/build/runtime_entry.cr --release --no-debug -o /out/#{runtime_name}
+          # Crystal's default parallelism can exhaust the small production
+          # builder while compiling the embedded Ocawe runtime. Keep remote
+          # builds deterministic and within the host memory budget.
+          && crystal build /src/workflow/build/runtime_entry.cr --threads 1 --release --no-debug -o /out/#{runtime_name}
 
         FROM ${BASE_IMAGE}
         RUN apt-get update \\
