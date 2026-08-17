@@ -51,6 +51,7 @@ module ACD
                            workflow_id: workflow_id,
                            run_id: run_id,
                            result_text: "merge output rejected: #{merge_error}",
+                           result_status: status,
                          )
                        end
                      else
@@ -81,6 +82,7 @@ module ACD
                          workflow_id: workflow_id,
                          run_id: run_id,
                          result_text: "merge output rejected: #{merge_error}",
+                         result_status: status,
                        )
                      end
                    else
@@ -108,12 +110,17 @@ module ACD
                        workflow_id: workflow_id,
                        run_id: run_id,
                        result_text: resolved_text,
+                       result_status: status,
                      )
                    end
         activity["to"] = JSON.parse([remote_actor].to_json) unless remote_actor.empty? || activity.has_key?("to")
 
-        append_aptok_outbox_event(workflow_actor, JSON.parse(activity.to_json).as_h, "outbox-result-#{suffix}")
-      rescue
+        STDERR.puts "[federation] publishing result workflow=#{workflow_id} status=#{status} text_len=#{activity["object"]?.try(&.as_h?).try(&.["content"]?).try(&.as_s?).to_s.size}"
+        normalized_activity = JSON.parse(activity.to_json).as_h
+        append_aptok_outbox_event(workflow_actor, normalized_activity, "outbox-result-#{suffix}")
+        deliver_outbound_federation_activity(normalized_activity)
+      rescue ex
+        STDERR.puts "[federation] result publish failed: #{ex.message || ex.class.name}"
       end
 
       private def enrich_output_with_embedded_json(output : Hash(String, JSON::Any)) : Hash(String, JSON::Any)
@@ -176,25 +183,43 @@ module ACD
         local_domain : String,
         workflow_id : String,
         run_id : String,
-        result_text : String
+        result_text : String,
+        result_status : String = "completed"
       ) : Hash(String, JSON::Any)
-        note_id = "#{local_domain}/notes/#{workflow_id}-#{run_id}-#{suffix}"
-        ticket_id = ticket["id"]?.try(&.as_s?) || ""
-        note = {
-          "type"      => JSON.parse("Note".to_json),
-          "id"        => JSON.parse(note_id.to_json),
-          "name"      => JSON.parse("workflow-result".to_json),
-          "content"   => JSON.parse(result_text.to_json),
-          "inReplyTo" => JSON.parse(ticket_id.to_json),
+        source_ticket_id = ticket["id"]?.try(&.as_s?) || ""
+        task_ref = ticket["taskRef"]?.try(&.as_s?) || source_ticket_id
+        result_inbox = ticket_result_inbox(ticket)
+        result_ticket = {
+          "type"         => JSON.parse("Ticket".to_json),
+          "id"           => JSON.parse("#{local_domain}/results/#{workflow_id}-#{run_id}-#{suffix}".to_json),
+          "taskRef"      => JSON.parse(task_ref.to_json),
+          "activity"     => JSON.parse("result".to_json),
+          "command"      => JSON.parse("#result".to_json),
+          "status"       => JSON.parse(result_status.to_json),
+          "responseMode" => JSON.parse("answer".to_json),
+          "content"      => JSON.parse(result_text.to_json),
+          "inReplyTo"    => JSON.parse(source_ticket_id.to_json),
         } of String => JSON::Any
+        result_ticket["resultInbox"] = JSON.parse(result_inbox.to_json) unless result_inbox.empty?
 
         {
-          "@context" => JSON.parse(Aptok::ACTIVITYSTREAMS_CONTEXT.to_json),
+          "@context" => JSON.parse([Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::FORGEFED_CONTEXT].to_json),
           "id"       => JSON.parse("#{local_domain}/activities/result-#{suffix}".to_json),
-          "type"     => JSON.parse("Create".to_json),
+          "type"     => JSON.parse("Offer".to_json),
           "actor"    => JSON.parse(workflow_actor.to_json),
-          "object"   => JSON.parse(note.to_json),
+          "object"   => JSON.parse(result_ticket.to_json),
         } of String => JSON::Any
+      end
+
+      private def ticket_result_inbox(ticket : Hash(String, JSON::Any)) : String
+        direct = ticket["resultInbox"]?.try(&.as_s?).to_s.strip
+        return direct unless direct.empty?
+        source = ticket["source"]?.try(&.as_h?)
+        raw = source.try(&.["content"]?).try(&.as_s?).to_s
+        return "" if raw.empty?
+        JSON.parse(raw)["resultInbox"]?.try(&.as_s?).to_s.strip
+      rescue
+        ""
       end
     end
   end
