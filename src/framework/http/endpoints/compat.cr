@@ -1,3 +1,5 @@
+require "base64"
+
 module ACD
   module Kemal
     class App
@@ -46,6 +48,21 @@ module ACD
         end
 
         post "/v1/chat/completions" do |env|
+          body = json_body(env)
+          begin
+            completion = build_chat_completion(body, env.request.headers)
+            write_chat_completion_response(env, completion, stream_requested?(body))
+          rescue ex
+            env.response.status_code = completion_error_status(ex)
+            env.response.content_type = "application/json"
+            {error: {type: "completion_error", message: ex.message || "chat completion failed"}}.to_json
+          end
+        end
+
+        # OpenAI-compatible clients commonly join a base URL ending in `/v1/`
+        # with `chat/completions`, producing a trailing slash. Kemal does not
+        # normalize that path, so expose the equivalent route explicitly.
+        post "/v1/chat/completions/" do |env|
           body = json_body(env)
           begin
             completion = build_chat_completion(body, env.request.headers)
@@ -117,7 +134,8 @@ module ACD
         files = resolve_file_resources(body)
         metadata["files"] = JSON.parse(files.to_json) unless files.empty?
 
-        workflow_id = model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
+        workflow_model = model.split(":", 2).first
+        workflow_id = workflow_model.starts_with?("workflow/") ? workflow_model.sub("workflow/", "") : nil
 
         if workflow_id
           ensure_client_api_key!(workflow_id, headers) unless skip_client_auth
@@ -131,6 +149,11 @@ module ACD
           input_data = {
             "prompt"   => JSON.parse(prompt.to_json),
             "messages" => JSON.parse(messages.to_json),
+            # Preserve the gateway model and its optional route preference for
+            # workflows such as Orator. The workflow ID above is still based
+            # on the part before ':', so `workflow/orator:quality` executes
+            # the Orator workflow and lets it pass the preference to Fmatch.
+            "model" => JSON.parse(model.to_json),
           } of String => JSON::Any
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
           input_data["files"] = JSON.parse(files.to_json) unless files.empty?
@@ -160,6 +183,11 @@ module ACD
                         else
                           run_result.to_json
                         end
+          router_candidates = if snap = snapshot
+                                workflow_chat_candidates(snap)
+                              else
+                                [] of JSON::Any
+                              end
           output_blocks = if snap = snapshot
                             workflow_chat_output_blocks(workflow_id, snap)
                           else
@@ -195,6 +223,7 @@ module ACD
               },
             ],
             "usage" => usage,
+            "router_candidates" => JSON.parse(router_candidates.to_json),
           }.to_json).as_h
         end
 
@@ -241,13 +270,20 @@ module ACD
 
       private def normalize_chat_model(model : String) : String
         normalized = model.strip
-        return "workflow/orator" if normalized == "orator" || normalized == "workflow-orator"
+        parts = normalized.split(":", 2)
+        base = parts[0]?
+        preference = parts[1]?
+        return normalized unless base
+        if base == "orator" || base == "workflow-orator"
+          return preference ? "workflow/orator:#{preference}" : "workflow/orator"
+        end
         normalized
       end
 
       private def workflow_id_for_chat_body(body : Ocawe::Workflow::AnyHash) : String?
         model = normalize_chat_model(body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
-        model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
+        workflow_model = model.split(":", 2).first
+        workflow_model.starts_with?("workflow/") ? workflow_model.sub("workflow/", "") : nil
       end
 
       private def ensure_client_api_key!(workflow_id : String?, headers : ::HTTP::Headers?) : Nil
@@ -490,6 +526,9 @@ module ACD
       end
 
       private def write_chat_completion_response(env, completion, stream : Bool) : String
+        if candidates = completion["router_candidates"]?.try(&.as_a?)
+          env.response.headers["X-Router-Candidates"] = Base64.strict_encode(candidates.to_json)
+        end
         unless stream
           env.response.status_code = 200
           env.response.content_type = "application/json"
@@ -646,6 +685,21 @@ module ACD
         end
 
         snapshot.to_json
+      end
+
+      private def workflow_chat_candidates(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Array(JSON::Any)
+        [snapshot.output, snapshot.state].each do |source|
+          next unless source
+          if candidates = source["candidates"]?.try(&.as_a?)
+            return candidates
+          end
+          if result = source["result"]?.try(&.as_h?)
+            if candidates = result["candidates"]?.try(&.as_a?)
+              return candidates
+            end
+          end
+        end
+        [] of JSON::Any
       end
 
       private def workflow_chat_usage(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Ocawe::Workflow::AnyHash?
