@@ -97,6 +97,7 @@ module ACD
         mount_docs_endpoints
         unless @settings.api.federation_only?
           mount_workflow_endpoints
+          mount_command_endpoints
           mount_workflows_create_endpoints
           mount_agent_endpoints
           mount_tool_endpoints

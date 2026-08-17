@@ -76,6 +76,10 @@ module Ocawe
         workspace : AnyHash?,
       ) : AnyHash
         config = acp_config.as_h? || {} of String => JSON::Any
+        if model = ctx.input_data["model"]?.try(&.as_s?)
+          config = config.dup
+          config["model"] = JSON.parse(model.to_json)
+        end
         input = acp_prompt_input(ctx.input_data)
 
         # Build environment

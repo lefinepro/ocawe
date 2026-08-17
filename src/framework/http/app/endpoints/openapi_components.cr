@@ -70,6 +70,27 @@ module ACD
                   "triggers" => {"$ref" => "#/components/schemas/WorkflowTriggers"},
                 },
               },
+              "CommandListResponse" => {
+                "type" => "object",
+                "required" => ["commands"],
+                "properties" => {
+                  "commands" => {
+                    "type" => "array",
+                    "items" => {"$ref" => "#/components/schemas/CommandItem"},
+                  },
+                },
+              },
+              "CommandItem" => {
+                "type" => "object",
+                "required" => ["id", "name", "command", "kind", "model_route"],
+                "properties" => {
+                  "id" => {"type" => "string"},
+                  "name" => {"type" => "string"},
+                  "command" => {"type" => "string"},
+                  "kind" => {"type" => "string"},
+                  "model_route" => {"type" => "boolean"},
+                },
+              },
               "WorkflowTriggers" => {
                 "type" => "object",
                 "description" => "Stored trigger configuration metadata. Configured does not imply active execution.",

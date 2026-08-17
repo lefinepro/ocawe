@@ -24,10 +24,10 @@ nix flake check
 
 Review checks:
 
-- `Ocawe::RegistryApi.register_function` is the public registration API.
-- `set_value` is registered as a function, not a command.
+- `Ocawe::Command.register` is the public command registration API.
+- `set_value` is registered through the Commands API.
 - Plugin paths are canonicalized, sorted, and confined to the project root.
 - Bare invocation remains the existing function-registry fallback.
 - `input.command."generate_code"` is data lookup and never dispatches a handler.
-- Explicit container file lists include `plugins/functions` automatically.
+- Explicit container file lists include command plugin directories automatically.
 - The example has no explicit plugin `require` and uses the mock model fixture.

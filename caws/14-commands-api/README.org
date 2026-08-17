@@ -1,8 +1,8 @@
 #+TITLE: Commands API
 
-This example demonstrates local Crystal function plugins. The plugin under
-~plugins/functions~ is discovered automatically; the root Cawfile does not
-require it explicitly.
+This example demonstrates local Ocawe command plugins. The plugin under
+~plugins/commands~ is discovered automatically and registers through
+~Ocawe::Command.register~; the root Cawfile does not require it explicitly.
 
 The workflow invokes the registered ~set_value~ function by its bare name. The
 agent prompt uses the ~#set_value~ convention. The existing ~agent~ node is

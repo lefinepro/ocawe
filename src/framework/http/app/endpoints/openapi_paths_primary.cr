@@ -38,6 +38,22 @@ module ACD
                 },
               },
             },
+            "/v1/commands" => {
+              "get" => {
+                "tags" => ["Commands"],
+                "summary" => "List registered Ocawe commands",
+                "responses" => {
+                  "200" => {
+                    "description" => "Registered command catalog",
+                    "content" => {
+                      "application/json" => {
+                        "schema" => {"$ref" => "#/components/schemas/CommandListResponse"},
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "/v1/workflows/create" => {
               "post" => {
                 "tags" => ["Workflows"],

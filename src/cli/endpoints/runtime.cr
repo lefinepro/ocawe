@@ -3,20 +3,52 @@ require "file_utils"
 require "../../framework/discovery/cawfile_loader"
 require "../../framework/discovery/git_https_puller"
 require "../../framework/builder"
+require "../remote_builder"
 
 module OcaweCore
   module CLI
     class Main
       private def build(args : Array(String)) : Nil
+        remote_host = nil.as(String?)
+        manager = "auto"
+        base_image = "ocawe:latest"
+        dry_run = false
         release = true
         static = false
         output = runtime_bin
 
         OptionParser.parse(args) do |parser|
+          parser.on("--remote HOST", "Build a service on a remote host") { |value| remote_host = value }
+          parser.on("--manager NAME", "Remote manager: auto, nerdctl, docker, or podman") { |value| manager = value }
+          parser.on("--base-image IMAGE", "Remote runtime base image") { |value| base_image = value }
+          parser.on("--dry-run", "Show the remote build without executing it") { dry_run = true }
           parser.on("--release", "Build release binary (default)") { release = true }
           parser.on("--debug", "Build non-release binary") { release = false }
           parser.on("--static", "Build static binary") { static = true }
           parser.on("--output PATH", "Output binary path") { |v| output = v }
+        end
+
+        service = args.shift?
+        if remote_host
+          unless service
+            STDERR.puts "Error: ocawe build --remote requires SERVICE"
+            exit(1)
+          end
+          ok = RemoteBuilder.new(project_root).build(
+            service,
+            RemoteBuilder::Options.new(
+              host: remote_host.not_nil!,
+              manager: manager,
+              base_image: base_image,
+              dry_run: dry_run
+            )
+          )
+          exit(1) unless ok
+          return
+        end
+        if service
+          STDERR.puts "Error: SERVICE builds require --remote HOST"
+          exit(1)
         end
 
         abort_unless_success(build_runtime(release: release, static: static, output: output, force: true))
@@ -507,7 +539,10 @@ module OcaweCore
         crystal_loader = cawfile_bundle.try(&.crystal_loader)
         return runtime_entry unless crystal_loader
 
-        entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
+        # Keep generated runtime glue outside the workflow tree.  A Cawfile is
+        # the application source of truth; `ocawe up/run` must not leave a
+        # project-owned build directory beside it.
+        entrypoint = File.join(Dir.tempdir, "ocawe-runtime-entry-#{Process.pid}.cr")
         entrypoint_dir = File.dirname(entrypoint)
         lines = [] of String
         lines << %(require "#{require_path(entrypoint_dir, runtime_entry)}")

@@ -1497,7 +1497,7 @@ module ACD
         registry_files
       end
 
-      # Discovers local function plugins for the generated runtime entrypoint.
+      # Discovers local Ocawe command plugins for the generated runtime entrypoint.
       # Canonical paths prevent duplicate requires and ensure symlinks cannot
       # pull source from outside the project being built.
       private def self.discover_function_plugins(project_dir : String) : Array(String)
@@ -1516,13 +1516,13 @@ module ACD
           paths << canonical
         end
 
-        # Keep loading the old directory for existing bundles; new bundles
-        # should use plugins/functions.
+        # Keep loading the compatibility directory for existing bundles; new
+        # bundles may use either plugins/functions or plugins/commands.
         Dir.glob(File.join(project_dir, "plugins", "commands", "**", "*.cr")).each do |path|
           next unless File.file?(path)
           canonical = File.realpath(path)
           unless canonical == root || canonical.starts_with?(root_prefix)
-            raise "function plugin escapes project root: #{path}"
+            raise "command plugin escapes project root: #{path}"
           end
           paths << canonical
         end

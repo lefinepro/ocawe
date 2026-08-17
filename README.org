@@ -207,6 +207,30 @@ ocawe up caws/01-simple     # run specific workflow
 ocawe up -d caws/01-simple  # background mode
 #+end_src
 
+Build a Sireng pipeline on a remote host. Ocawe transfers only the selected
+pipeline and the Ocawe source needed by its runtime, then uses the remote
+host's first working =nerdctl=, =docker=, or =podman= manager. The remote build
+produces an immutable image and a matching =<service>-runtime= binary under the
+host runtime store. Repeating the same command reuses the content-addressed
+build.
+
+#+begin_src bash
+ocawe build planner --remote build-host
+ocawe build planner --remote build-host --manager nerdctl
+ocawe build planner --remote build-host --dry-run
+#+end_src
+
+The remote build never changes the active runtime until the image and binary
+have both completed successfully. Deploy the promoted version separately:
+
+#+begin_src bash
+cd sireng
+nix run .#deploy -- planner
+# or, from the Sireng development environment:
+sireng deploy planner
+sireng deploy planner --version <source-hash>
+#+end_src
+
 ** Workflow Triggers
 
 #+begin_src bash

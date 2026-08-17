@@ -46,6 +46,8 @@ module OcaweCore
           Commands:
             build [--release] [--static] [--output PATH]
                 Build runtime binary.
+            build SERVICE --remote HOST [--manager NAME]
+                Build a Sireng service remotely and promote its runtime/image.
             dev [PATH] [-d] [--port N] [--log-level LEVEL]
                 Build a development runtime and start server with live reload.
                 PATH: optional workflow directory (default: current directory)
