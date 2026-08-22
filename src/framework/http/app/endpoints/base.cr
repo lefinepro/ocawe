@@ -108,6 +108,7 @@ module ACD
           mount_hitl_endpoints
           mount_compat_endpoints
           mount_models_endpoints
+          mount_pricing_endpoints if Ocawe::Workflow.function_registry.registered?("rotator_model_inventory")
           mount_environments_endpoints
           mount_trigger_endpoints
           mount_webhook_endpoints
@@ -517,7 +518,7 @@ module ACD
 
       private def register_configured_functions! : Nil
         config = @settings
-        Ocawe::RegistryApi.reset_all!
+        Ocawe::RegistryApi.register_defaults!
 
         config.functions.each do |name, handler|
           Ocawe::RegistryApi.register_system_function(name, &handler)
