@@ -101,10 +101,9 @@ module ACD
 
         env.response.status_code = handled ? 202 : 204
         env.response.content_type = "application/json"
-        # Internal model fan-out callers use the inbox as a synchronous
-        # OpenAI-compatible transport. Preserve the workflow result instead
-        # of reducing it to {"handled": true}; otherwise fmatch cannot see
-        # the generated answer.
+        # Preserve a result when a handler completes synchronously. Otherwise
+        # this response is only the 202/204 transport acknowledgement; the
+        # terminal Offer(Ticket) is published to resultInbox after execution.
         result ? result.to_json : {"handled" => handled}.to_json
       rescue ex
         env.response.status_code = 400
@@ -520,6 +519,12 @@ module ACD
 
         transport = Aptok::Transport.new
         key_pair = local_actor_key_pair(actor)
+        result_inbox = activity["object"]?.try(&.as_h?).try(&.["resultInbox"]?).try(&.as_s?).to_s.strip
+        unless result_inbox.empty?
+          target = result_inbox.rstrip('/').sub(/\/inbox(?:\/[^\/]*)?$/, "")
+          deliver_activity_to_inbox(transport, activity, actor, target, result_inbox, key_pair)
+          return
+        end
         @federation_kv.list("ocawe:federation:follow:").each do |entry|
           follow = JSON.parse(entry.value).as_h
           status = follow["status"]?.try(&.as_s?).to_s

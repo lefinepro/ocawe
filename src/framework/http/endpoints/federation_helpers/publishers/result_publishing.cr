@@ -11,7 +11,7 @@ module ACD
         remote_actor : String,
         workflow_actor : String,
         local_domain : String,
-        published_at : String
+        published_at : String,
       ) : Nil
         effective_output = enrich_output_with_embedded_json(output)
         status = pick_first_non_empty(
@@ -52,14 +52,31 @@ module ACD
                            run_id: run_id,
                            result_text: "merge output rejected: #{merge_error}",
                            result_status: status,
+                           usage: effective_output["usage"]?,
                          )
                        end
                      else
-                       normalize_federation_result_activity(
-                         explicit_activity.not_nil!,
+                       explicit = explicit_activity.not_nil!
+                       explicit_object = explicit["object"]?.try(&.as_h?)
+                       result_text = pick_first_non_empty(
+                         explicit_object.try(&.["content"]?).try(&.as_s?),
+                         explicit["content"]?.try(&.as_s?),
+                         effective_output["federation_result_text"]?.try(&.as_s?),
+                         effective_output["result"]?.try(&.as_s?),
+                         effective_output["text"]?.try(&.as_s?),
+                         effective_output["content"]?.try(&.as_s?),
+                       )
+                       build_note_result_activity(
                          suffix: suffix,
+                         ticket: ticket,
+                         remote_actor: remote_actor,
                          workflow_actor: workflow_actor,
                          local_domain: local_domain,
+                         workflow_id: workflow_id,
+                         run_id: run_id,
+                         result_text: result_text,
+                         result_status: status,
+                         usage: effective_output["usage"]?,
                        )
                      end
                    elsif requested_activity == "merge"
@@ -83,6 +100,7 @@ module ACD
                          run_id: run_id,
                          result_text: "merge output rejected: #{merge_error}",
                          result_status: status,
+                         usage: effective_output["usage"]?,
                        )
                      end
                    else
@@ -111,6 +129,7 @@ module ACD
                        run_id: run_id,
                        result_text: resolved_text,
                        result_status: status,
+                       usage: effective_output["usage"]?,
                      )
                    end
         activity["to"] = JSON.parse([remote_actor].to_json) unless remote_actor.empty? || activity.has_key?("to")
@@ -166,7 +185,7 @@ module ACD
         source : Hash(String, JSON::Any),
         suffix : String,
         workflow_actor : String,
-        local_domain : String
+        local_domain : String,
       ) : Hash(String, JSON::Any)
         activity = source.dup
         activity["@context"] = source["@context"]? || JSON.parse([Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::FORGEFED_CONTEXT].to_json)
@@ -184,10 +203,12 @@ module ACD
         workflow_id : String,
         run_id : String,
         result_text : String,
-        result_status : String = "completed"
+        result_status : String = "completed",
+        usage : JSON::Any? = nil,
       ) : Hash(String, JSON::Any)
         source_ticket_id = ticket["id"]?.try(&.as_s?) || ""
         task_ref = ticket["taskRef"]?.try(&.as_s?) || source_ticket_id
+        execution_id = ticket["executionId"]?.try(&.as_s?) || ticket["execution_id"]?.try(&.as_s?) || ""
         result_inbox = ticket_result_inbox(ticket)
         result_ticket = {
           "type"         => JSON.parse("Ticket".to_json),
@@ -201,6 +222,9 @@ module ACD
           "inReplyTo"    => JSON.parse(source_ticket_id.to_json),
         } of String => JSON::Any
         result_ticket["resultInbox"] = JSON.parse(result_inbox.to_json) unless result_inbox.empty?
+        result_ticket["executionId"] = JSON.parse(execution_id.to_json) unless execution_id.empty?
+        result_ticket["candidates"] = ticket["candidates"] if ticket["candidates"]?
+        result_ticket["usage"] = usage if usage
 
         {
           "@context" => JSON.parse([Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::FORGEFED_CONTEXT].to_json),
