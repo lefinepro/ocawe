@@ -278,7 +278,19 @@ module ACP
 
       send_message_json(req_json)
 
-      response = response_channel.receive
+      timeout_seconds = (ENV["OCAWE_ACP_TIMEOUT_SECONDS"]? || "900").to_f
+      response = if timeout_seconds > 0
+                   select
+                   when value = response_channel.receive
+                     value
+                   when timeout(timeout_seconds.seconds)
+                     @pending_responses.delete(id)
+                     response_channel.close
+                     raise "ACP request timed out after #{timeout_seconds} seconds"
+                   end
+                 else
+                   response_channel.receive
+                 end
       @pending_responses.delete(id)
 
       if error = response.error

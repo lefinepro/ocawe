@@ -112,6 +112,8 @@ module Ocawe
                        workspace.try(&.["write_policy"]?).try(&.as_s?) ||
                        ENV["OCAWE_AGENT_WRITE_POLICY"]? || "write"
 
+        ensure_disk_space!(host_path || cwd, placement)
+
         task_name = "ocawe-acp-#{safe_name(@node_id)}-#{safe_name(@run_id)}-#{Random::Secure.hex(4)}"
         tool_args = placement["tool_args"]?.try(&.as_a?).try(&.compact_map { |value| value.as_s? }) || [] of String
         args = tool_args + ["run", "--rm", "-i", "--name", task_name,
@@ -181,6 +183,24 @@ module Ocawe
         )
       rescue ex
         STDERR.puts "[acp] failed to remove task container #{task_name}: #{ex.message || ex.class.name}"
+      end
+
+      # A full disk must become a terminal workflow error before the runtime
+      # attempts to create a container. The threshold is deliberately part of
+      # the Cawfile placement so docker/nerdctl/podman deployments share the
+      # same policy without executor-specific defaults.
+      private def ensure_disk_space!(path : String, placement : Hash(String, JSON::Any)) : Nil
+        minimum = placement["min_free_bytes"]?.try(&.as_i?) ||
+                  ENV["OCAWE_MIN_FREE_BYTES"]?.try(&.to_i64?) || 0_i64
+        return if minimum <= 0
+        output = IO::Memory.new
+        status = Process.run("df", args: ["-Pk", path], output: output, error: Process::Redirect::Close)
+        raise "disk guard failed for #{path}" unless status.success?
+        free_kib = output.to_s.lines[1]?.try(&.split(/\s+/).reject(&.empty?)).try(&.[3]?.try(&.to_i64?)) || 0_i64
+        free_bytes = free_kib * 1024_i64
+        if free_bytes < minimum
+          raise "insufficient disk space for ACP container: #{free_bytes} bytes free, #{minimum} required"
+        end
       end
 
       private def safe_name(value : String) : String

@@ -145,16 +145,20 @@ module ACD
         retry_unresolved_subscriptions
         retry_pending_follows
 
-        @federation_kv.list("ocawe:federation:follow:").each do |entry|
+        follows = @federation_kv.list("ocawe:federation:follow:")
+        STDERR.puts "[federation] poll cycle follows=#{follows.size}"
+        follows.each do |entry|
           follow = JSON.parse(entry.value).as_h
           remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
           remote_outbox = follow["remote_outbox"]?.try(&.as_s?).to_s
           next if remote_actor.empty? || remote_outbox.empty?
 
           begin
+            STDERR.puts "[federation] polling remote_actor=#{remote_actor} outbox=#{remote_outbox}"
             ctx = aptok_federation.create_context
             collection = ctx.lookup_object(remote_outbox, Aptok::LookupObjectOptions.new(cross_origin: "trust"))
             activities = collection ? ctx.traverse_collection(collection, 50) : [] of Aptok::JsonMap
+            STDERR.puts "[federation] polled remote_actor=#{remote_actor} activities=#{activities.size}"
             activities.each do |activity|
               activity_id = activity["id"]?.try(&.as_s?).to_s
               next if activity_id.empty?

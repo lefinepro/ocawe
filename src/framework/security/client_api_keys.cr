@@ -11,12 +11,24 @@ module Ocawe
     PREFIX = "lf-"
 
     def required_for?(workflow_id : String) : Bool
-      workflow_id == "orator" && ENV["OCAWE_ORATOR_API_KEYS_REQUIRED"]?.to_s.downcase.in?("1", "true", "yes")
+      workflow_key = workflow_id.upcase.gsub(/[^A-Z0-9]+/, "_")
+      enabled?(ENV["OCAWE_API_KEYS_REQUIRED"]?) ||
+        enabled?(ENV["OCAWE_#{workflow_key}_API_KEYS_REQUIRED"]?)
     end
 
     def admin_key : String?
-      value = ENV["OCAWE_ORATOR_ADMIN_KEY"]?.to_s.strip
+      value = ENV["OCAWE_API_KEYS_ADMIN_KEY"]?.to_s.strip
+      if value.empty?
+        key = ENV.keys.sort.find do |name|
+          name.starts_with?("OCAWE_") && name.ends_with?("_ADMIN_KEY")
+        end
+        value = key ? ENV[key].strip : ""
+      end
       value.empty? ? nil : value
+    end
+
+    private def enabled?(value : String?) : Bool
+      value.to_s.downcase.in?("1", "true", "yes")
     end
 
     def create(workflow_id : String, label : String = "") : AnyHash

@@ -46,8 +46,8 @@ module OcaweCore
           Commands:
             build [--release] [--static] [--output PATH]
                 Build runtime binary.
-            build SERVICE --remote HOST [--manager NAME]
-                Build a Sireng service remotely and promote its runtime/image.
+            build SERVICE --remote HOST [--manager NAME] [--deploy --namespace NAME]
+                Build a workflow project remotely, promote its runtime/image, and optionally deploy it.
             dev [PATH] [-d] [--port N] [--log-level LEVEL]
                 Build a development runtime and start server with live reload.
                 PATH: optional workflow directory (default: current directory)
@@ -61,7 +61,7 @@ module OcaweCore
             exec [PATH] -- COMMAND [ARG...]
                 Execute a command inside the running workflow environment.
             test [PATH]
-                Run Cawfile test blocks against ORATOR_URL/OCAWE_TEST_BASE_URL.
+                Run Cawfile test blocks against OCAWE_TEST_BASE_URL.
             pull REF
                 Clone or fast-forward pull a git Cawfile reference.
             -v, --version
@@ -83,7 +83,14 @@ module OcaweCore
 
       private def project_root : String
         @project_root ||= begin
-          root = installed_source_root || File.expand_path("../../..", __DIR__)
+          current = File.expand_path(Dir.current)
+          workspace_root = if File.file?(File.join(current, "src", "ocawe.cr"))
+                             current
+                           else
+                             candidate = File.expand_path("../ocawe", current)
+                             File.file?(File.join(candidate, "src", "ocawe.cr")) ? candidate : nil
+                           end
+          root = workspace_root || installed_source_root || File.expand_path("../../..", __DIR__)
           File.expand_path(root)
         end
       end

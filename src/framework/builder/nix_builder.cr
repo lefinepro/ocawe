@@ -26,14 +26,16 @@ module Ocawe
           return false
         end
 
+        runtime_binary = unwrap_runtime_binary(binary_path)
+
         context = File.join(context_dir, "build", "container")
         FileUtils.rm_rf(context)
         Dir.mkdir_p(context)
         rootfs = File.join(context, "rootfs")
         Dir.mkdir_p(rootfs)
 
-        copy_executable(binary_path, File.join(rootfs, "app", "ocawecore"))
-        copy_binary_closure(binary_path, rootfs)
+        copy_executable(runtime_binary, File.join(rootfs, "app", "ocawecore"))
+        copy_binary_closure(runtime_binary, rootfs)
         copy_package_tools(packages, rootfs)
         copy_default_tools(rootfs)
         write_runtime_entrypoint(rootfs)
@@ -96,6 +98,7 @@ module Ocawe
           "FROM #{final_image}",
           "COPY rootfs/ /",
           "ENV PATH=\"/usr/bin:/bin:/app/tools:${PATH}\"",
+          "ENV SSL_CERT_FILE=\"/etc/ssl/certs/ca-bundle.crt\"",
           "WORKDIR /app",
           "EXPOSE 4111",
           # Use the loader exposed in /usr/lib so the generated image does not
@@ -199,9 +202,13 @@ module Ocawe
         raise "nix package '#{package}' produced no output paths" if package_paths.empty?
 
         package_paths.each do |path|
-          copy_nix_closure(path, rootfs)
+          # Package executables retain their Nix interpreter/RPATH and must
+          # use the libraries in their own closure.  Publishing those
+          # libraries into /usr/lib can overwrite the runtime's glibc with an
+          # ABI-incompatible version (for example codex-acp versus ocawecore).
+          copy_nix_closure(path, rootfs, expose_libraries: false)
           link_package_bins(path, rootfs)
-          link_package_shared_libraries(path, rootfs)
+          expose_ca_bundle(path, rootfs)
         end
       end
 
@@ -209,14 +216,14 @@ module Ocawe
         nixpkgs_attr?(package) ? "nixpkgs##{package}" : package
       end
 
-      private def copy_nix_closure(path : String, rootfs : String) : Nil
+      private def copy_nix_closure(path : String, rootfs : String, expose_libraries : Bool = false) : Nil
         output = IO::Memory.new
         status = Process.run("nix-store", args: ["-qR", path], output: output, error: Process::Redirect::Inherit)
         raise "could not query nix closure for #{path}" unless status.success?
 
         output.to_s.lines.map(&.strip).reject(&.empty?).sort!.each do |store_path|
           copy_absolute_path(store_path, rootfs)
-          expose_store_path_libraries(store_path, rootfs)
+          expose_store_path_libraries(store_path, rootfs) if expose_libraries
         end
       end
 
@@ -267,6 +274,26 @@ module Ocawe
         end
       end
 
+      # Nix's certificate bundle lives under its store path, while HTTP
+      # clients in a scratch image conventionally look in /etc/ssl/certs.
+      # Expose it without copying secrets or relying on the host filesystem.
+      private def expose_ca_bundle(package_path : String, rootfs : String) : Nil
+        source = [
+          File.join(package_path, "etc", "ssl", "certs", "ca-bundle.crt"),
+          File.join(package_path, "etc", "ssl", "certs", "ca-certificates.crt"),
+        ].find { |candidate| File.file?(candidate) }
+        return unless source
+
+        certificates = File.join(rootfs, "etc", "ssl", "certs")
+        Dir.mkdir_p(certificates)
+        bundle = File.join(certificates, "ca-bundle.crt")
+        copy_file(source, bundle, 0o644)
+
+        legacy = File.join(certificates, "ca-certificates.crt")
+        File.delete(legacy) if File.exists?(legacy) || File.symlink?(legacy)
+        File.symlink("ca-bundle.crt", legacy)
+      end
+
       private def collect_shared_libraries(binary : String) : Array(String)
         output = IO::Memory.new
         status = Process.run("ldd", args: [binary], output: output, error: Process::Redirect::Close)
@@ -300,13 +327,21 @@ module Ocawe
 
       private def copy_absolute_path(path : String, rootfs : String) : Nil
         destination = File.join(rootfs, path)
+        if File.directory?(path)
+          # A previous binary closure may already have created this store
+          # directory with only a subset of its shared libraries.  Merge the
+          # package closure into it; skipping an existing directory leaves
+          # tools such as codex-acp without libm/libstdc++ at runtime.
+          Dir.mkdir_p(destination)
+          Dir.children(path).each do |child|
+            copy_absolute_path(File.join(path, child), rootfs)
+          end
+          return
+        end
+
         return if File.exists?(destination)
         Dir.mkdir_p(File.dirname(destination))
-        if File.directory?(path)
-          copy_dir(path, destination, ignore_context_entries: false)
-        else
-          copy_file(path, destination, File.info(path).permissions.value)
-        end
+        copy_file(path, destination, File.info(path).permissions.value)
       end
 
       private def find_executable(name : String) : String?
@@ -346,6 +381,17 @@ module Ocawe
 
       private def copy_executable(src : String, dst : String) : Nil
         copy_file(src, dst, 0o755)
+      end
+
+      # Nix's `makeWrapper` exposes commands as shell scripts and keeps the
+      # actual ELF beside them as `.name-wrapped`.  A container entrypoint
+      # invokes the dynamic loader directly, so copying the wrapper produces
+      # an `invalid ELF header` at startup.  Prefer the sibling runtime when
+      # it exists; ordinary binaries keep their original path.
+      private def unwrap_runtime_binary(binary_path : String) : String
+        wrapped = File.join(File.dirname(binary_path), ".#{File.basename(binary_path)}-wrapped")
+        return wrapped if File.file?(wrapped) && !File.symlink?(wrapped)
+        binary_path
       end
 
       private def copy_file(src : String, dst : String, mode : Int32) : Nil

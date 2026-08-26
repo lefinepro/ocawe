@@ -11,7 +11,7 @@ module ACD
                 "name"        => name,
                 "command"     => "##{name}",
                 "kind"        => "ocawe-command",
-                "model_route" => {"new", "candidates", "execute", "result"}.includes?(name),
+                "model_route" => {"new", "execute", "result"}.includes?(name),
               }
             end,
           }.to_json

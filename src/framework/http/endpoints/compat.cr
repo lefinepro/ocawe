@@ -149,21 +149,13 @@ module ACD
           input_data = {
             "prompt"   => JSON.parse(prompt.to_json),
             "messages" => JSON.parse(messages.to_json),
-            # Preserve the gateway model and its optional route preference for
-            # workflows such as Orator. The workflow ID above is still based
-            # on the part before ':', so `workflow/orator:quality` executes
-            # the Orator workflow and lets it pass the preference to Fmatch.
-            "model" => JSON.parse(model.to_json),
+            # Preserve the gateway model and any suffix interpreted by the
+            # selected workflow. Workflow-specific policy stays in its Cawfile.
+            "model"    => JSON.parse(model.to_json),
           } of String => JSON::Any
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
           input_data["files"] = JSON.parse(files.to_json) unless files.empty?
           input_data["command"] = JSON.parse(body["command"].to_json) if body["command"]?
-          if workflow_id == "orator" && !input_data["command"]?
-            user_message = messages.reverse.find { |message| message[:role].downcase == "user" }
-            command_source = user_message ? user_message[:content] : prompt
-            inferred_command = orator_command_from_prompt(command_source)
-            input_data["command"] = JSON.parse(inferred_command.to_json) if inferred_command
-          end
           copy_chat_identity_fields(body, input_data)
           resources = files.empty? ? nil : {"files" => JSON.parse(files.to_json)} of String => JSON::Any
 
@@ -183,15 +175,14 @@ module ACD
                         else
                           run_result.to_json
                         end
-          router_candidates = if snap = snapshot
-                                workflow_chat_candidates(snap)
-                              else
-                                [] of JSON::Any
-                              end
           output_blocks = if snap = snapshot
-                            workflow_chat_output_blocks(workflow_id, snap)
+                            blocks = workflow_chat_output_blocks(workflow_id, snap)
+                            collect_workflow_output_blocks(JSON.parse(run_result.output.to_json), blocks) if run_result.output
+                            blocks
                           else
-                            [] of JSON::Any
+                            blocks = [] of JSON::Any
+                            collect_workflow_output_blocks(JSON.parse(run_result.output.to_json), blocks) if run_result.output
+                            blocks
                           end
           usage = {
             "prompt_tokens"     => JSON.parse("0"),
@@ -223,7 +214,6 @@ module ACD
               },
             ],
             "usage" => usage,
-            "router_candidates" => JSON.parse(router_candidates.to_json),
           }.to_json).as_h
         end
 
@@ -269,15 +259,7 @@ module ACD
       end
 
       private def normalize_chat_model(model : String) : String
-        normalized = model.strip
-        parts = normalized.split(":", 2)
-        base = parts[0]?
-        preference = parts[1]?
-        return normalized unless base
-        if base == "orator" || base == "workflow-orator"
-          return preference ? "workflow/orator:#{preference}" : "workflow/orator"
-        end
-        normalized
+        model.strip
       end
 
       private def workflow_id_for_chat_body(body : Ocawe::Workflow::AnyHash) : String?
@@ -294,18 +276,6 @@ module ACD
         return if Ocawe::ClientApiKeys.valid?(token, workflow_id)
 
         raise "unauthorized: valid lf API key is required"
-      end
-
-      private def orator_command_from_prompt(prompt : String) : Ocawe::Workflow::AnyHash?
-        raw = prompt.strip.sub(/\Auser:\s*/i, "").strip.sub(/\A>\s*/, "").strip
-        match = raw.match(/\A#(plan|bg|background|key|keys|invite)(?:\s+([\s\S]*))?\z/i)
-        return nil unless match
-
-        name = match[1].downcase
-        name = "bg" if name == "background"
-        name = "keys" if name == "key"
-        value = (match[2]? || "").strip
-        JSON.parse({name => (value.empty? ? true : value)}.to_json).as_h
       end
 
       private def copy_chat_identity_fields(source : Ocawe::Workflow::AnyHash, target : Ocawe::Workflow::AnyHash) : Nil
@@ -390,7 +360,10 @@ module ACD
         message = ex.message || ""
         return 401 if message.includes?("unauthorized:")
         return 404 if message.includes?("not found") || message.includes?("unknown workflow")
-        return 502 if message.includes?("workflow ") || message.includes?("provider") || message.includes?("fmatch")
+        return 504 if message.includes?("_execution_timeout:")
+        return 503 if message.includes?("_routing_error:")
+        return 502 if message.includes?("_execution_error:") || message.includes?("_empty_model_answer:")
+        return 502 if message.includes?("workflow ") || message.includes?("provider")
         422
       end
 
@@ -526,9 +499,10 @@ module ACD
       end
 
       private def write_chat_completion_response(env, completion, stream : Bool) : String
-        if candidates = completion["router_candidates"]?.try(&.as_a?)
-          env.response.headers["X-Router-Candidates"] = Base64.strict_encode(candidates.to_json)
-        end
+        # Strip legacy top-level metadata; structured workflow data is exposed
+        # through the standard message output blocks.
+        completion.delete("router_candidates")
+        env.response.headers.delete("X-Router-Candidates")
         unless stream
           env.response.status_code = 200
           env.response.content_type = "application/json"
@@ -687,21 +661,6 @@ module ACD
         snapshot.to_json
       end
 
-      private def workflow_chat_candidates(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Array(JSON::Any)
-        [snapshot.output, snapshot.state].each do |source|
-          next unless source
-          if candidates = source["candidates"]?.try(&.as_a?)
-            return candidates
-          end
-          if result = source["result"]?.try(&.as_h?)
-            if candidates = result["candidates"]?.try(&.as_a?)
-              return candidates
-            end
-          end
-        end
-        [] of JSON::Any
-      end
-
       private def workflow_chat_usage(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Ocawe::Workflow::AnyHash?
         [snapshot.output, snapshot.state].each do |source|
           usage = source.try(&.["usage"]?).try(&.as_h?)
@@ -724,13 +683,34 @@ module ACD
                  {} of String => JSON::Any
                end
         blocks = [] of JSON::Any
-        if output = snapshot.output
-          if direct_blocks = output["output_blocks"]?.try(&.as_a?)
-            blocks.concat(direct_blocks)
-          end
+        [snapshot.output, snapshot.state].each do |source|
+          collect_workflow_output_blocks(JSON.parse(source.to_json), blocks) if source
         end
         blocks.concat(output_ui_blocks(output_ui_template_for_workflow(workflow_id), data))
         blocks
+      end
+
+      private def collect_workflow_output_blocks(value : JSON::Any?, blocks : Array(JSON::Any)) : Nil
+        return unless value
+
+        if text = value.as_s?
+          begin
+            parsed = JSON.parse(text)
+            collect_workflow_output_blocks(parsed, blocks) unless parsed.as_s? == text
+          rescue JSON::ParseException
+          end
+        elsif hash = value.as_h?
+          if direct_blocks = hash["output_blocks"]?.try(&.as_a?)
+            blocks.concat(direct_blocks)
+          end
+          hash.each_value do |nested|
+            collect_workflow_output_blocks(nested, blocks)
+          end
+        elsif array = value.as_a?
+          array.each do |nested|
+            collect_workflow_output_blocks(nested, blocks)
+          end
+        end
       end
     end
   end

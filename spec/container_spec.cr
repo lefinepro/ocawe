@@ -222,7 +222,8 @@ module Ocawe::Builder
         dockerfile.should contain("FROM scratch")
         dockerfile.should contain("COPY rootfs/ /")
         dockerfile.should contain("WORKDIR /app")
-        dockerfile.should contain("ENTRYPOINT [\"/app/ocawecore\"]")
+        dockerfile.should contain("ENV SSL_CERT_FILE=\"/etc/ssl/certs/ca-bundle.crt\"")
+        dockerfile.should contain("ENTRYPOINT [\"/usr/lib/ld-linux-x86-64.so.2\", \"--library-path\", \"/usr/lib:/lib\", \"/app/ocawecore\"]")
         dockerfile.should_not contain("nix-channel")
         dockerfile.should_not contain("nix-env")
       end

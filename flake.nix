@@ -95,6 +95,10 @@
 
             doCheck = false;
 
+            postPatch = ''
+              rm -rf lib/*
+            '';
+
             installPhase = ''
               runHook preInstall
 

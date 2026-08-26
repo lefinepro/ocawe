@@ -7,12 +7,60 @@ require "../remote_builder"
 
 module OcaweCore
   module CLI
+    # Credentials deliberately stay outside the image. A workflow container
+    # receives only the authentication file from an existing Codex home; its
+    # session/cache directory is an isolated writable tmpfs.
+    module ContainerCredentials
+      CODEX_HOME_TARGET = "/run/ocawe/credentials/codex"
+
+      def self.arguments(environment : Hash(String, String)) : Array(String)
+        source = environment["CODEX_HOME"]?.try(&.strip)
+        return [] of String if source.nil? || source.empty?
+
+        source_path = File.expand_path(source)
+        auth_file = File.join(source_path, "auth.json")
+        return [] of String unless File.file?(auth_file)
+
+        [
+          "--env", "CODEX_HOME=#{CODEX_HOME_TARGET}",
+          "--tmpfs", CODEX_HOME_TARGET,
+          "--volume", "#{auth_file}:#{File.join(CODEX_HOME_TARGET, "auth.json")}:ro",
+        ]
+      end
+    end
+
+    # Federation marketplace metadata belongs to the solver process, not to the
+    # image.  Forward only the documented public declarations; credentials and
+    # arbitrary host environment variables must never leak into a workflow
+    # container.
+    module ContainerFederationEnvironment
+      FORWARDED_KEYS = [
+        "OCAWE_FEDERATION_RESOURCE_CONFORMS_TO",
+        "OCAWE_FEDERATION_ACTOR_NAME",
+        "OCAWE_FEDERATION_ACTOR_SUMMARY",
+        "OCAWE_FEDERATION_TAGS",
+        "OCAWE_FEDERATION_SIGNATURES_REQUIRED",
+      ]
+
+      def self.arguments(environment : Hash(String, String)) : Array(String)
+        arguments = [] of String
+        FORWARDED_KEYS.each do |key|
+          value = environment[key]?.try(&.strip)
+          next if value.nil? || value.empty?
+          arguments.concat(["--env", "#{key}=#{value}"])
+        end
+        arguments
+      end
+    end
+
     class Main
       private def build(args : Array(String)) : Nil
         remote_host = nil.as(String?)
         manager = "auto"
         base_image = "ocawe:latest"
         dry_run = false
+        deploy = false
+        namespace = "default"
         release = true
         static = false
         output = runtime_bin
@@ -22,6 +70,8 @@ module OcaweCore
           parser.on("--manager NAME", "Remote manager: auto, nerdctl, docker, or podman") { |value| manager = value }
           parser.on("--base-image IMAGE", "Remote runtime base image") { |value| base_image = value }
           parser.on("--dry-run", "Show the remote build without executing it") { dry_run = true }
+          parser.on("--deploy", "Update the matching Kubernetes deployment after promotion") { deploy = true }
+          parser.on("--namespace NAME", "Kubernetes namespace for --deploy (default: default)") { |value| namespace = value }
           parser.on("--release", "Build release binary (default)") { release = true }
           parser.on("--debug", "Build non-release binary") { release = false }
           parser.on("--static", "Build static binary") { static = true }
@@ -40,6 +90,8 @@ module OcaweCore
               host: remote_host.not_nil!,
               manager: manager,
               base_image: base_image,
+              deploy: deploy,
+              namespace: namespace,
               dry_run: dry_run
             )
           )
@@ -165,6 +217,18 @@ module OcaweCore
           Dir.cd(workflows_root) do
             abort_unless_success(build_runtime(release: false, output: runtime_bin))
           end
+        elsif workflow_runtime_required?(cawfile_bundle)
+          # A workflow can provide Crystal plugins (for example an inbox
+          # handler).  Those are compiled into a workflow-specific entrypoint;
+          # the packaged generic runtime cannot discover or load Crystal source
+          # after it has started.  Build that entrypoint before baking the
+          # container so the image executes the declared workflow, not only the
+          # framework shell.
+          workflow_runtime = File.join(Dir.tempdir, "ocawe-workflow-runtime-#{Process.pid}")
+          Dir.cd(workflows_root) do
+            abort_unless_success(build_runtime(release: true, output: workflow_runtime))
+          end
+          runtime_bin = workflow_runtime
         else
           abort_unless_success(ensure_runtime_binary(runtime_bin))
         end
@@ -422,6 +486,8 @@ module OcaweCore
       ) : String
         cleanup = [runtime, "rm", "-f", container_name].map { |part| shell_quote(part) }.join(" ")
         command = [runtime, "run", "--name", container_name, "--rm"]
+        command.concat(ContainerCredentials.arguments(ENV.to_h))
+        command.concat(ContainerFederationEnvironment.arguments(ENV.to_h))
         if mount = mount_workflows_root
           command.concat(["-v", "#{File.expand_path(mount)}:#{workdir}"])
         end
@@ -431,7 +497,9 @@ module OcaweCore
         else
           command.concat(["-p", "#{port}:#{port}"])
         end
-        command.concat([image, "/app/ocawecore"])
+        # The generated image owns the runtime through its ENTRYPOINT.  Passing
+        # /app/ocawecore again would make it the first runtime argument.
+        command << image
         command.concat(runtime_args)
         "#{cleanup} >/dev/null 2>&1 || true; #{command.map { |part| shell_quote(part) }.join(" ")}"
       end
@@ -472,9 +540,15 @@ module OcaweCore
         end
         main_flag = entrypoint == runtime_entry ? "-D ocawe_runtime_main " : ""
 
-        # Build from project root to ensure shard dependencies are found
-        Dir.cd(project_root) do
-          run_cmd("mkdir -p build && crystal build #{entrypoint} #{main_flag}#{flag_str}-o #{output}")
+        # Installed Nix packages keep the framework source read-only.  A
+        # workflow-specific entrypoint still has to be compiled in that mode,
+        # so use the writable workflow directory while keeping the output
+        # outside the package.  Source checkouts retain the historical project
+        # root build directory behaviour.
+        build_directory = File.writable?(project_root) ? project_root : Dir.current
+        Dir.cd(build_directory) do
+          prefix = build_directory == project_root ? "mkdir -p build && " : ""
+          run_cmd("#{prefix}crystal build #{entrypoint} #{main_flag}#{flag_str}-o #{output}")
         end
       end
 
@@ -558,6 +632,11 @@ module OcaweCore
         FileUtils.mkdir_p(File.dirname(entrypoint))
         write_file_if_changed(entrypoint, lines.join("\n"))
         entrypoint
+      end
+
+      private def workflow_runtime_required?(bundle : ACD::Discovery::CawfileBundle?) : Bool
+        bundle.try(&.crystal_loader).try(&.code.any?) ||
+          bundle.try(&.crystal_loader).try(&.registry_files.any?) || false
       end
 
       private def runtime_entry_line(line : String, entrypoint_dir : String) : String

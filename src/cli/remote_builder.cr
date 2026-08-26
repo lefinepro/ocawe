@@ -5,7 +5,7 @@ require "../framework/discovery/cawfile_loader"
 
 module OcaweCore
   module CLI
-    # Builds one Sireng pipeline on a remote host. The source bundle is kept
+    # Builds one workflow project on a remote host. The source bundle is kept
     # deliberately small and content-addressed so repeated builds can reuse
     # the remote build directory and container-manager cache.
     class RemoteBuilder
@@ -13,7 +13,9 @@ module OcaweCore
         host : String,
         manager : String = "auto",
         base_image : String = "ocawe:latest",
-        runtime_root : String = "/var/lib/lefine/ocawe-runtimes",
+        runtime_root : String = "/var/lib/ocawe/runtimes",
+        deploy : Bool = false,
+        namespace : String = "default",
         dry_run : Bool = false
 
       def initialize(@project_root : String)
@@ -47,7 +49,7 @@ module OcaweCore
             return true
           end
 
-          run!("scp", [archive, "#{options.host}:#{remote_archive}"])
+          run!("scp", ["-F", "/dev/null", "-o", "StrictHostKeyChecking=no", archive, "#{options.host}:#{remote_archive}"])
           run_remote(options, safe_service, hash, image, remote_archive)
         ensure
           FileUtils.rm_rf(tmp)
@@ -60,16 +62,16 @@ module OcaweCore
 
       private def resolve_service(service : String) : String
         candidates = [
-          File.expand_path(File.join("sireng", "pipelines", service), Dir.current),
           File.expand_path(File.join("pipelines", service), Dir.current),
           File.expand_path(service, Dir.current),
-          File.expand_path(File.join("sireng", "pipelines", service), @project_root),
+          File.expand_path(File.join("pipelines", service), @project_root),
+          File.expand_path(service, @project_root),
         ]
         path = candidates.find do |candidate|
           File.file?(File.join(candidate, "Cawfile")) && Dir.exists?(candidate)
         end
         return path if path
-        raise "service '#{service}' not found; expected sireng/pipelines/#{service}/Cawfile"
+        raise "service '#{service}' not found; expected pipelines/#{service}/Cawfile or #{service}/Cawfile"
       end
 
       private def stage_source(staging : String, workflow_root : String) : Nil
@@ -143,6 +145,16 @@ module OcaweCore
             require_line = %(require "#{require_path(output_dir, path)}")
             lines << require_line unless lines.includes?(require_line)
           end
+          # A workflow may require a plugin directly from its Cawfile while
+          # other plugins are only reached through a registry file. Include
+          # the complete local plugin tree in the remote runtime so the
+          # generated binary cannot silently fall back to an older plugin
+          # bundle left in the base image.
+          Dir.glob(File.join(workflow_root, "plugins", "**", "*.cr")).sort.each do |path|
+            next if File.basename(path) == "registry.cr"
+            require_line = %(require "#{require_path(output_dir, path)}")
+            lines << require_line unless lines.includes?(require_line)
+          end
           lines << ""
           lines << "OcaweCore.run"
           File.write(output, lines.join("\n"))
@@ -182,7 +194,7 @@ module OcaweCore
 
       private def run_remote(options : Options, service : String, hash : String, image : String, remote_archive : String) : Nil
         script = remote_script
-        args = [options.host, "bash", "-s", "--", service, hash, image, remote_archive, options.manager, options.base_image, options.runtime_root]
+        args = ["-F", "/dev/null", "-o", "StrictHostKeyChecking=no", options.host, "bash", "-s", "--", service, hash, image, remote_archive, options.manager, options.base_image, options.runtime_root, options.deploy ? "1" : "0", options.namespace]
         status = Process.run("ssh", args: args, input: IO::Memory.new(script), output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
         raise "remote build command exited with status #{status.exit_code}" unless status.success?
       end
@@ -197,6 +209,8 @@ module OcaweCore
         requested_manager="$5"
         base_image="$6"
         runtime_root="$7"
+        deploy="$8"
+        namespace="$9"
         runtime_name="${service}-runtime"
         service_root="${runtime_root}/${service}"
         build_root="/tmp/ocawe-builds/${service}/${hash}"
@@ -251,30 +265,43 @@ module OcaweCore
         }
         run_privileged mkdir -p "$build_root"
         run_privileged mkdir -p "$service_root"
-        if [ -x "$version_root/$runtime_name" ] && [ -f "$store_metadata" ]; then
+        image_archive="$build_root/${service}-${hash}.tar"
+        # A failed image import can leave the runtime binary behind before the
+        # version metadata is committed.  Only that version-local metadata
+        # marks a complete cache entry; the service-level metadata may belong
+        # to an older successful build.
+        if [ -x "$version_root/$runtime_name" ] && [ -f "$version_root/metadata.json" ]; then
           echo "[ocawe] remote cache hit: $service $hash"
         else
-          run_privileged rm -rf "$build_root/context"
-          run_privileged mkdir -p "$build_root/context"
-          run_privileged tar -xzf "$archive" -C "$build_root/context"
-          run_privileged rm -f "$archive"
-          run_manager build --build-arg "BASE_IMAGE=$base_image" -t "$image" "$build_root/context"
+          if [ -x "$version_root/$runtime_name" ] && [ -f "$image_archive" ]; then
+            echo "[ocawe] resuming image import: $service $hash"
+            run_privileged rm -f "$archive"
+          else
+            run_privileged rm -rf "$build_root/context"
+            run_privileged mkdir -p "$build_root/context"
+            run_privileged tar -xzf "$archive" -C "$build_root/context"
+            run_privileged rm -f "$archive"
+            # The runtime binary is compiled from the staged Ocawe sources. Do
+            # not reuse an older Docker build layer here: a remote deployment
+            # must contain the exact framework source used for this bundle.
+            run_manager build --no-cache --build-arg "BASE_IMAGE=$base_image" -t "$image" "$build_root/context"
 
-          container="ocawe-extract-${service}-${hash}"
-          run_manager rm -f "$container" >/dev/null 2>&1 || true
-          run_manager create --name "$container" "$image" >/tmp/ocawe-container-id
-          container_id="$(cat /tmp/ocawe-container-id)"
-          trap 'run_manager rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
-          run_privileged mkdir -p "$build_root/output"
-          run_manager cp "$container_id:/runtime/$runtime_name" "$build_root/output/$runtime_name"
-          run_manager rm -f "$container_id" >/dev/null 2>&1 || true
-          trap - EXIT
+            container="ocawe-extract-${service}-${hash}"
+            run_manager rm -f "$container" >/dev/null 2>&1 || true
+            container_id_file="$build_root/container-id"
+            run_privileged rm -f "$container_id_file"
+            run_manager create --name "$container" "$image" | run_privileged tee "$container_id_file" >/dev/null
+            container_id="$(run_privileged cat "$container_id_file")"
+            trap 'run_manager rm -f "$container_id" >/dev/null 2>&1 || true' EXIT
+            run_privileged mkdir -p "$build_root/output"
+            run_manager cp "$container_id:/runtime/$runtime_name" "$build_root/output/$runtime_name"
+            run_manager rm -f "$container_id" >/dev/null 2>&1 || true
+            trap - EXIT
 
-          run_privileged mkdir -p "$version_root"
-          run_privileged install -m 0755 "$build_root/output/$runtime_name" "$version_root/$runtime_name"
-
-          image_archive="$build_root/${service}-${hash}.tar"
-          run_manager save -o "$image_archive" "$image"
+            run_privileged mkdir -p "$version_root"
+            run_privileged install -m 0755 "$build_root/output/$runtime_name" "$version_root/$runtime_name"
+            run_manager save -o "$image_archive" "$image"
+          fi
           if command -v k3s >/dev/null 2>&1; then
             run_privileged k3s ctr -n k8s.io images import "$image_archive"
           elif command -v ctr >/dev/null 2>&1; then
@@ -296,6 +323,40 @@ module OcaweCore
         run_privileged cp "$version_root/metadata.json" "$store_metadata.next"
         run_privileged mv -Tf "$store_metadata.next" "$store_metadata"
         echo "[ocawe] promoted $service $hash ($image)"
+        if [ "$deploy" = "1" ]; then
+          command -v kubectl >/dev/null 2>&1 || { echo "[ocawe] --deploy requires kubectl on the remote host" >&2; exit 1; }
+          kubectl_args=(--kubeconfig /etc/rancher/k3s/k3s.yaml -n "$namespace")
+          if [ "$(id -u)" -eq 0 ]; then
+            kubectl_cmd=(kubectl)
+          else
+            kubectl_cmd=(sudo -n kubectl)
+          fi
+          if [ -f "$build_root/context/workflow/Cawfile" ]; then
+            "${kubectl_cmd[@]}" "${kubectl_args[@]}" create configmap "${service}-workflow" \
+              --from-file="Cawfile=$build_root/context/workflow/Cawfile" \
+              --dry-run=client -o yaml | "${kubectl_cmd[@]}" "${kubectl_args[@]}" apply -f -
+          fi
+          if [ -d "$build_root/context/workflow/plugins" ]; then
+            plugin_args=()
+            while IFS= read -r -d '' plugin_file; do
+              plugin_name="$(basename "$plugin_file")"
+              plugin_args+=("--from-file=${plugin_name}=${plugin_file}")
+            done < <(find "$build_root/context/workflow/plugins" -type f -print0 | sort -z)
+            if [ "${#plugin_args[@]}" -gt 0 ]; then
+              "${kubectl_cmd[@]}" "${kubectl_args[@]}" create configmap "${service}-plugins" \
+                "${plugin_args[@]}" \
+              --dry-run=client -o yaml | "${kubectl_cmd[@]}" "${kubectl_args[@]}" apply -f -
+            fi
+          fi
+          # Strategic merge keeps project-owned environment variables and data
+          # mounts. Only the legacy host-mounted runtime is removed so the
+          # binary from this exact image remains authoritative.
+          patch_payload=$(printf '{"spec":{"template":{"spec":{"containers":[{"name":"%s","image":"%s","volumeMounts":[{"mountPath":"/workflows/%s/Cawfile","name":"cawfile","subPath":"Cawfile"},{"mountPath":"/workflows/%s/plugins","name":"plugins"},{"mountPath":"/runtime","$patch":"delete"},{"mountPath":"/runtime/%s","$patch":"delete"}]}]}}}}' "$service" "$image" "$service" "$service" "$runtime_name")
+          "${kubectl_cmd[@]}" "${kubectl_args[@]}" patch deployment "$service" --type=strategic -p "$patch_payload"
+          "${kubectl_cmd[@]}" "${kubectl_args[@]}" set image "deployment/$service" "$service=$image"
+          "${kubectl_cmd[@]}" "${kubectl_args[@]}" rollout status "deployment/$service" --timeout=180s
+          echo "[ocawe] deployed $service to namespace $namespace"
+        fi
         SCRIPT
       end
 

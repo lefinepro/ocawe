@@ -2,7 +2,6 @@ require "file_utils"
 require "http/client"
 require "json"
 require "uri"
-require "aptok"
 
 module Ocawe
   module Pipeline
@@ -43,44 +42,6 @@ module Ocawe
         io << "\n\n" << label << "\n"
         io << current_user_text
       end
-    end
-
-    def marketplace_request_activity(
-      id : String,
-      actor : String,
-      target : String,
-      title : String,
-      content : String,
-      resource_conforms_to : String,
-    ) : String
-      intent = Aptok.marketplace_intent(
-        id: "#{id}#intent",
-        action: "deliverService",
-        quantity: Aptok.marketplace_quantity(value: "1"),
-        resource_conforms_to: resource_conforms_to,
-      )
-      proposal = Aptok.marketplace_proposal(
-        id: "#{id}#proposal",
-        purpose: "request",
-        attributed_to: actor,
-        publishes: intent,
-        name: title,
-        content: content,
-        to: [target],
-      )
-      proposal["mediaType"] = Aptok.json("text/plain")
-      proposal["source"] = Aptok.json({
-        "mediaType" => "text/plain",
-        "content"   => content,
-      })
-      marketplace_context = Aptok.marketplace_context.as_a
-      marketplace_context.insert(1, Aptok.json("https://w3id.org/fep/0837"))
-      Aptok.object("Offer", id, {
-        "@context" => Aptok.json(marketplace_context),
-        "actor"    => Aptok.json(actor),
-        "to"       => Aptok.json([target]),
-        "object"   => Aptok.json(proposal),
-      }).to_json
     end
 
     def first_string(activity : AnyHash, object : AnyHash?, names : Enumerable(String)) : String?
