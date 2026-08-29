@@ -156,6 +156,12 @@ module ACD
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
           input_data["files"] = JSON.parse(files.to_json) unless files.empty?
           input_data["command"] = JSON.parse(body["command"].to_json) if body["command"]?
+          if workflow_id == "orator" && !input_data["command"]?
+            user_message = messages.reverse.find { |message| message[:role].downcase == "user" }
+            command_source = user_message ? user_message[:content] : prompt
+            inferred_command = orator_command_from_prompt(command_source)
+            input_data["command"] = JSON.parse(inferred_command.to_json) if inferred_command
+          end
           copy_chat_identity_fields(body, input_data)
           resources = files.empty? ? nil : {"files" => JSON.parse(files.to_json)} of String => JSON::Any
 
@@ -278,6 +284,18 @@ module ACD
         raise "unauthorized: valid lf API key is required"
       end
 
+      private def orator_command_from_prompt(prompt : String) : Ocawe::Workflow::AnyHash?
+        raw = prompt.strip.sub(/\Auser:\s*/i, "").strip.sub(/\A>\s*/, "").strip
+        match = raw.match(/\A#(plan|bg|background|key|keys|invite)(?:\s+([\s\S]*))?\z/i)
+        return nil unless match
+
+        name = match[1].downcase
+        name = "bg" if name == "background"
+        name = "keys" if name == "key"
+        value = (match[2]? || "").strip
+        JSON.parse({name => (value.empty? ? true : value)}.to_json).as_h
+      end
+
       private def copy_chat_identity_fields(source : Ocawe::Workflow::AnyHash, target : Ocawe::Workflow::AnyHash) : Nil
         ["user_actor", "user_handle"].each do |field|
           value = source[field]?.try(&.as_s?)
@@ -363,7 +381,7 @@ module ACD
         return 504 if message.includes?("_execution_timeout:")
         return 503 if message.includes?("_routing_error:")
         return 502 if message.includes?("_execution_error:") || message.includes?("_empty_model_answer:")
-        return 502 if message.includes?("workflow ") || message.includes?("provider")
+        return 502 if message.includes?("workflow ") || message.includes?("provider") || message.includes?("fmatch")
         422
       end
 
