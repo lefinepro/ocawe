@@ -82,11 +82,19 @@ jobs:
 
       - name: Run unit specs (mock mode)
         run: |
+          set -o pipefail
           env -u OPENAI_API_KEY -u CLIPROXY_API_KEY COGNICORE_MOCK_LLM=1 \
-            crystal spec spec/*_spec.cr --error-trace
+            crystal spec spec/*_spec.cr --error-trace --verbose 2>&1 | tee unit-spec.log
         env:
           COGNICORE_MOCK_LLM: "1"
           OCAWECORE_BINARY: ${{ github.workspace }}/bin/ocawecore
+
+      - name: Upload unit spec log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-spec-log
+          path: unit-spec.log
 
   e2e-integration:
     runs-on: ubuntu-latest
