@@ -57,9 +57,10 @@ curl -fsS http://127.0.0.1:4119/v1/workflows
 kill "$(cat "$tmp/12-api-nodes/.ocawe.pid")"
 #+end_src
 
-The Nix package includes the CLI/runtime dependencies used by the distribution,
-including Crystal build inputs, Git, Node.js, Ruby, SQLite, and Lua 5.4. It also
-installs example Cawfiles and helper scripts under =share/ocawe=. Installed
+The Nix package includes only the CLI/runtime dependencies used by the
+distribution, including Git, OpenSSH, SQLite, and zstd. Provider CLIs and their
+language runtimes are supplied separately when a workflow explicitly needs
+them. The package also installs example Cawfiles and helper scripts under =share/ocawe=. Installed
 commands use the packaged source, examples, and runtime binary automatically.
 
 Install from GitHub Releases:
@@ -465,7 +466,7 @@ mise run playground-build
 mise run docs-build
 #+end_src
 
-The mise environment installs Crystal, Bun, and Lua 5.4 for local development.
+The mise environment installs Crystal and Bun for local development.
 
 ** Testing
 

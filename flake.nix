@@ -42,11 +42,8 @@
             pkgs.coreutils
             pkgs.curl
             pkgs.git
-            pkgs.lua5_4
-            pkgs.nodejs_22
             pkgs.openssl
             pkgs.openssh
-            pkgs.ruby
             pkgs.sqlite
             pkgs.zstd
           ];
@@ -384,8 +381,6 @@
               pkgs.crystal
               pkgs.pkg-config
               pkgs.shards
-              pkgs.lua5_4
-              pkgs.ruby
             ];
 
             buildInputs = [

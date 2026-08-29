@@ -85,10 +85,16 @@ module OcaweCore
           raise "Ocawe source directory missing: #{source}" unless Dir.exists?(source)
           copy_tree(source, File.join(source_root, directory))
         end
-        ["shard.yml", "shard.lock", "shards.nix"].each do |name|
+        ["shard.yml", "shard.lock", "shards.nix", "flake.nix", "flake.lock", "README.org"].each do |name|
           source = File.join(@project_root, name)
           raise "Ocawe source file missing: #{source}" unless File.file?(source)
           FileUtils.cp(source, File.join(source_root, name))
+        end
+
+        ["caws", "scripts"].each do |directory|
+          source = File.join(@project_root, directory)
+          raise "Ocawe runtime directory missing: #{source}" unless Dir.exists?(source)
+          copy_tree(source, File.join(source_root, directory))
         end
 
         copy_tree(workflow_root, workflow_target)
@@ -165,24 +171,18 @@ module OcaweCore
         runtime_name = "#{service}-runtime"
         dockerfile = <<-DOCKERFILE
         ARG BASE_IMAGE=ocawe:latest
-        FROM crystallang/crystal:1.19.1 AS build
+        FROM nixos/nix:2.28.3 AS build
         WORKDIR /src/ocawe
         COPY ocawe/ /src/ocawe/
         COPY workflow/ /src/workflow/
-        RUN apt-get update \\
-          && apt-get install -y --no-install-recommends libsqlite3-dev libgmp-dev libssl-dev libyaml-dev libpcre2-dev zlib1g-dev \\
-          && rm -rf /var/lib/apt/lists/* \\
+        # Crystal's default parallelism can exhaust the small production
+        # builder while compiling the embedded Ocawe runtime. Keep remote
+        # builds deterministic and within the host memory budget.
+        RUN cd /src/ocawe \\
           && mkdir -p /out \\
-          && shards install --production --skip-postinstall --skip-executables \\
-          # Crystal's default parallelism can exhaust the small production
-          # builder while compiling the embedded Ocawe runtime. Keep remote
-          # builds deterministic and within the host memory budget.
-          && crystal build /src/workflow/build/runtime_entry.cr --threads 1 --release --no-debug -o /out/#{runtime_name}
+          && nix develop . --command crystal build /src/workflow/build/runtime_entry.cr --threads 1 --release --no-debug -o /out/#{runtime_name}
 
         FROM ${BASE_IMAGE}
-        RUN apt-get update \\
-          && apt-get install -y --no-install-recommends libsqlite3-0 libgmp10 libssl3 libyaml-0-2 libpcre2-8-0 zlib1g ca-certificates \\
-          && rm -rf /var/lib/apt/lists/*
         WORKDIR /workflows/#{service}
         COPY --from=build /out/#{runtime_name} /runtime/#{runtime_name}
         COPY workflow/Cawfile /workflows/#{service}/Cawfile
