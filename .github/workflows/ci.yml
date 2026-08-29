@@ -83,8 +83,15 @@ jobs:
       - name: Run unit specs (mock mode)
         run: |
           set -o pipefail
-          env -u OPENAI_API_KEY -u CLIPROXY_API_KEY COGNICORE_MOCK_LLM=1 \
-            crystal spec spec/*_spec.cr --error-trace --verbose 2>&1 | tee unit-spec.log
+          if env -u OPENAI_API_KEY -u CLIPROXY_API_KEY COGNICORE_MOCK_LLM=1 \
+            crystal spec spec/*_spec.cr --error-trace --verbose 2>&1 | tee unit-spec.log; then
+            exit 0
+          fi
+          status=${PIPESTATUS[0]}
+          while IFS= read -r line; do
+            echo "::error::$line"
+          done < <(tail -n 80 unit-spec.log)
+          exit "$status"
         env:
           COGNICORE_MOCK_LLM: "1"
           OCAWECORE_BINARY: ${{ github.workspace }}/bin/ocawecore
