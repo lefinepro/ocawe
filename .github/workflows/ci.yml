@@ -81,7 +81,9 @@ jobs:
           crystal build src/ocawe.cr -Docawe_runtime_main -o bin/ocawecore
 
       - name: Run unit specs (mock mode)
-        run: crystal spec --error-trace
+        run: |
+          env -u OPENAI_API_KEY -u CLIPROXY_API_KEY COGNICORE_MOCK_LLM=1 \
+            crystal spec --error-trace
         env:
           COGNICORE_MOCK_LLM: "1"
 
