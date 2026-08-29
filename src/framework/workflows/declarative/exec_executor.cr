@@ -152,8 +152,10 @@ module Ocawe
           return configured if executable_file?(configured)
         end
 
-        workspace_binary = File.join(Dir.current, "bin", "ocawecore")
-        return workspace_binary if executable_file?(workspace_binary)
+        [Dir.current, ocawe_source_root].uniq.each do |workspace_root|
+          workspace_binary = File.join(workspace_root, "bin", "ocawecore")
+          return workspace_binary if executable_file?(workspace_binary)
+        end
 
         binary = Process.executable_path
         return binary if binary && File.basename(binary).includes?("ocawecore")
