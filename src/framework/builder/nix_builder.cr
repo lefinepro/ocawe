@@ -231,7 +231,7 @@ module Ocawe
         lib_dir = File.join(store_path, "lib")
         return unless Dir.exists?(lib_dir)
 
-        Dir.children(lib_dir).select { |name| name.starts_with?("lib") && name.includes?(".so") }.sort.each do |name|
+        Dir.children(lib_dir).select { |name| name.starts_with?("lib") && name.includes?(".so") }.sort!.each do |name|
           expose_shared_library(File.join(lib_dir, name), rootfs)
         end
       end
@@ -262,7 +262,7 @@ module Ocawe
         # Use Dir.children rather than a glob here. Crystal's glob handling
         # has varied across the runtime versions used by the workflow image,
         # while children preserves both versioned objects and their symlinks.
-        libraries = Dir.children(lib_dir).select { |name| name.starts_with?("lib") && name.includes?(".so") }.sort
+        libraries = Dir.children(lib_dir).select { |name| name.starts_with?("lib") && name.includes?(".so") }.sort!
         puts "[ocawe] exposing #{libraries.size} shared libraries from #{package_path}" unless libraries.empty?
         libraries.each do |name|
           source = File.join(lib_dir, name)

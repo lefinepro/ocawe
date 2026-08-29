@@ -228,6 +228,22 @@ module FederationE2E
     end
   end
 
+  # Correlation filter for the current ForgeFed result contract: workflow
+  # replies are Offer(Ticket) activities whose result Ticket points back to the
+  # received ticket through `inReplyTo`.
+  def result_tickets_replying_to(activities : Array(JSON::Any), ticket_id : String) : Array(Hash(String, JSON::Any))
+    activities.compact_map do |entry|
+      activity = entry.as_h?
+      next nil unless activity
+      next nil unless activity["type"]?.try(&.as_s?) == "Offer"
+      result_ticket = activity["object"]?.try(&.as_h?)
+      next nil unless result_ticket
+      next nil unless result_ticket["type"]?.try(&.as_s?) == "Ticket"
+      next nil unless result_ticket["inReplyTo"]?.try(&.as_s?) == ticket_id
+      activity
+    end
+  end
+
   # Correlation filter for outbound assertions: a `Create` wrapping a `Ticket`
   # whose text carries `marker`. Like `notes_replying_to`, it never depends on
   # the position of an activity in the collection (R-009).

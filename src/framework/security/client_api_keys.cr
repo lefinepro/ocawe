@@ -19,7 +19,7 @@ module Ocawe
     def admin_key : String?
       value = ENV["OCAWE_API_KEYS_ADMIN_KEY"]?.to_s.strip
       if value.empty?
-        key = ENV.keys.sort.find do |name|
+        key = ENV.keys.sort!.find do |name|
           name.starts_with?("OCAWE_") && name.ends_with?("_ADMIN_KEY")
         end
         value = key ? ENV[key].strip : ""

@@ -13,7 +13,7 @@ require "./federation_e2e_helper"
 #   sender Cawfile (`follow` + `publish`) -> `federation_output.activity`
 #     -> outbound delivery to the followed inbox, HTTP-signed
 #     -> receiver Cawfile runs its agent exactly once
-#     -> receiver outbox `Create(Note)`, correlated by `object.inReplyTo`
+#     -> receiver outbox `Offer(Ticket)`, correlated by `object.inReplyTo`
 #
 # Neither bundle configures an API: federation is enabled purely by the
 # `Api::Federation::Outbox` / `Api::Federation::Inbox` types they declare. Every
@@ -67,25 +67,26 @@ describe "ActivityPub send from a Cawfile (caws/13-activitypub)" do
       ticket_id = ticket["id"].as_s
       ticket_id.empty?.should be_false
 
-      # --- correlated Create(Note) reply --------------------------------------
-      note_activity : Hash(String, JSON::Any)? = nil
-      harness.wait_until("the receiver to publish a Create(Note) replying to #{ticket_id}") do
-        replies = FederationE2E.notes_replying_to(harness.outbox_activities(receiver), ticket_id)
-        next "no Create(Note) with inReplyTo=#{ticket_id} yet" if replies.empty?
-        next "#{replies.size} Create(Note) activities reply to #{ticket_id}, expected exactly 1" if replies.size > 1
-        note_activity = replies.first
+      # --- correlated Offer(Ticket) reply ------------------------------------
+      result_activity : Hash(String, JSON::Any)? = nil
+      harness.wait_until("the receiver to publish an Offer(Ticket) replying to #{ticket_id}") do
+        replies = FederationE2E.result_tickets_replying_to(harness.outbox_activities(receiver), ticket_id)
+        next "no Offer(Ticket) with inReplyTo=#{ticket_id} yet" if replies.empty?
+        next "#{replies.size} Offer(Ticket) activities reply to #{ticket_id}, expected exactly 1" if replies.size > 1
+        result_activity = replies.first
         nil
       end
 
-      reply = note_activity.not_nil!
+      reply = result_activity.not_nil!
       reply["actor"].as_s.should eq(receiver.actor_url)
-      note = reply["object"].as_h
-      note["type"].as_s.should eq("Note")
-      note["id"].as_s.should start_with(receiver.base_url)
+      result_ticket = reply["object"].as_h
+      result_ticket["type"].as_s.should eq("Ticket")
+      result_ticket["id"].as_s.should start_with(receiver.base_url)
+      result_ticket["inReplyTo"].as_s.should eq(ticket_id)
 
       # The receiver's own agent answered: a mock signature proves the reply is
       # a fresh agent run rather than the inbound ticket echoed back.
-      note["content"].as_s.should match(FederationE2E::MOCK_SIGNATURE)
+      result_ticket["content"].as_s.should match(FederationE2E::MOCK_SIGNATURE)
 
       # --- exactly once -------------------------------------------------------
       # Without querying any run API, "the receiver executed exactly once" is
@@ -94,7 +95,7 @@ describe "ActivityPub send from a Cawfile (caws/13-activitypub)" do
       # ticket (no duplicate delivery, no re-run of the `@[Service]` workflow).
       sleep harness.receiver_poll_settle_time
 
-      FederationE2E.notes_replying_to(harness.outbox_activities(receiver), ticket_id).size.should eq(1)
+      FederationE2E.result_tickets_replying_to(harness.outbox_activities(receiver), ticket_id).size.should eq(1)
       FederationE2E.tickets_containing(harness.outbox_activities(sender), marker).size.should eq(1)
 
       # The delivery was accepted over a verified HTTP Signature: both peers run

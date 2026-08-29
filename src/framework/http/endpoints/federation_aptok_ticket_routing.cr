@@ -52,7 +52,7 @@ module ACD
         status = follow["status"]?.try(&.as_s?).to_s
         local_actor = follow["local_actor"]?.try(&.as_s?).to_s
         local_actor = @settings.federation.local_actor if local_actor.empty?
-        STDERR.puts "[federation] route activity=#{activity_type} status=#{status} id=#{activity["id"]?.try(&.as_s?).to_s}"
+        STDERR.puts "[federation] route activity=#{activity_type} status=#{status} id=#{activity["id"]?.try(&.as_s?)}"
 
         if activity_type == "Accept"
           update_aptok_follow_state(remote_actor, status: "active", error: "") unless remote_actor.empty?

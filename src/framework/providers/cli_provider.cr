@@ -84,11 +84,7 @@ module OcaweCore
       end
 
       private def process_exit_code(status : Process::Status)
-        {% if compare_versions(Crystal::VERSION, "1.19.0") >= 0 %}
-          status.exit_code
-        {% else %}
-          status.exit_status
-        {% end %}
+        status.exit_code
       end
 
       private def send_prompt(binary : String, prompt : String) : String
