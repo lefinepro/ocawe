@@ -90,7 +90,7 @@ jobs:
           status=${PIPESTATUS[0]}
           while IFS= read -r line; do
             echo "::error::$line"
-          done < <(tail -n 80 unit-spec.log)
+          done < <(rg -n "Failure|Expected|Error:|Exception|timed out|assert|should|not healthy|failed|No such|undefined" unit-spec.log | tail -n 10)
           exit "$status"
         env:
           COGNICORE_MOCK_LLM: "1"
