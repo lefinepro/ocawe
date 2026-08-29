@@ -147,10 +147,19 @@ module Ocawe
       end
 
       private def direct_remote_caw_runtime_binary(pulled : ACD::Discovery::GitHttpsPullResult, cawfile : ACD::Discovery::CawfileBundle) : String
-        _ = pulled
         _ = cawfile
+        if configured = ENV["OCAWECORE_BINARY"]?
+          return configured if executable_file?(configured)
+        end
+
+        workspace_binary = File.join(Dir.current, "bin", "ocawecore")
+        return workspace_binary if executable_file?(workspace_binary)
+
         binary = Process.executable_path
-        binary || ""
+        return binary if binary && File.basename(binary).includes?("ocawecore")
+
+        _ = pulled
+        ""
       end
 
       private def executable_file?(path : String) : Bool
