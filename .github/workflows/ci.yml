@@ -88,9 +88,8 @@ jobs:
             exit 0
           fi
           status=${PIPESTATUS[0]}
-          while IFS= read -r line; do
-            echo "::error::$line"
-          done < <(rg -n "Failure|Expected|Error:|Exception|timed out|assert|should|not healthy|failed|No such|undefined" unit-spec.log | tail -n 10)
+          encoded=$(base64 -w 0 unit-spec.log)
+          echo "::error::UNIT_LOG_BASE64=$encoded"
           exit "$status"
         env:
           COGNICORE_MOCK_LLM: "1"
