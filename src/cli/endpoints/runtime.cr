@@ -704,7 +704,7 @@ module OcaweCore
         # so use the writable workflow directory while keeping the output
         # outside the package.  Source checkouts retain the historical project
         # root build directory behaviour.
-        build_directory = File.writable?(project_root) ? project_root : Dir.current
+        build_directory = File::Info.writable?(project_root) ? project_root : Dir.current
         Dir.cd(build_directory) do
           prefix = build_directory == project_root ? "mkdir -p build && " : ""
           run_cmd("#{prefix}crystal build #{entrypoint} #{main_flag}#{flag_str}-o #{output}")
@@ -794,8 +794,8 @@ module OcaweCore
       end
 
       private def workflow_runtime_required?(bundle : ACD::Discovery::CawfileBundle?) : Bool
-        bundle.try(&.crystal_loader).try(&.code.any?) ||
-          bundle.try(&.crystal_loader).try(&.registry_files.any?) || false
+        crystal_loader = bundle.try(&.crystal_loader)
+        crystal_loader ? (!crystal_loader.code.empty? || !crystal_loader.registry_files.empty?) : false
       end
 
       private def runtime_entry_line(line : String, entrypoint_dir : String) : String
