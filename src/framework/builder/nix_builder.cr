@@ -178,10 +178,25 @@ module Ocawe
       private def write_runtime_entrypoint(rootfs : String) : Nil
         loader = Dir.glob(File.join(rootfs, "nix", "store", "*", "lib64", "ld-linux-x86-64.so.2")).sort.first?
         loader ||= Dir.glob(File.join(rootfs, "nix", "store", "*", "lib", "ld-linux-x86-64.so.2")).sort.first?
+        # CI and development builds can use a host binary instead of a Nix
+        # wrapped binary. `copy_binary_closure` still copies and exposes its
+        # system loader, so use the image-visible link when no store loader
+        # exists. This keeps the fallback rootfs builder usable off Nix.
+        loader ||= [
+          File.join(rootfs, "usr", "lib", "ld-linux-x86-64.so.2"),
+          File.join(rootfs, "lib64", "ld-linux-x86-64.so.2"),
+          File.join(rootfs, "lib", "x86_64-linux-gnu", "ld-linux-x86-64.so.2"),
+        ].find { |candidate| File.exists?(candidate) || File.symlink?(candidate) }
         raise "Nix dynamic loader was not included in the runtime closure" unless loader
 
-        loader_lib = File.dirname(loader).sub(/\/lib64$/, "/lib")
-        script = "#!/bin/sh\nexec #{loader} --library-path /usr/lib:/lib:#{loader_lib} /app/ocawecore \"$@\"\n"
+        image_loader = if loader.starts_with?(rootfs + "/")
+                         loader[(rootfs.size + 1)..]
+                       else
+                         loader
+                       end
+        image_loader = "/#{image_loader}" unless image_loader.starts_with?("/")
+        loader_lib = File.dirname(image_loader).sub(/\/lib64$/, "/lib")
+        script = "#!/bin/sh\nexec #{image_loader} --library-path /usr/lib:/lib:#{loader_lib} /app/ocawecore \"$@\"\n"
         destination = File.join(rootfs, "app", "ocawe-entrypoint.sh")
         File.write(destination, script)
         File.chmod(destination, 0o755)
