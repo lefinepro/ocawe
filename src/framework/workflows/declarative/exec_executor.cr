@@ -234,7 +234,7 @@ module Ocawe
       end
 
       private def wait_for_remote_runtime!(port : Int32) : Nil
-        deadline = Ocawe::Utils::TimeCompat.monotonic + 60.seconds
+        deadline = Ocawe::Utils::TimeCompat.monotonic + 180.seconds
         loop do
           begin
             response = HTTP::Client.get("http://127.0.0.1:#{port}/health")
