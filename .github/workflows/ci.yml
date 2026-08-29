@@ -16,13 +16,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1
-        with:
-          crystal: 1.19.1
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
 
-      - name: Install shards
-        run: shards install --skip-postinstall --skip-executables
+      - name: Install development dependencies
+        run: nix develop --command shards install --skip-postinstall --skip-executables
 
       - name: Patch Ameba dependency compatibility
         run: |
@@ -37,7 +35,7 @@ jobs:
       - name: Build Ameba
         run: |
           mkdir -p bin
-          crystal build -o bin/ameba lib/ameba/src/cli.cr
+          nix develop --command crystal build -o bin/ameba lib/ameba/src/cli.cr
       - name: Run Ameba
         run: bin/ameba
 
@@ -47,43 +45,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1
-        with:
-          crystal: 1.19.1
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
 
-      - name: Install shards
-        run: shards install --production --skip-postinstall --skip-executables
+      - name: Install development dependencies
+        run: nix develop --command shards install --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
-        run: crystal run scripts/patch_nbchannel.cr
-
-      # `--error-on-warnings` gates deprecated stdlib APIs (e.g. `Time.monotonic`,
-      # deprecated in favour of `Time.instant`). Both entrypoints are checked:
-      # `-Docawe_runtime_main` pulls in the HTTP app and scheduler, which the
-      # plain `src/ocawe.cr` build never reaches.
-      - name: Run Crystal syntax smoke-check
-        run: |
-          crystal build src/ocawe.cr --no-codegen --error-on-warnings
-          crystal build src/cli/main.cr --no-codegen --error-on-warnings
-          crystal build src/ocawe.cr -Docawe_runtime_main --no-codegen --error-on-warnings
+        run: nix develop --command crystal run scripts/patch_nbchannel.cr
 
       - name: Build CLI binary for specs
         run: |
           mkdir -p bin
-          crystal build src/cli/main.cr -o bin/ocawe
+          nix build .#ocawe --print-build-logs
+          cp -L result/bin/ocawe bin/ocawe
 
-      # `crystal spec` also picks up spec/e2e/, and the cross-process
-      # ActivityPub spec spawns this executable as two independent peers.
-      # `-Docawe_runtime_main` is what makes the binary actually serve HTTP.
+      # The Nix package builds both the CLI and the HTTP runtime binaries.
+      # The cross-process ActivityPub specs spawn the latter as independent peers.
       - name: Build runtime binary for cross-process E2E specs
         run: |
           mkdir -p bin
-          crystal build src/ocawe.cr -Docawe_runtime_main -o bin/ocawecore
+          cp -L result/bin/ocawecore bin/ocawecore
 
       - name: Run unit specs (mock mode)
         run: |
           env -u OPENAI_API_KEY -u CLIPROXY_API_KEY COGNICORE_MOCK_LLM=1 \
-            crystal spec spec/*_spec.cr --error-trace
+            nix develop --command crystal spec spec/*_spec.cr --error-trace
         env:
           COGNICORE_MOCK_LLM: "1"
           OCAWECORE_BINARY: ${{ github.workspace }}/bin/ocawecore
@@ -97,20 +83,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1
-        with:
-          crystal: 1.19.1
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
 
-      - name: Install shards
-        run: shards install --production --skip-postinstall --skip-executables
+      - name: Install development dependencies
+        run: nix develop --command shards install --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
-        run: crystal run scripts/patch_nbchannel.cr
+        run: nix develop --command crystal run scripts/patch_nbchannel.cr
 
       - name: Build CLI binary for specs
         run: |
           mkdir -p bin
-          crystal build src/cli/main.cr -o bin/ocawe
+          nix build .#ocawe --print-build-logs
+          cp -L result/bin/ocawe bin/ocawe
 
       # The cross-process ActivityPub spec spawns this executable twice, so it
       # has to exist before the specs run. `-Docawe_runtime_main` is what makes
@@ -118,7 +103,7 @@ jobs:
       - name: Build runtime binary for cross-process E2E specs
         run: |
           mkdir -p bin
-          crystal build src/ocawe.cr -Docawe_runtime_main -o bin/ocawecore
+          cp -L result/bin/ocawecore bin/ocawecore
 
       # Deterministic and offline: the harness always forces mock mode in both
       # children and strips provider keys, so this runs identically with or
@@ -126,7 +111,7 @@ jobs:
       - name: Run cross-process ActivityPub E2E spec (mock mode)
         run: |
           env -u OPENAI_API_KEY -u CLIPROXY_API_KEY COGNICORE_MOCK_LLM=1 \
-            crystal spec spec/e2e/activitypub_agent_communication_spec.cr --error-trace
+            nix develop --command crystal spec spec/e2e/activitypub_agent_communication_spec.cr --error-trace
 
       # Same harness, but the two peers are the committed `caws/13-activitypub`
       # example bundles, so this step fails if the example drifts out of a
@@ -134,16 +119,16 @@ jobs:
       - name: Run Cawfile ActivityPub send E2E spec (mock mode)
         run: |
           env -u OPENAI_API_KEY -u CLIPROXY_API_KEY COGNICORE_MOCK_LLM=1 \
-            crystal spec spec/e2e/activitypub_cawfile_send_spec.cr --error-trace
+            nix develop --command crystal spec spec/e2e/activitypub_cawfile_send_spec.cr --error-trace
 
       - name: Run E2E integration specs
         run: |
           if [ -n "$CLIPROXY_API_KEY" ]; then
             echo "Running E2E integration tests with real API..."
-            crystal spec spec/e2e/ --error-trace
+            nix develop --command crystal spec spec/e2e/ --error-trace
           else
             echo "CLIPROXY_API_KEY not configured - running E2E tests in mock mode"
-            COGNICORE_MOCK_LLM=1 crystal spec spec/e2e/ --error-trace
+            COGNICORE_MOCK_LLM=1 nix develop --command crystal spec spec/e2e/ --error-trace
           fi
         env:
           CLIPROXY_API_KEY: ${{ secrets.CLIPROXY_API_KEY }}
@@ -157,10 +142,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1
-        with:
-          crystal: 1.19.1
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -172,10 +155,10 @@ jobs:
           corepack enable pnpm
           corepack prepare pnpm@11.9.0 --activate
 
-      - name: Install shards
-        run: shards install --production --skip-postinstall --skip-executables
+      - name: Install development dependencies
+        run: nix develop --command shards install --production --skip-postinstall --skip-executables
       - name: Patch dependency Crystal compatibility
-        run: crystal run scripts/patch_nbchannel.cr
+        run: nix develop --command crystal run scripts/patch_nbchannel.cr
 
       - name: Build playground
         working-directory: packages/playground
@@ -199,8 +182,11 @@ jobs:
 
       # Without `-Docawe_runtime_main` the entrypoint in src/ocawe.cr is compiled
       # out and the published artifact exits immediately instead of serving.
-      - name: Build runtime binary
-        run: mkdir -p build && crystal build src/ocawe.cr -Docawe_runtime_main --release -o build/ocawecore
+      - name: Build runtime binary with Nix
+        run: |
+          nix build .#ocawe --print-build-logs
+          mkdir -p build
+          cp -L result/bin/ocawecore build/ocawecore
 
       - name: Upload runtime artifact
         uses: actions/upload-artifact@v4

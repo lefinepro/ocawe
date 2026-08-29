@@ -19,7 +19,7 @@ module FederationE2E
   # built without that flag starts and exits immediately.
   RUNTIME_BINARY_ENV     = "OCAWE_E2E_RUNTIME_BIN"
   DEFAULT_RUNTIME_BINARY = "bin/ocawecore"
-  RUNTIME_BUILD_COMMAND  = "crystal build src/ocawe.cr -Docawe_runtime_main -o bin/ocawecore"
+  RUNTIME_BUILD_COMMAND  = "nix build .#ocawe && cp -L result/bin/ocawecore bin/ocawecore"
 
   ACTIVITY_CONTENT_TYPE = "application/activity+json"
 

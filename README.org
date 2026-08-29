@@ -103,33 +103,25 @@ Declarative =mise.toml=:
 "github:lefinepro/ocawe" = { version = "latest", matching = "ocawe-linux", bin_path = "bin", filter_bins = "ocawe" }
 #+end_src
 
-Install CLI from source without Nix:
+Build the CLI from source with Nix:
 
 #+begin_src bash
-# Uses system Crystal if present; otherwise downloads Crystal into ./.tools/crystal.
-source scripts/bootstrap-crystal.sh
-crystal build src/cli/main.cr -o build/ocawe
-./build/ocawe --help
+nix build .#ocawe
+./result/bin/ocawe --help
 #+end_src
 
 Optional shell install:
 
 #+begin_src bash
 mkdir -p ~/.local/bin
-ln -sf "$PWD/build/ocawe" ~/.local/bin/ocawe
+ln -sf "$PWD/result/bin/ocawe" ~/.local/bin/ocawe
 ocawe --help
 #+end_src
 
 If =~/.local/bin= is not in =PATH=, add it in your shell profile.
 
-The bootstrap script downloads a platform Crystal archive into =./.tools/crystal=
-only when =crystal= is missing.
-
-You can control bootstrap with env vars:
-- =OCAWE_CRYSTAL_VERSION= (default =1.19.1=)
-- =OCAWE_CRYSTAL_BASE_URL= (default Crystal GitHub releases URL)
-- =OCAWE_CRYSTAL_FORCE_BOOTSTRAP=1= (force local toolchain even if system =crystal= exists)
-- =OCAWE_CRYSTAL_VERBOSE=1= (print toolchain version during bootstrap)
+Nix provides the pinned Crystal toolchain, shards, and native build
+dependencies used by the flake package.
 
 Run an example:
 

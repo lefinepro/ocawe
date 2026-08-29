@@ -36,11 +36,6 @@ jobs:
           fetch-depth: 0
           ref: ${{ steps.meta.outputs.tag_name }}
 
-      - name: Install Crystal
-        uses: crystal-lang/install-crystal@v1
-        with:
-          crystal: 1.19.1
-
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v14
 
@@ -57,17 +52,12 @@ jobs:
           corepack enable pnpm
           corepack prepare pnpm@11.9.0 --activate
 
-      - name: Install shards
-        run: shards install --production --skip-postinstall --skip-executables
-
-      - name: Patch dependency Crystal compatibility
-        run: crystal run scripts/patch_nbchannel.cr
-
-      - name: Build runtime binary
+      - name: Build runtime binaries with Nix
         run: |
           mkdir -p build release
-          crystal build src/cli/main.cr --release --no-debug -o build/ocawe
-          crystal build src/ocawe.cr --release --no-debug -Docawe_runtime_main -o build/ocawecore
+          nix build .#ocawe --print-build-logs
+          cp -L result/bin/ocawe build/ocawe
+          cp -L result/bin/ocawecore build/ocawecore
 
       - name: Build playground prebuild
         run: |

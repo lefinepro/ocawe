@@ -681,7 +681,6 @@ module OcaweCore
         flags << "--release" if release
         flags << "--static" if static
         flags << "--no-debug" if release
-        flag_str = flags.empty? ? "" : flags.join(" ") + " "
         entrypoint = build_runtime_entrypoint
         unless force
           sources = runtime_source_paths(entrypoint)
@@ -691,24 +690,58 @@ module OcaweCore
           end
         end
 
-        # Check if crystal is available only when a rebuild is actually needed.
-        unless system("command -v crystal > /dev/null 2>&1")
-          STDERR.puts "Error: crystal compiler not found in PATH"
-          STDERR.puts "Please install Crystal: https://crystal-lang.org/install/"
+        unless system("command -v nix > /dev/null 2>&1")
+          STDERR.puts "Error: Nix is required to build the Ocawe runtime"
+          STDERR.puts "Install Nix and retry, or use a packaged ocawecore binary"
           return false
         end
-        main_flag = entrypoint == runtime_entry ? "-D ocawe_runtime_main " : ""
 
-        # Installed Nix packages keep the framework source read-only.  A
-        # workflow-specific entrypoint still has to be compiled in that mode,
-        # so use the writable workflow directory while keeping the output
-        # outside the package.  Source checkouts retain the historical project
-        # root build directory behaviour.
-        build_directory = File::Info.writable?(project_root) ? project_root : Dir.current
-        Dir.cd(build_directory) do
-          prefix = build_directory == project_root ? "mkdir -p build && " : ""
-          run_cmd("#{prefix}crystal build #{entrypoint} #{main_flag}#{flag_str}-o #{output}")
+        if entrypoint == runtime_entry && release && !static
+          return build_runtime_package(output)
         end
+
+        # Workflow-specific Crystal extensions are still compiled when a
+        # Cawfile explicitly declares them, but the compiler and all of its
+        # dependencies come from the flake development environment.
+        build_args = ["develop", project_root, "--command", "crystal", "build", entrypoint]
+        build_args.concat(["-D", "ocawe_runtime_main"]) if entrypoint == runtime_entry
+        build_args.concat(flags)
+        build_args.concat(["-o", output])
+        run_nix_command(build_args)
+      end
+
+      private def build_runtime_package(output : String) : Bool
+        package = nix_package_path
+        source = File.join(package, "bin", "ocawecore")
+        unless File.file?(source)
+          STDERR.puts "Error: Nix package did not produce #{source}"
+          return false
+        end
+
+        FileUtils.mkdir_p(File.dirname(output))
+        FileUtils.cp(source, output)
+        File.chmod(output, 0o755)
+        true
+      rescue ex
+        STDERR.puts "Error: Nix runtime build failed: #{ex.message}"
+        false
+      end
+
+      private def nix_package_path : String
+        output = IO::Memory.new
+        status = Process.run(
+          "nix",
+          args: ["build", "--no-link", "--print-out-paths", "#{project_root}#ocawe"],
+          output: output,
+          error: Process::Redirect::Inherit
+        )
+        raise "nix build failed with exit code #{status.exit_code}" unless status.success?
+
+        output.to_s.lines.map(&.strip).reject(&.empty?).first? || raise "nix build returned no output path"
+      end
+
+      private def run_nix_command(args : Array(String)) : Bool
+        Process.run("nix", args: args, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit).success?
       end
 
       private def build_rootfs_packer : Bool
@@ -716,10 +749,11 @@ module OcaweCore
         output = File.join(project_root, "build", "rootfs_tar")
         return true unless File.file?(source)
         return true if File.file?(output) && File.info(output).modification_time >= File.info(source).modification_time
-        return true unless system("command -v cc > /dev/null 2>&1")
+        return true unless system("command -v nix > /dev/null 2>&1")
 
         Dir.cd(project_root) do
-          run_cmd("mkdir -p build && cc -Os -s -o #{shell_quote(output)} #{shell_quote(source)}")
+          Dir.mkdir_p(File.dirname(output))
+          run_nix_command(["develop", project_root, "--command", "cc", "-Os", "-s", "-o", output, source])
         end
       end
 
@@ -751,17 +785,15 @@ module OcaweCore
           return true
         end
 
-        unless system("command -v crystal > /dev/null 2>&1")
+        unless system("command -v nix > /dev/null 2>&1")
           STDERR.puts "Error: runtime binary not found: #{output}"
-          STDERR.puts "Run `ocawe build --release` in an environment with Crystal, or install the packaged ocawe binary."
+          STDERR.puts "Run `ocawe build --release` in an environment with Nix, or install the packaged ocawe binary."
           return false
         end
 
-        puts "[ocawe] building runtime: #{output}"
+        puts "[ocawe] building runtime with Nix: #{output}"
         STDOUT.flush
-        Dir.cd(project_root) do
-          run_cmd("mkdir -p build && crystal build #{runtime_entry} -D ocawe_runtime_main --release --no-debug -o #{output}")
-        end
+        build_runtime(release: true, output: output, force: true)
       end
 
       private def build_runtime_entrypoint : String
