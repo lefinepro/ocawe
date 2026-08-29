@@ -88,7 +88,7 @@ jobs:
             exit 0
           fi
           status=${PIPESTATUS[0]}
-          encoded=$(base64 -w 0 unit-spec.log)
+          encoded=$(tail -n 120 unit-spec.log | base64 -w 0)
           echo "::error::UNIT_LOG_BASE64=$encoded"
           exit "$status"
         env:
