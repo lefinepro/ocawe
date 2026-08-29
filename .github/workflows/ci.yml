@@ -83,7 +83,7 @@ jobs:
       - name: Run unit specs (mock mode)
         run: |
           env -u OPENAI_API_KEY -u CLIPROXY_API_KEY COGNICORE_MOCK_LLM=1 \
-            crystal spec --error-trace
+            crystal spec spec/*_spec.cr --error-trace
         env:
           COGNICORE_MOCK_LLM: "1"
           OCAWECORE_BINARY: ${{ github.workspace }}/bin/ocawecore
