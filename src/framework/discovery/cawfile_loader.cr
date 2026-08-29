@@ -140,6 +140,8 @@ module ACD
       getter enable_federation : Bool
       # Whether models API should be enabled (detected from Api::Models usage)
       getter enable_models : Bool
+      # Whether Mastra-compatible API should be enabled (detected from Api::MastraAPI usage)
+      getter enable_mastra : Bool
       # Workflow input/output type names extracted from @[Validate(...)]
       getter input_type : String?
       getter output_type : String?
@@ -173,6 +175,7 @@ module ACD
         @container : CawfileContainer? = nil,
         @enable_federation : Bool = false,
         @enable_models : Bool = false,
+        @enable_mastra : Bool = false,
         @input_type : String? = nil,
         @output_type : String? = nil,
         @model : String? = nil,
@@ -254,6 +257,7 @@ module ACD
             container: container,
             enable_federation: enable_federation,
             enable_models: enable_models,
+            enable_mastra: detect_mastra_from_raw(raw_lines),
             input_type: input_type,
             output_type: output_type,
             model: model,
@@ -1153,6 +1157,10 @@ module ACD
 
       private def self.detect_models_from_raw(lines : Array(String)) : Bool
         lines.any? { |line| line.includes?("Api::Models") }
+      end
+
+      private def self.detect_mastra_from_raw(lines : Array(String)) : Bool
+        lines.any? { |line| line.includes?("Api::MastraAPI") || line.includes?("Api::Mastra") }
       end
 
       private def self.extract_model_and_validate(

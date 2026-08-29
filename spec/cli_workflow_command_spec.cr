@@ -19,6 +19,8 @@ describe OcaweCore::CLI::Main do
     output.includes?("build").should eq(true)
     output.includes?("dev").should eq(true)
     output.includes?("up").should eq(true)
+    output.includes?("start").should eq(true)
+    output.includes?("stop").should eq(true)
     output.includes?("pull REF").should eq(true)
   end
 

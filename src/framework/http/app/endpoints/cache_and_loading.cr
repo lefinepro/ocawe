@@ -87,6 +87,10 @@ module ACD
       end
 
       private def load_workflow_definition(bundle : Discovery::WorkflowBundle, loaded_agents : Array(Agents::LoadedAgent)) : Ocawe::Workflow::WorkflowDefinition
+        if @start_mode && bundle.cawfile.nil?
+          raise "#{bundle.workflow_file}: ocawe start requires a Cawfile; legacy Crystal workflow files are unsupported"
+        end
+
         workflow = Ocawe::Workflow.create_workflow(bundle.id, "Loaded from #{bundle.workflow_file}")
         agent_index = {} of String => Agents::LoadedAgent
         loaded_agents.each { |agent| agent_index[agent.id] = agent }

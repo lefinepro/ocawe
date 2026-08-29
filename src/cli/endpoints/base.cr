@@ -5,7 +5,7 @@ module OcaweCore
       @runtime_bin : String?
 
       private DEFAULT_PORT  = 4111
-      private CORE_COMMANDS = Set{"build", "dev", "up", "shell", "exec", "test", "pull", "-v", "--version", "-h", "--help"}
+      private CORE_COMMANDS = Set{"build", "dev", "up", "start", "stop", "shell", "exec", "test", "pull", "-v", "--version", "-h", "--help"}
 
       def initialize
       end
@@ -20,6 +20,10 @@ module OcaweCore
           dev(args)
         when "up"
           up(args)
+        when "start"
+          start(args)
+        when "stop"
+          stop(args)
         when "shell"
           shell(args)
         when "exec"
@@ -56,6 +60,13 @@ module OcaweCore
                 PATH: optional workflow directory (default: current directory)
                 -d/--detach: run in background
                 --log-level: debug, warning, or critical (default: warning)
+            start [PATH] [-d] [--port N] [--log-level LEVEL]
+                Build/update the Cawfile runtime and start the optimized runtime API.
+                PATH: optional workflow directory (default: current directory)
+                -d/--detach: run in background
+                Crystal workflow code is precompiled when required.
+            stop [PATH]
+                Stop the runtime started by `ocawe start`.
             shell [PATH]
                 Open an interactive shell inside the running workflow environment.
             exec [PATH] -- COMMAND [ARG...]

@@ -41,6 +41,25 @@ describe ACD::Discovery::CawfileLoader do
   end
 
   describe ".load" do
+    it "detects an explicitly declared Mastra API" do
+      dir = File.tempname("cawfile_mastra")
+      Dir.mkdir_p(dir)
+      begin
+        File.write(File.join(dir, "Cawfile"), <<-RCL)
+struct Input
+  include Api::MastraAPI::Request
+end
+
+workflow "mastra" do
+end
+RCL
+        bundle = ACD::Discovery::CawfileLoader.load(dir, "mastra").not_nil!
+        bundle.enable_mastra.should be_true
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it "parses a minimal Cawfile with workflow and settings" do
       dir = File.tempname("cawfile_test")
       Dir.mkdir_p(dir)

@@ -48,3 +48,21 @@ dynamically dispatch them.
 
 Release and container builds include both plugin paths even when an explicit
 container file allowlist omits them. Keep plugin files within the project root.
+
+## `start` and `stop`
+
+`ocawe up` keeps the legacy full-runtime behavior. Use `ocawe start` for the
+small runtime API:
+
+```bash
+ocawe start ./workflow -d
+ocawe stop ./workflow
+```
+
+`start` loads the Cawfile at runtime and starts `ocawecore` with `POST /run`,
+`POST /stop/:id`, and `GET /metrics`. When a workflow contains Crystal loader
+extensions, Ocawe precompiles the workflow runtime before starting it.
+Mastra-compatible routes are enabled only when the Cawfile declares
+`Api::MastraAPI`. Each start also writes a compressed runtime bundle to
+`build/<workflow-id>.runtime.tar.zst`; the bundle contains `ocawecore`, the
+Cawfile, and workflow assets.

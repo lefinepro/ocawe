@@ -48,6 +48,7 @@
             pkgs.openssh
             pkgs.ruby
             pkgs.sqlite
+            pkgs.zstd
           ];
 
           ocawe = pkgs.crystal.buildCrystalPackage {

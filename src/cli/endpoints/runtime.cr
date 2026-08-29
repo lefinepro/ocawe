@@ -185,7 +185,27 @@ module OcaweCore
         run_server(args, dev_mode: false)
       end
 
-      private def run_server(args : Array(String), dev_mode : Bool) : Nil
+      private def start(args : Array(String)) : Nil
+        run_server(args, dev_mode: false, start_mode: true)
+      end
+
+      private def stop(args : Array(String)) : Nil
+        workflows_root = resolve_workflows_root(args.shift?)
+        cawfile = ACD::Discovery::CawfileLoader.find_cawfile(workflows_root)
+        unless cawfile
+          STDERR.puts "Error: no Cawfile found for #{workflows_root}"
+          exit(1)
+        end
+
+        bundle = ACD::Discovery::CawfileLoader.load(workflows_root, "root")
+        if bundle && bundle.container && bundle.container.not_nil!.configured? && container_runtime_available?
+          stop_container(detect_runtime, container_name_for_bundle(bundle))
+        else
+          stop_local_runtime(workflows_root)
+        end
+      end
+
+      private def run_server(args : Array(String), dev_mode : Bool, start_mode : Bool = false) : Nil
         port = nil
         detached = false
         log_level = nil.as(String?)
@@ -199,7 +219,8 @@ module OcaweCore
         workflows_root = resolve_workflows_root(args.first?)
         FileUtils.mkdir_p(workflows_root)
         runtime_bin = runtime_bin()
-        puts "[ocawe] preparing #{dev_mode ? "dev" : "up"} runtime binary=#{runtime_bin} workflows_root=#{workflows_root}"
+        mode_name = start_mode ? "start" : (dev_mode ? "dev" : "up")
+        puts "[ocawe] preparing #{mode_name} runtime binary=#{runtime_bin} workflows_root=#{workflows_root}"
         STDOUT.flush
 
         port ||= read_port_from_cawfile(workflows_root)
@@ -211,6 +232,11 @@ module OcaweCore
         if cawfile
           cawfile_bundle = ACD::Discovery::CawfileLoader.load(workflows_root, "root")
           container_config = cawfile_bundle.container if cawfile_bundle
+        end
+
+        if start_mode && !cawfile_bundle
+          STDERR.puts "Error: ocawe start requires a Cawfile"
+          exit(1)
         end
 
         if dev_mode
@@ -232,6 +258,8 @@ module OcaweCore
         else
           abort_unless_success(ensure_runtime_binary(runtime_bin))
         end
+
+        package_start_runtime(workflows_root, runtime_bin, cawfile_bundle.not_nil!) if start_mode
 
         container_tag = nil.as(String?)
 
@@ -258,9 +286,10 @@ module OcaweCore
         end
 
         effective_port = (port || DEFAULT_PORT).not_nil!
-        puts "[ocawe] starting #{dev_mode ? "dev" : "up"} runtime port=#{effective_port} workflows_root=#{workflows_root}"
+        puts "[ocawe] starting #{mode_name} runtime port=#{effective_port} workflows_root=#{workflows_root}"
         STDOUT.flush
         runtime_args = ["--port=#{effective_port}"]
+        runtime_args << "--start-mode" if start_mode
         runtime_command = nil.as(String?)
         if image = container_tag
           if container_runtime_available?
@@ -287,15 +316,17 @@ module OcaweCore
           # used the now-unsupported `Process.fork`; spawning directly avoids the
           # deprecation and records the actual runtime PID (so `kill <pid>` works).
           runtime = spawn_runtime(runtime_command, runtime_bin, runtime_args, workflows_root)
-          pid = runtime.pid
-
-          pid_file = File.join(workflows_root, ".ocawe.pid")
-          File.open(pid_file, "w") { |f| f.puts pid }
-
-          puts "[ocawe] started in background (PID #{pid}, port #{port || DEFAULT_PORT})"
+          if start_mode && runtime_command
+            puts "[ocawe] started container runtime in background (port #{port || DEFAULT_PORT})"
+          else
+            pid = runtime.pid
+            pid_file = File.join(workflows_root, ".ocawe.pid")
+            File.open(pid_file, "w") { |f| f.puts pid }
+            puts "[ocawe] started in background (PID #{pid}, port #{port || DEFAULT_PORT})"
+          end
           puts "[ocawe] dev live reload enabled" if dev_mode
-          puts "[ocawe] logs: ocawe up --follow"
-          puts "[ocawe] stop: kill #{pid}"
+          puts "[ocawe] logs: ocawe #{start_mode ? "start" : "up"} --follow"
+          puts "[ocawe] stop: #{start_mode ? "ocawe stop" : "kill #{runtime.pid}"}"
         else
           runtime = spawn_runtime(runtime_command, runtime_bin, runtime_args, workflows_root)
           Signal::INT.trap do
@@ -308,6 +339,134 @@ module OcaweCore
             exit(1)
           end
         end
+      end
+
+      private def stop_container(runtime : String, container_name : String) : Nil
+        output = IO::Memory.new
+        status = Process.run(
+          runtime,
+          args: ["ps", "-q", "--filter", "name=^#{container_name}$"],
+          output: output,
+          error: Process::Redirect::Close,
+        )
+        unless status.success? && !output.to_s.strip.empty?
+          puts "[ocawe] container not running: #{container_name}"
+          return
+        end
+
+        stopped = Process.run(
+          runtime,
+          args: ["stop", "--time", "10", container_name],
+          output: Process::Redirect::Inherit,
+          error: Process::Redirect::Inherit,
+        ).success?
+        Process.run(
+          runtime,
+          args: ["rm", "-f", container_name],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close,
+        )
+        abort_unless_success(stopped)
+        puts "[ocawe] stopped container: #{container_name}"
+      end
+
+      private def package_start_runtime(
+        workflows_root : String,
+        runtime_binary : String,
+        bundle : ACD::Discovery::CawfileBundle,
+      ) : String
+        zstd_status = Process.run(
+          "zstd",
+          args: ["--version"],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close,
+        )
+        unless zstd_status.success?
+          STDERR.puts "Error: zstd is required by `ocawe start`"
+          exit(1)
+        end
+
+        package_root = File.join(Dir.tempdir, "ocawe-start-package-#{Process.pid}")
+        build_root = File.join(workflows_root, "build")
+        archive_base = File.join(build_root, "#{safe_runtime_name(bundle.id)}.runtime")
+        tar_path = "#{archive_base}.tar"
+        archive_path = "#{tar_path}.zst"
+
+        FileUtils.rm_rf(package_root)
+        FileUtils.mkdir_p(package_root)
+        FileUtils.mkdir_p(build_root)
+
+        FileUtils.cp(runtime_binary, File.join(package_root, "ocawecore"))
+        cawfile_path = ACD::Discovery::CawfileLoader.find_cawfile(workflows_root)
+        if cawfile_path
+          FileUtils.cp(cawfile_path, File.join(package_root, File.basename(cawfile_path)))
+        end
+
+        ["agents", "skills", "tools"].each do |entry|
+          source = File.join(workflows_root, entry)
+          FileUtils.cp_r(source, File.join(package_root, entry)) if File.exists?(source)
+        end
+
+        if container = bundle.container
+          container.files.each do |entry|
+            next if ["agents", "skills", "tools"].includes?(entry)
+            source = File.join(workflows_root, entry)
+            next unless File.exists?(source)
+            destination = File.join(package_root, entry)
+            FileUtils.mkdir_p(File.dirname(destination))
+            FileUtils.cp_r(source, destination)
+          end
+        end
+
+        File.delete(tar_path) if File.exists?(tar_path)
+        File.delete(archive_path) if File.exists?(archive_path)
+
+        tar_status = Process.run(
+          "tar",
+          args: ["-C", package_root, "-cf", tar_path, "."],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Inherit,
+        )
+        abort_unless_success(tar_status.success?)
+
+        zstd_status = Process.run(
+          "zstd",
+          args: ["-q", "-T0", "-f", tar_path, "-o", archive_path],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Inherit,
+        )
+        abort_unless_success(zstd_status.success?)
+        File.delete(tar_path)
+        puts "[ocawe] packaged runtime: #{archive_path}"
+        archive_path
+      ensure
+        FileUtils.rm_rf(package_root) if package_root
+      end
+
+      private def safe_runtime_name(value : String) : String
+        normalized = value.gsub(/[^a-zA-Z0-9_.-]/, "-")
+        normalized.empty? ? "ocawe" : normalized
+      end
+
+      private def stop_local_runtime(workflows_root : String) : Nil
+        pid_file = File.join(workflows_root, ".ocawe.pid")
+        unless File.file?(pid_file)
+          puts "[ocawe] no start-mode server found"
+          return
+        end
+
+        pid = File.read(pid_file).strip.to_i
+        Process.run(
+          "kill",
+          args: ["-TERM", pid.to_s],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close,
+        )
+        File.delete(pid_file)
+        puts "[ocawe] stopped local server: #{pid}"
+      rescue ex
+        STDERR.puts "Error: unable to stop local server: #{ex.message}"
+        exit(1)
       end
 
       private def shell(args : Array(String)) : Nil

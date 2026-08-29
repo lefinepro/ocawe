@@ -403,6 +403,8 @@ end
 *Key directives:*
 - =settings do ... end= — runtime config (port, datasets adapter, federation, telemetry)
 - =@[Service]= — workflow starts with =ocawe up= and restarts on runtime reload
+- =ocawe start PATH= — optimized Cawfile runtime with the minimal =/run=, =/stop/:id=, and =/metrics= API
+- =ocawe stop PATH= — stops the container or local server started by =ocawe start=
 - =@[Model("provider")]= — default model for the workflow
 - =container do ... end= — bundle-level container packaging; =packages= accepts Nix package names, flake refs, and path refs, while optional =files= selects what to copy into =/app=
 - =@[Validate(Input, Output)]= — input/output type validation
