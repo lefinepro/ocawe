@@ -86,6 +86,7 @@ jobs:
             crystal spec --error-trace
         env:
           COGNICORE_MOCK_LLM: "1"
+          OCAWECORE_BINARY: ${{ github.workspace }}/bin/ocawecore
 
   e2e-integration:
     runs-on: ubuntu-latest
