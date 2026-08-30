@@ -112,6 +112,12 @@ end
 when you run `ocawe build` / `ocawe up`. The same container config applies to
 every workflow in the Cawfile, including `@[Service]` workflows.
 
+If the command is launched with an existing `CODEX_HOME`, Ocawe mounts only
+its `auth.json` read-only and gives Codex a writable tmpfs home inside the
+container. This lets a `codex-acp` package authenticate without copying
+credentials into the image, sharing a host model cache, or writing host paths
+into the Cawfile.
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `packages` | `String[]` | Nix package names plus flake/path refs such as `github:owner/tool` or `./local-tool`. |

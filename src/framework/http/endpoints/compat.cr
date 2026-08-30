@@ -1,3 +1,5 @@
+require "base64"
+
 module ACD
   module Kemal
     class App
@@ -46,6 +48,21 @@ module ACD
         end
 
         post "/v1/chat/completions" do |env|
+          body = json_body(env)
+          begin
+            completion = build_chat_completion(body, env.request.headers)
+            write_chat_completion_response(env, completion, stream_requested?(body))
+          rescue ex
+            env.response.status_code = completion_error_status(ex)
+            env.response.content_type = "application/json"
+            {error: {type: "completion_error", message: ex.message || "chat completion failed"}}.to_json
+          end
+        end
+
+        # OpenAI-compatible clients commonly join a base URL ending in `/v1/`
+        # with `chat/completions`, producing a trailing slash. Kemal does not
+        # normalize that path, so expose the equivalent route explicitly.
+        post "/v1/chat/completions/" do |env|
           body = json_body(env)
           begin
             completion = build_chat_completion(body, env.request.headers)
@@ -117,7 +134,8 @@ module ACD
         files = resolve_file_resources(body)
         metadata["files"] = JSON.parse(files.to_json) unless files.empty?
 
-        workflow_id = model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
+        workflow_model = model.split(":", 2).first
+        workflow_id = workflow_model.starts_with?("workflow/") ? workflow_model.sub("workflow/", "") : nil
 
         if workflow_id
           ensure_client_api_key!(workflow_id, headers) unless skip_client_auth
@@ -131,6 +149,9 @@ module ACD
           input_data = {
             "prompt"   => JSON.parse(prompt.to_json),
             "messages" => JSON.parse(messages.to_json),
+            # Preserve the gateway model and any suffix interpreted by the
+            # selected workflow. Workflow-specific policy stays in its Cawfile.
+            "model"    => JSON.parse(model.to_json),
           } of String => JSON::Any
           input_data["system"] = JSON.parse(system_message.to_json) if system_message
           input_data["files"] = JSON.parse(files.to_json) unless files.empty?
@@ -161,10 +182,24 @@ module ACD
                           run_result.to_json
                         end
           output_blocks = if snap = snapshot
-                            workflow_chat_output_blocks(workflow_id, snap)
+                            blocks = workflow_chat_output_blocks(workflow_id, snap)
+                            collect_workflow_output_blocks(JSON.parse(run_result.output.to_json), blocks) if run_result.output
+                            blocks
                           else
-                            [] of JSON::Any
+                            blocks = [] of JSON::Any
+                            collect_workflow_output_blocks(JSON.parse(run_result.output.to_json), blocks) if run_result.output
+                            blocks
                           end
+          usage = {
+            "prompt_tokens"     => JSON.parse("0"),
+            "completion_tokens" => JSON.parse("0"),
+            "total_tokens"      => JSON.parse("0"),
+          } of String => JSON::Any
+          if snap = snapshot
+            if workflow_usage = workflow_chat_usage(snap)
+              workflow_usage.each { |key, value| usage[key] = value }
+            end
+          end
           now = Time.utc.to_unix
           message = {
             "role"    => JSON.parse("assistant".to_json),
@@ -184,11 +219,7 @@ module ACD
                 "finish_reason" => "stop",
               },
             ],
-            "usage" => {
-              "prompt_tokens"     => 0,
-              "completion_tokens" => 0,
-              "total_tokens"      => 0,
-            },
+            "usage" => usage,
           }.to_json).as_h
         end
 
@@ -234,14 +265,13 @@ module ACD
       end
 
       private def normalize_chat_model(model : String) : String
-        normalized = model.strip
-        return "workflow/orator" if normalized == "orator" || normalized == "workflow-orator"
-        normalized
+        model.strip
       end
 
       private def workflow_id_for_chat_body(body : Ocawe::Workflow::AnyHash) : String?
         model = normalize_chat_model(body["model"]?.try(&.as_s?) || FALLBACK_CHAT_MODEL)
-        model.starts_with?("workflow/") ? model.sub("workflow/", "") : nil
+        workflow_model = model.split(":", 2).first
+        workflow_model.starts_with?("workflow/") ? workflow_model.sub("workflow/", "") : nil
       end
 
       private def ensure_client_api_key!(workflow_id : String?, headers : ::HTTP::Headers?) : Nil
@@ -348,6 +378,9 @@ module ACD
         message = ex.message || ""
         return 401 if message.includes?("unauthorized:")
         return 404 if message.includes?("not found") || message.includes?("unknown workflow")
+        return 504 if message.includes?("_execution_timeout:")
+        return 503 if message.includes?("_routing_error:")
+        return 502 if message.includes?("_execution_error:") || message.includes?("_empty_model_answer:")
         return 502 if message.includes?("workflow ") || message.includes?("provider") || message.includes?("fmatch")
         422
       end
@@ -484,6 +517,10 @@ module ACD
       end
 
       private def write_chat_completion_response(env, completion, stream : Bool) : String
+        # Strip legacy top-level metadata; structured workflow data is exposed
+        # through the standard message output blocks.
+        completion.delete("router_candidates")
+        env.response.headers.delete("X-Router-Candidates")
         unless stream
           env.response.status_code = 200
           env.response.content_type = "application/json"
@@ -504,6 +541,7 @@ module ACD
         message = choices[0]["message"].as_h
         content = message["content"]?.try(&.as_s?) || ""
         finish_reason_val = choices[0]["finish_reason"]?.try(&.as_s?)
+        usage = completion_hash["usage"]?
 
         # First chunk: role
         role_chunk = {
@@ -597,6 +635,7 @@ module ACD
                 "finish_reason" => finish_reason_val,
               },
             ],
+            "usage" => usage,
           }
           env.response.print "data: #{final_chunk.to_json}\n\n"
         end
@@ -640,6 +679,14 @@ module ACD
         snapshot.to_json
       end
 
+      private def workflow_chat_usage(snapshot : Ocawe::Workflow::WorkflowRunSnapshot) : Ocawe::Workflow::AnyHash?
+        [snapshot.output, snapshot.state].each do |source|
+          usage = source.try(&.["usage"]?).try(&.as_h?)
+          return usage if usage
+        end
+        nil
+      end
+
       private def workflow_failure_message(workflow_id : String, status : String, error : Ocawe::Workflow::WorkflowError?) : String
         failure = error.try(&.message) || "workflow completed with status #{status}"
         "workflow #{workflow_id} failed: #{failure}"
@@ -654,13 +701,34 @@ module ACD
                  {} of String => JSON::Any
                end
         blocks = [] of JSON::Any
-        if output = snapshot.output
-          if direct_blocks = output["output_blocks"]?.try(&.as_a?)
-            blocks.concat(direct_blocks)
-          end
+        [snapshot.output, snapshot.state].each do |source|
+          collect_workflow_output_blocks(JSON.parse(source.to_json), blocks) if source
         end
         blocks.concat(output_ui_blocks(output_ui_template_for_workflow(workflow_id), data))
         blocks
+      end
+
+      private def collect_workflow_output_blocks(value : JSON::Any?, blocks : Array(JSON::Any)) : Nil
+        return unless value
+
+        if text = value.as_s?
+          begin
+            parsed = JSON.parse(text)
+            collect_workflow_output_blocks(parsed, blocks) unless parsed.as_s? == text
+          rescue JSON::ParseException
+          end
+        elsif hash = value.as_h?
+          if direct_blocks = hash["output_blocks"]?.try(&.as_a?)
+            blocks.concat(direct_blocks)
+          end
+          hash.each_value do |nested|
+            collect_workflow_output_blocks(nested, blocks)
+          end
+        elsif array = value.as_a?
+          array.each do |nested|
+            collect_workflow_output_blocks(nested, blocks)
+          end
+        end
       end
     end
   end

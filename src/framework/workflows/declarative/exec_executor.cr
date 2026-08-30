@@ -76,6 +76,10 @@ module Ocawe
         workspace : AnyHash?,
       ) : AnyHash
         config = acp_config.as_h? || {} of String => JSON::Any
+        if model = ctx.input_data["model"]?.try(&.as_s?)
+          config = config.dup
+          config["model"] = JSON.parse(model.to_json)
+        end
         input = acp_prompt_input(ctx.input_data)
 
         # Build environment
@@ -143,10 +147,21 @@ module Ocawe
       end
 
       private def direct_remote_caw_runtime_binary(pulled : ACD::Discovery::GitHttpsPullResult, cawfile : ACD::Discovery::CawfileBundle) : String
-        _ = pulled
         _ = cawfile
+        if configured = ENV["OCAWECORE_BINARY"]?
+          return configured if executable_file?(configured)
+        end
+
+        [Dir.current, ocawe_source_root].uniq.each do |workspace_root|
+          workspace_binary = File.join(workspace_root, "bin", "ocawecore")
+          return workspace_binary if executable_file?(workspace_binary)
+        end
+
         binary = Process.executable_path
-        binary || ""
+        return binary if binary && File.basename(binary).includes?("ocawecore")
+
+        _ = pulled
+        ""
       end
 
       private def executable_file?(path : String) : Bool
@@ -219,7 +234,7 @@ module Ocawe
       end
 
       private def wait_for_remote_runtime!(port : Int32) : Nil
-        deadline = Ocawe::Utils::TimeCompat.monotonic + 60.seconds
+        deadline = Ocawe::Utils::TimeCompat.monotonic + 180.seconds
         loop do
           begin
             response = HTTP::Client.get("http://127.0.0.1:#{port}/health")

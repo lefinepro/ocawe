@@ -37,6 +37,9 @@ describe "ACD::Kemal::App federation actor document" do
     actor["publicKey"]?.try(&.as_h?).not_nil!["id"]?.try(&.as_s?).should eq(
       "https://deployer.col.pub/actors/deploy-on-akash#main-key"
     )
+    actor["assertionMethod"]?.try(&.as_a?).not_nil!.first?.try(&.as_s?).should eq(
+      "https://deployer.col.pub/actors/deploy-on-akash#main-key"
+    )
   ensure
     if path = key_path
       File.delete(path) if File.exists?(path)

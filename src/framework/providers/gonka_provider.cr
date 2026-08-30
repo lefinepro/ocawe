@@ -43,7 +43,12 @@ module OcaweCore
         end
 
         body = JSON.parse(response.body)
-        TextGenerationResponse.new(provider: "gonka", model: request.model, text: extract_text(body))
+        TextGenerationResponse.new(
+          provider: "gonka",
+          model: request.model,
+          text: extract_text(body),
+          usage: TokenUsage.from_payload(body)
+        )
       end
 
       private def normalized_base_url(base : String) : String

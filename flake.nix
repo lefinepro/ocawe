@@ -42,12 +42,10 @@
             pkgs.coreutils
             pkgs.curl
             pkgs.git
-            pkgs.lua5_4
-            pkgs.nodejs_22
             pkgs.openssl
             pkgs.openssh
-            pkgs.ruby
             pkgs.sqlite
+            pkgs.zstd
           ];
 
           ocawe = pkgs.crystal.buildCrystalPackage {
@@ -94,6 +92,10 @@
             };
 
             doCheck = false;
+
+            postPatch = ''
+              rm -rf lib/*
+            '';
 
             installPhase = ''
               runHook preInstall
@@ -379,8 +381,6 @@
               pkgs.crystal
               pkgs.pkg-config
               pkgs.shards
-              pkgs.lua5_4
-              pkgs.ruby
             ];
 
             buildInputs = [

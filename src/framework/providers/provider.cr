@@ -3,6 +3,33 @@ module OcaweCore
   module AI
     alias AnyHash = Hash(String, JSON::Any)
 
+    struct TokenUsage
+      getter prompt_tokens : Int64?
+      getter completion_tokens : Int64?
+      getter total_tokens : Int64?
+
+      def initialize(@prompt_tokens : Int64? = nil, @completion_tokens : Int64? = nil, @total_tokens : Int64? = nil)
+      end
+
+      def self.from_payload(payload : JSON::Any) : TokenUsage?
+        usage = payload["usage"]?.try(&.as_h?)
+        return unless usage
+
+        prompt = token_count(usage["prompt_tokens"]? || usage["input_tokens"]?)
+        completion = token_count(usage["completion_tokens"]? || usage["output_tokens"]?)
+        total = token_count(usage["total_tokens"]?)
+        return unless prompt || completion || total
+
+        new(prompt, completion, total || (prompt && completion ? prompt + completion : nil))
+      end
+
+      private def self.token_count(value : JSON::Any?) : Int64?
+        return unless value
+        count = value.as_i?.try(&.to_i64) || value.as_f?.try(&.to_i64) || value.as_s?.try(&.to_i64?)
+        count if count && count >= 0
+      end
+    end
+
     struct TextGenerationRequest
       getter model : String
       getter system : String?
@@ -22,8 +49,9 @@ module OcaweCore
       getter model : String
       getter text : String
       getter tool_calls : Array(JSON::Any)?
+      getter usage : TokenUsage?
 
-      def initialize(@provider : String, @model : String, @text : String, @tool_calls : Array(JSON::Any)? = nil)
+      def initialize(@provider : String, @model : String, @text : String, @tool_calls : Array(JSON::Any)? = nil, @usage : TokenUsage? = nil)
       end
     end
 

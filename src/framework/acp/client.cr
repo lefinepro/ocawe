@@ -30,12 +30,15 @@ module ACP
     getter agent_info : AgentInfo?
     getter agent_capabilities : AgentCapabilities?
     getter session_id : String?
+    getter session_models : JSON::Any?
+    getter session_config_options : JSON::Any?
 
     @process : Process?
     @request_id : Int32
     @pending_responses : Hash(Int32, Channel(JsonRpcResponse))
     @notification_channel : Channel(JsonRpcNotification)
     @reader_fiber : Fiber?
+    @stderr_reader_fiber : Fiber?
     @closed : Bool
 
     def initialize(
@@ -43,7 +46,7 @@ module ACP
       @args : Array(String) = [] of String,
       @env : Hash(String, String) = {} of String => String,
       @filesystem_policy : FilesystemPolicy? = nil,
-      @process_cwd : String? = nil
+      @process_cwd : String? = nil,
     )
       @request_id = 0
       @pending_responses = {} of Int32 => Channel(JsonRpcResponse)
@@ -51,7 +54,10 @@ module ACP
       @agent_info = nil
       @agent_capabilities = nil
       @session_id = nil
+      @session_models = nil
+      @session_config_options = nil
       @closed = false
+      @stderr_reader_fiber = nil
     end
 
     # Start the agent process and initialize the connection
@@ -73,21 +79,28 @@ module ACP
         read_loop
       end
 
+      # ACP agents may emit large diagnostics to stderr (for example while
+      # refreshing their model cache). Leaving the pipe unread eventually
+      # blocks the child process and makes the JSON-RPC request wait forever.
+      @stderr_reader_fiber = spawn do
+        drain_stderr
+      end
+
       # Send initialize request
       params_json = {
-        "protocolVersion" => 1,
+        "protocolVersion"    => 1,
         "clientCapabilities" => {
           "fs" => {
-            "readTextFile" => true,
-            "writeTextFile" => true
+            "readTextFile"  => true,
+            "writeTextFile" => true,
           },
-          "terminal" => true
+          "terminal" => true,
         },
         "clientInfo" => {
-          "name" => "ocawe",
-          "title" => "Ocawe Runtime",
-          "version" => "0.0.1"
-        }
+          "name"    => "ocawe",
+          "title"   => "Ocawe Runtime",
+          "version" => "0.0.1",
+        },
       }
 
       params = InitializeParams.from_json(params_json.to_json)
@@ -111,7 +124,34 @@ module ACP
       result = request("session/new", params)
       session_result = SessionNewResult.from_json(result.to_json)
       @session_id = session_result.sessionId
+      @session_models = session_result.models
+      @session_config_options = session_result.configOptions
       session_result.sessionId
+    end
+
+    # Codex ACP versions expose model selection either through the dedicated
+    # method or through the generic session configuration method.
+    def set_model(model_id : String, session_id : String? = nil) : JSON::Any
+      sid = session_id || @session_id || raise "No active session"
+      model = model_id.strip
+      raise "Model id is empty" if model.empty?
+
+      begin
+        return request("session/set_model", JSON.parse({
+          "sessionId" => sid,
+          "modelId"   => model,
+        }.to_json))
+      rescue ex : ProtocolError
+        unless ex.code == ErrorCode::METHOD_NOT_FOUND || ex.code == ErrorCode::INVALID_PARAMS
+          raise ex
+        end
+      end
+
+      request("session/set_config_option", JSON.parse({
+        "sessionId" => sid,
+        "configId"  => "model",
+        "value"     => model,
+      }.to_json))
     end
 
     # Send a prompt to the agent
@@ -120,10 +160,10 @@ module ACP
 
       params_json = {
         "sessionId" => sid,
-        "prompt" => [{
+        "prompt"    => [{
           "type" => "text",
-          "text" => prompt_text
-        }]
+          "text" => prompt_text,
+        }],
       }
 
       params = SessionPromptParams.from_json(params_json.to_json)
@@ -138,7 +178,7 @@ module ACP
 
       params_json = {
         "sessionId" => sid,
-        "prompt" => content.map(&.to_json)
+        "prompt"    => content.map(&.to_json),
       }
 
       params = SessionPromptParams.from_json(params_json.to_json)
@@ -183,6 +223,27 @@ module ACP
       updates
     end
 
+    # A prompt response is written after all of its preceding update
+    # notifications on the same stdio stream. Drain every update already
+    # queued when the response arrives without adding a fixed post-response
+    # delay or an arbitrary chunk limit.
+    def drain_updates : Array(SessionUpdate)
+      updates = [] of SessionUpdate
+      loop do
+        notification = select
+        when value = @notification_channel.receive
+          value
+        else
+          break
+        end
+        next unless notification.method == "session/update"
+        if update = parse_session_update(notification)
+          updates << update
+        end
+      end
+      updates
+    end
+
     # Close the connection and terminate the agent process
     def close
       return if @closed
@@ -207,9 +268,9 @@ module ACP
       id = @request_id += 1
       req_json = {
         "jsonrpc" => "2.0",
-        "id" => id,
-        "method" => method,
-        "params" => JSON.parse(params.to_json)
+        "id"      => id,
+        "method"  => method,
+        "params"  => JSON.parse(params.to_json),
       }
 
       response_channel = Channel(JsonRpcResponse).new(1)
@@ -217,7 +278,19 @@ module ACP
 
       send_message_json(req_json)
 
-      response = response_channel.receive
+      timeout_seconds = (ENV["OCAWE_ACP_TIMEOUT_SECONDS"]? || "900").to_f
+      response = if timeout_seconds > 0
+                   select
+                   when value = response_channel.receive
+                     value
+                   when timeout(timeout_seconds.seconds)
+                     @pending_responses.delete(id)
+                     response_channel.close
+                     raise "ACP request timed out after #{timeout_seconds} seconds"
+                   end
+                 else
+                   response_channel.receive
+                 end
       @pending_responses.delete(id)
 
       if error = response.error
@@ -233,8 +306,8 @@ module ACP
 
       notif_json = {
         "jsonrpc" => "2.0",
-        "method" => method,
-        "params" => JSON.parse(params.to_json)
+        "method"  => method,
+        "params"  => JSON.parse(params.to_json),
       }
 
       send_message_json(notif_json)
@@ -270,6 +343,14 @@ module ACP
       end
     rescue ex
       STDERR.puts "ACP client read loop error: #{ex.message}"
+    end
+
+    private def drain_stderr
+      proc = @process || return
+      while proc.error.gets
+      end
+    rescue
+      # stderr is diagnostic-only; a closed pipe must not affect ACP requests.
     end
 
     private def handle_message(line : String)
@@ -326,6 +407,8 @@ module ACP
         handle_read_text_file(params)
       when "fs/writeTextFile"
         handle_write_text_file(params)
+      when "session/request_permission"
+        handle_permission_request(params)
       else
         raise ProtocolError.new("Method not found: #{method}", ErrorCode::METHOD_NOT_FOUND)
       end
@@ -352,6 +435,35 @@ module ACP
       Dir.mkdir_p(parent) unless Dir.exists?(parent)
       File.write(resolved, content)
       JSON.parse({"path" => resolved}.to_json)
+    end
+
+    private def handle_permission_request(params : JSON::Any?) : JSON::Any
+      values = params.try(&.as_h?) || raise ProtocolError.new("params must be an object", ErrorCode::INVALID_PARAMS)
+      options = values["options"]?.try(&.as_a?) || raise ProtocolError.new("permission options are required", ErrorCode::INVALID_PARAMS)
+      policy = ENV["OCAWE_ACP_PERMISSION_POLICY"]? || "allow_once"
+      order = case policy.downcase
+              when "deny", "reject"
+                ["reject_once", "reject_always"]
+              when "allow_always"
+                ["allow_always", "allow_once"]
+              else
+                ["allow_once", "allow_always"]
+              end
+      selected = nil.as(JSON::Any?)
+      order.each do |kind|
+        selected = options.find { |option| option["kind"]?.try(&.as_s?) == kind }
+        break if selected
+      end
+      selected ||= options.find { |option| option["kind"]?.try(&.as_s?).to_s.starts_with?("reject_") }
+      return JSON.parse({"outcome" => {"outcome" => "cancelled"}}.to_json) unless selected
+
+      option_id = selected["optionId"]?.try(&.as_s?) || raise ProtocolError.new("permission optionId is required", ErrorCode::INVALID_PARAMS)
+      JSON.parse({
+        "outcome" => {
+          "outcome"  => "selected",
+          "optionId" => option_id,
+        },
+      }.to_json)
     end
 
     private def extract_path_param(params : JSON::Any?) : String

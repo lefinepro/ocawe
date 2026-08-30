@@ -17,32 +17,39 @@ def handle_request(req)
   when "initialize"
     {
       "jsonrpc" => "2.0",
-      "id" => id,
-      "result" => {
-        "protocolVersion" => 1,
+      "id"      => id,
+      "result"  => {
+        "protocolVersion"   => 1,
         "agentCapabilities" => {
-          "loadSession" => false,
+          "loadSession"        => false,
           "promptCapabilities" => {
-            "image" => false,
-            "audio" => false,
-            "embeddedContext" => false
-          }
+            "image"           => false,
+            "audio"           => false,
+            "embeddedContext" => false,
+          },
         },
         "agentInfo" => {
-          "name" => "mock-acp",
-          "title" => "Mock ACP Agent",
-          "version" => "1.0.0"
+          "name"    => "mock-acp",
+          "title"   => "Mock ACP Agent",
+          "version" => "1.0.0",
         },
-        "authMethods" => [] of String
-      }
+        "authMethods" => [] of String,
+      },
     }
   when "session/new"
     {
       "jsonrpc" => "2.0",
-      "id" => id,
-      "result" => {
-        "sessionId" => "sess_mock_12345"
-      }
+      "id"      => id,
+      "result"  => {
+        "sessionId" => "sess_mock_12345",
+        "models" => [{"id" => "gpt-5.4", "name" => "GPT-5.4"}],
+      },
+    }
+  when "session/set_model"
+    {
+      "jsonrpc" => "2.0",
+      "id"      => id,
+      "result"  => {"modelId" => params["modelId"]},
     }
   when "session/prompt"
     session_id = params["sessionId"]
@@ -54,46 +61,72 @@ def handle_request(req)
       end
     end
 
-    # Send session/update notification first
-    update = {
-      "jsonrpc" => "2.0",
-      "method" => "session/update",
-      "params" => {
-        "sessionId" => session_id,
-        "update" => {
-          "sessionUpdate" => "agent_message_chunk",
-          "messageId" => "msg_agent_001",
-          "content" => {
-            "type" => "text",
-            "text" => "Mock ACP agent received: #{prompt_text}"
-          }
-        }
-      }
-    }
-    puts update.to_json
+    if ENV["MOCK_ACP_REQUEST_PERMISSION"]? == "1"
+      puts({
+        "jsonrpc" => "2.0",
+        "id"      => 900,
+        "method"  => "session/request_permission",
+        "params"  => {
+          "sessionId" => session_id,
+          "toolCall"  => {"toolCallId" => "mock-tool"},
+          "options"   => [
+            {"optionId" => "allow-once", "name" => "Allow once", "kind" => "allow_once"},
+            {"optionId" => "reject-once", "name" => "Reject", "kind" => "reject_once"},
+          ],
+        },
+      }.to_json)
+      STDOUT.flush
+      permission_line = STDIN.gets || raise "permission response missing"
+      permission = JSON.parse(permission_line)
+      selected = permission["result"]["outcome"]["optionId"]?.try(&.as_s?)
+      raise "permission was not allowed once" unless selected == "allow-once"
+    end
+
+    chunks = if ENV["MOCK_ACP_CHUNKS"]? == "many"
+               (1..12).map { |index| "chunk-#{index}" }
+             else
+               ["Mock ACP agent received: #{prompt_text}"]
+             end
+    chunks.each_with_index do |chunk, index|
+      puts({
+        "jsonrpc" => "2.0",
+        "method"  => "session/update",
+        "params"  => {
+          "sessionId" => session_id,
+          "update"    => {
+            "sessionUpdate" => "agent_message_chunk",
+            "messageId"     => "msg_agent_#{index}",
+            "content"       => {
+              "type" => "text",
+              "text" => chunk,
+            },
+          },
+        },
+      }.to_json)
+    end
 
     # Send final response
     {
       "jsonrpc" => "2.0",
-      "id" => id,
-      "result" => {
-        "stopReason" => "end_turn"
-      }
+      "id"      => id,
+      "result"  => {
+        "stopReason" => "end_turn",
+      },
     }
   when "session/cancel"
     {
       "jsonrpc" => "2.0",
-      "method" => "session/cancel",
-      "params" => {} of String => JSON::Any
+      "method"  => "session/cancel",
+      "params"  => {} of String => JSON::Any,
     }
   else
     {
       "jsonrpc" => "2.0",
-      "id" => id,
-      "error" => {
-        "code" => -32601,
-        "message" => "Method not found: #{method}"
-      }
+      "id"      => id,
+      "error"   => {
+        "code"    => -32601,
+        "message" => "Method not found: #{method}",
+      },
     }
   end
 end
@@ -112,11 +145,11 @@ loop do
   rescue ex
     puts({
       "jsonrpc" => "2.0",
-      "id" => req["id"],
-      "error" => {
-        "code" => -32700,
-        "message" => ex.message
-      }
+      "id"      => req["id"],
+      "error"   => {
+        "code"    => -32700,
+        "message" => ex.message,
+      },
     }.to_json)
     STDOUT.flush
   end

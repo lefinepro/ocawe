@@ -11,6 +11,7 @@ module ACD
       def initialize(
         @port : Int32,
         @settings : Ocawe::Config::Settings = Ocawe::Config::Settings.default,
+        @start_mode : Bool = false,
       )
         configured_generated_root = ENV["OCAWE_GENERATED_WORKFLOWS_ROOT"]?
         @generated_workflows_root = File.expand_path(
@@ -95,8 +96,12 @@ module ACD
         ::Kemal.config.add_handler(Ocawe::Telemetry::HTTPHandler.new) if Ocawe::Telemetry.enabled?
         mount_health_endpoints
         mount_docs_endpoints
-        unless @settings.api.federation_only?
+        if @start_mode
+          mount_start_runtime_endpoints
+          mount_compat_endpoints if mastra_api_enabled?
+        elsif !@settings.api.federation_only?
           mount_workflow_endpoints
+          mount_command_endpoints
           mount_workflows_create_endpoints
           mount_agent_endpoints
           mount_tool_endpoints
@@ -133,6 +138,12 @@ module ACD
           !@settings.federation.auto_subscribe.empty? ||
           !workflow_follow_targets.empty? ||
           Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
+      end
+
+      private def mastra_api_enabled? : Bool
+        @locator.list_workflows.any? do |bundle|
+          bundle.cawfile.try(&.enable_mastra) || false
+        end
       end
 
       private def start_telemetry_exporter : Nil

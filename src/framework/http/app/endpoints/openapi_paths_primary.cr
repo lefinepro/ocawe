@@ -19,6 +19,73 @@ module ACD
                 },
               },
             },
+            "/run" => {
+              "post" => {
+                "tags" => ["Start runtime"],
+                "summary" => "Start a workflow in minimal start mode",
+                "requestBody" => {
+                  "required" => true,
+                  "content" => {
+                    "application/json" => {
+                      "schema" => {
+                        "type" => "object",
+                        "required" => ["workflow_id"],
+                        "properties" => {
+                          "workflow_id" => {"type" => "string"},
+                          "input_data" => {"type" => "object"},
+                          "run_id" => {"type" => "string"},
+                          "resource_id" => {"type" => "string"},
+                          "resources" => {"type" => "object"},
+                        },
+                      },
+                    },
+                  },
+                },
+                "responses" => {
+                  "201" => {"description" => "Workflow run started"},
+                  "400" => {"description" => "Invalid workflow request"},
+                  "422" => {"description" => "Workflow execution error"},
+                },
+              },
+            },
+            "/stop/{id}" => {
+              "post" => {
+                "tags" => ["Start runtime"],
+                "summary" => "Stop a workflow run in minimal start mode",
+                "parameters" => [{
+                  "name" => "id",
+                  "in" => "path",
+                  "required" => true,
+                  "schema" => {"type" => "string"},
+                }],
+                "requestBody" => {
+                  "required" => true,
+                  "content" => {
+                    "application/json" => {
+                      "schema" => {
+                        "type" => "object",
+                        "required" => ["workflow_id"],
+                        "properties" => {"workflow_id" => {"type" => "string"}},
+                      },
+                    },
+                  },
+                },
+                "responses" => {
+                  "200" => {"description" => "Workflow run stopped"},
+                  "400" => {"description" => "Invalid stop request"},
+                  "404" => {"$ref" => "#/components/responses/NotFound"},
+                },
+              },
+            },
+            "/metrics" => {
+              "get" => {
+                "tags" => ["Start runtime"],
+                "summary" => "Get the runtime telemetry metric snapshot",
+                "responses" => {
+                  "200" => {"description" => "Metric snapshot"},
+                },
+              },
+            },
             "/v1/workflows" => {
               "get" => {
                 "tags" => ["Workflows"],
@@ -32,6 +99,22 @@ module ACD
                           "type" => "array",
                           "items" => {"type" => "string"},
                         },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "/v1/commands" => {
+              "get" => {
+                "tags" => ["Commands"],
+                "summary" => "List registered Ocawe commands",
+                "responses" => {
+                  "200" => {
+                    "description" => "Registered command catalog",
+                    "content" => {
+                      "application/json" => {
+                        "schema" => {"$ref" => "#/components/schemas/CommandListResponse"},
                       },
                     },
                   },

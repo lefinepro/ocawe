@@ -210,10 +210,10 @@ describe "ACD::Kemal::App federation merge request format" do
     events.size.should eq(1)
     activity = events.first["activity"]?.try(&.as_h?)
     activity.should_not be_nil
-    activity.not_nil!["type"]?.try(&.as_s?).should eq("Create")
+    activity.not_nil!["type"]?.try(&.as_s?).should eq("Offer")
     note = activity.not_nil!["object"]?.try(&.as_h?)
     note.should_not be_nil
-    note.not_nil!["type"]?.try(&.as_s?).should eq("Note")
+    note.not_nil!["type"]?.try(&.as_s?).should eq("Ticket")
     note.not_nil!["content"]?.try(&.as_s?).to_s.includes?("merge output rejected").should eq(true)
   end
 end

@@ -57,9 +57,10 @@ curl -fsS http://127.0.0.1:4119/v1/workflows
 kill "$(cat "$tmp/12-api-nodes/.ocawe.pid")"
 #+end_src
 
-The Nix package includes the CLI/runtime dependencies used by the distribution,
-including Crystal build inputs, Git, Node.js, Ruby, SQLite, and Lua 5.4. It also
-installs example Cawfiles and helper scripts under =share/ocawe=. Installed
+The Nix package includes only the CLI/runtime dependencies used by the
+distribution, including Git, OpenSSH, SQLite, and zstd. Provider CLIs and their
+language runtimes are supplied separately when a workflow explicitly needs
+them. The package also installs example Cawfiles and helper scripts under =share/ocawe=. Installed
 commands use the packaged source, examples, and runtime binary automatically.
 
 Install from GitHub Releases:
@@ -103,33 +104,25 @@ Declarative =mise.toml=:
 "github:lefinepro/ocawe" = { version = "latest", matching = "ocawe-linux", bin_path = "bin", filter_bins = "ocawe" }
 #+end_src
 
-Install CLI from source without Nix:
+Build the CLI from source with Nix:
 
 #+begin_src bash
-# Uses system Crystal if present; otherwise downloads Crystal into ./.tools/crystal.
-source scripts/bootstrap-crystal.sh
-crystal build src/cli/main.cr -o build/ocawe
-./build/ocawe --help
+nix build .#ocawe
+./result/bin/ocawe --help
 #+end_src
 
 Optional shell install:
 
 #+begin_src bash
 mkdir -p ~/.local/bin
-ln -sf "$PWD/build/ocawe" ~/.local/bin/ocawe
+ln -sf "$PWD/result/bin/ocawe" ~/.local/bin/ocawe
 ocawe --help
 #+end_src
 
 If =~/.local/bin= is not in =PATH=, add it in your shell profile.
 
-The bootstrap script downloads a platform Crystal archive into =./.tools/crystal=
-only when =crystal= is missing.
-
-You can control bootstrap with env vars:
-- =OCAWE_CRYSTAL_VERSION= (default =1.19.1=)
-- =OCAWE_CRYSTAL_BASE_URL= (default Crystal GitHub releases URL)
-- =OCAWE_CRYSTAL_FORCE_BOOTSTRAP=1= (force local toolchain even if system =crystal= exists)
-- =OCAWE_CRYSTAL_VERBOSE=1= (print toolchain version during bootstrap)
+Nix provides the pinned Crystal toolchain, shards, and native build
+dependencies used by the flake package.
 
 Run an example:
 
@@ -205,6 +198,30 @@ ocawe dev --port 4111
 ocawe up                           # reads port from Cawfile
 ocawe up caws/01-simple     # run specific workflow
 ocawe up -d caws/01-simple  # background mode
+#+end_src
+
+Build a Sireng pipeline on a remote host. Ocawe transfers only the selected
+pipeline and the Ocawe source needed by its runtime, then uses the remote
+host's first working =nerdctl=, =docker=, or =podman= manager. The remote build
+produces an immutable image and a matching =<service>-runtime= binary under the
+host runtime store. Repeating the same command reuses the content-addressed
+build.
+
+#+begin_src bash
+ocawe build planner --remote build-host
+ocawe build planner --remote build-host --manager nerdctl
+ocawe build planner --remote build-host --dry-run
+#+end_src
+
+The remote build never changes the active runtime until the image and binary
+have both completed successfully. Deploy the promoted version separately:
+
+#+begin_src bash
+cd sireng
+nix run .#deploy -- planner
+# or, from the Sireng development environment:
+sireng deploy planner
+sireng deploy planner --version <source-hash>
 #+end_src
 
 ** Workflow Triggers
@@ -379,6 +396,8 @@ end
 *Key directives:*
 - =settings do ... end= — runtime config (port, datasets adapter, federation, telemetry)
 - =@[Service]= — workflow starts with =ocawe up= and restarts on runtime reload
+- =ocawe start PATH= — optimized Cawfile runtime with the minimal =/run=, =/stop/:id=, and =/metrics= API
+- =ocawe stop PATH= — stops the container or local server started by =ocawe start=
 - =@[Model("provider")]= — default model for the workflow
 - =container do ... end= — bundle-level container packaging; =packages= accepts Nix package names, flake refs, and path refs, while optional =files= selects what to copy into =/app=
 - =@[Validate(Input, Output)]= — input/output type validation
@@ -447,7 +466,7 @@ mise run playground-build
 mise run docs-build
 #+end_src
 
-The mise environment installs Crystal, Bun, and Lua 5.4 for local development.
+The mise environment installs Crystal and Bun for local development.
 
 ** Testing
 

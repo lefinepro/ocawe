@@ -11,7 +11,7 @@ require "./federation_e2e_helper"
 #   Agent A process  --(classic run API)-->  A's mock agent run
 #     -> signed ActivityPub Create(Ticket)  --HTTP-->  Agent B's discovered inbox
 #     -> Agent B mock agent run (exactly once)
-#     -> Agent B outbox Create(Note), correlated by `object.inReplyTo`
+#     -> Agent B outbox Offer(Ticket), correlated by `object.inReplyTo`
 #
 # Coverage boundary (R-017): the `Create(Ticket)` envelope is assembled by the
 # test after Agent A's run has produced its output, using Aptok's own vocabulary
@@ -37,7 +37,7 @@ require "./federation_e2e_helper"
 # federation routes because a bundle that declares `Api::Federation::Inbox`
 # resolves to `api = ["classic", "federation"]`, which is not `federation_only?`.
 describe "ActivityPub cross-process agent-to-agent federation (two OS processes)" do
-  it "runs Agent A, delivers a signed Create(Ticket) to Agent B's discovered inbox, and correlates Agent B's Create(Note) reply" do
+  it "runs Agent A, delivers a signed Create(Ticket) to Agent B's discovered inbox, and correlates Agent B's Offer(Ticket) reply" do
     FederationE2E::Harness.run do |harness|
       sender = harness.sender
       receiver = harness.receiver
@@ -145,31 +145,31 @@ describe "ActivityPub cross-process agent-to-agent federation (two OS processes)
         nil
       end
 
-      # --- R-009 / AC-006: correlated Create(Note) in Agent B's outbox --------
-      note_activity : Hash(String, JSON::Any)? = nil
-      harness.wait_until("Agent B to publish a Create(Note) replying to #{ticket_id}") do
-        replies = FederationE2E.notes_replying_to(harness.outbox_activities(receiver), ticket_id)
-        next "no Create(Note) with inReplyTo=#{ticket_id} yet" if replies.empty?
-        next "#{replies.size} Create(Note) activities reply to #{ticket_id}, expected exactly 1" if replies.size > 1
-        note_activity = replies.first
+      # --- R-009 / AC-006: correlated Offer(Ticket) in Agent B's outbox ------
+      result_activity : Hash(String, JSON::Any)? = nil
+      harness.wait_until("Agent B to publish an Offer(Ticket) replying to #{ticket_id}") do
+        replies = FederationE2E.result_tickets_replying_to(harness.outbox_activities(receiver), ticket_id)
+        next "no Offer(Ticket) with inReplyTo=#{ticket_id} yet" if replies.empty?
+        next "#{replies.size} Offer(Ticket) activities reply to #{ticket_id}, expected exactly 1" if replies.size > 1
+        result_activity = replies.first
         nil
       end
 
-      note_activity.should_not be_nil
-      published = note_activity.not_nil!
-      published["type"].as_s.should eq("Create")
+      result_activity.should_not be_nil
+      published = result_activity.not_nil!
+      published["type"].as_s.should eq("Offer")
       published["actor"].as_s.should eq(receiver.actor_url)
       published["id"].as_s.should start_with(receiver.base_url)
 
-      note = published["object"].as_h
-      note["type"].as_s.should eq("Note")
-      note["inReplyTo"].as_s.should eq(ticket_id)
-      note["id"].as_s.should start_with(receiver.base_url)
+      result_ticket = published["object"].as_h
+      result_ticket["type"].as_s.should eq("Ticket")
+      result_ticket["inReplyTo"].as_s.should eq(ticket_id)
+      result_ticket["id"].as_s.should start_with(receiver.base_url)
 
       # Agent B's own mock run wrapped Agent A's mock output, so the reply
       # carries two mock signatures. One would mean the receiver echoed the
       # inbound ticket instead of publishing its own answer.
-      note_content = note["content"].as_s
+      note_content = result_ticket["content"].as_s
       note_content.should contain(marker)
       note_content.scan(FederationE2E::MOCK_SIGNATURE).size.should eq(2)
 
@@ -178,14 +178,14 @@ describe "ActivityPub cross-process agent-to-agent federation (two OS processes)
       replay.status.should eq(202)
 
       runs_after_first_delivery = harness.runs(receiver).size
-      notes_after_first_delivery = 1
+      results_after_first_delivery = 1
 
       # Give the federation poller several cycles to (not) process the replay.
       FederationE2E.settle(harness.receiver_poll_settle_time)
 
       harness.runs(receiver).size.should eq(runs_after_first_delivery)
-      FederationE2E.notes_replying_to(harness.outbox_activities(receiver), ticket_id)
-        .size.should eq(notes_after_first_delivery)
+      FederationE2E.result_tickets_replying_to(harness.outbox_activities(receiver), ticket_id)
+        .size.should eq(results_after_first_delivery)
 
       # --- R-011 / AC-008: unsigned delivery is rejected, state unchanged -----
       outbox_before_unsigned = harness.outbox_activities(receiver).size
@@ -211,7 +211,7 @@ describe "ActivityPub cross-process agent-to-agent federation (two OS processes)
 
       harness.runs(receiver).size.should eq(runs_after_first_delivery)
       harness.outbox_activities(receiver).size.should eq(outbox_before_unsigned)
-      FederationE2E.notes_replying_to(harness.outbox_activities(receiver), unsigned_ticket_id)
+      FederationE2E.result_tickets_replying_to(harness.outbox_activities(receiver), unsigned_ticket_id)
         .should be_empty
 
       # Both peers survived the whole scenario; a crashed child would otherwise

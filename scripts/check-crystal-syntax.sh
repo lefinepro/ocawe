@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-crystal build src/ocawe.cr --no-codegen
+nix develop --command crystal build src/ocawe.cr --no-codegen

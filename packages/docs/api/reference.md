@@ -44,6 +44,7 @@ Key endpoints:
 - `POST /mcp` (MCP JSON-RPC endpoint)
 
 Notes:
+- Workflow chat completions may add `usage.cost`, `usage.currency`, and `usage.cost_details` to the normal token counters. Orator uses this additive extension to expose the amount from the FEP-0837 marketplace commitment while preserving the standard OpenAI-compatible response shape.
 - Cawfile is the primary framework entry point. A root `Cawfile` can define settings, structs, `@[Service]` workflows, and multiple normal workflows. Directory-local `Cawfile` files are resolved before legacy `.acd.cr` files.
 - Voice and RAG are DSL workflow nodes (`voice`, `rag`), not dedicated startup auto-registered tools.
 - Workflow executable nodes use `exec "ref", runtime: {...}` for external tools. Internal Crystal logic is represented as internal function-name nodes (for example `agent_codex` or `project_healthcheck`).

@@ -138,6 +138,8 @@ module ACP
     include JSON::Serializable
 
     property sessionId : String
+    property models : JSON::Any?
+    property configOptions : JSON::Any?
   end
 
   struct SessionPromptParams

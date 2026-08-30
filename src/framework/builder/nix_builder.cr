@@ -26,20 +26,23 @@ module Ocawe
           return false
         end
 
+        runtime_binary = unwrap_runtime_binary(binary_path)
+
         context = File.join(context_dir, "build", "container")
         FileUtils.rm_rf(context)
         Dir.mkdir_p(context)
         rootfs = File.join(context, "rootfs")
         Dir.mkdir_p(rootfs)
 
-        dockerfile = generate_dockerfile(image: image, packages: packages, files: files)
-        File.write(File.join(context, "Dockerfile"), dockerfile)
-
-        copy_executable(binary_path, File.join(rootfs, "app", "ocawecore"))
-        copy_binary_closure(binary_path, rootfs)
+        copy_executable(runtime_binary, File.join(rootfs, "app", "ocawecore"))
+        copy_binary_closure(runtime_binary, rootfs)
         copy_package_tools(packages, rootfs)
         copy_default_tools(rootfs)
+        write_runtime_entrypoint(rootfs)
         copied_workflow_config = copy_workflow_cawfile(context_dir, rootfs)
+
+        dockerfile = generate_dockerfile(image: image, packages: packages, files: files)
+        File.write(File.join(context, "Dockerfile"), dockerfile)
 
         effective_files = if files.empty?
                             Dir.children(context_dir).select do |f|
@@ -95,18 +98,39 @@ module Ocawe
           "FROM #{final_image}",
           "COPY rootfs/ /",
           "ENV PATH=\"/usr/bin:/bin:/app/tools:${PATH}\"",
+          "ENV SSL_CERT_FILE=\"/etc/ssl/certs/ca-bundle.crt\"",
           "WORKDIR /app",
           "EXPOSE 4111",
-          "ENTRYPOINT [\"/app/ocawecore\"]",
+          # Use the loader exposed in /usr/lib so the generated image does not
+          # depend on the base image's dynamic linker.
+          "ENTRYPOINT [\"/usr/lib/ld-linux-x86-64.so.2\", \"--library-path\", \"/usr/lib:/lib\", \"/app/ocawecore\"]",
           "CMD [\"--port\", \"4111\"]",
         ]
         lines.join("\n")
       end
 
       private def copy_binary_closure(binary : String, rootfs : String) : Nil
-        collect_shared_libraries(binary).each do |library|
+        shared_library_closure(binary).each do |library|
           copy_absolute_file(library, rootfs)
+          expose_shared_library(library, rootfs)
         end
+      end
+
+      private def shared_library_closure(binary : String) : Array(String)
+        pending = collect_shared_libraries(binary)
+        seen = Set(String).new
+        libraries = [] of String
+        until pending.empty?
+          library = pending.shift
+          next if seen.includes?(library)
+
+          seen << library
+          libraries << library
+          collect_shared_libraries(library).each do |dependency|
+            pending << dependency unless seen.includes?(dependency)
+          end
+        end
+        libraries.sort
       end
 
       private def copy_package_tools(packages : Array(String), rootfs : String) : Nil
@@ -139,7 +163,43 @@ module Ocawe
         copy_executable(executable, destination)
         collect_shared_libraries(executable).each do |library|
           copy_absolute_file(library, rootfs)
+          expose_shared_library(library, rootfs)
         end
+      end
+
+      private def expose_shared_library(source : String, rootfs : String) : Nil
+        name = File.basename(source)
+        destination = File.join(rootfs, "usr", "lib", name)
+        Dir.mkdir_p(File.dirname(destination))
+        File.delete(destination) if File.exists?(destination) || File.symlink?(destination)
+        File.symlink(source, destination)
+      end
+
+      private def write_runtime_entrypoint(rootfs : String) : Nil
+        loader = Dir.glob(File.join(rootfs, "nix", "store", "*", "lib64", "ld-linux-x86-64.so.2")).sort.first?
+        loader ||= Dir.glob(File.join(rootfs, "nix", "store", "*", "lib", "ld-linux-x86-64.so.2")).sort.first?
+        # CI and development builds can use a host binary instead of a Nix
+        # wrapped binary. `copy_binary_closure` still copies and exposes its
+        # system loader, so use the image-visible link when no store loader
+        # exists. This keeps the fallback rootfs builder usable off Nix.
+        loader ||= [
+          File.join(rootfs, "usr", "lib", "ld-linux-x86-64.so.2"),
+          File.join(rootfs, "lib64", "ld-linux-x86-64.so.2"),
+          File.join(rootfs, "lib", "x86_64-linux-gnu", "ld-linux-x86-64.so.2"),
+        ].find { |candidate| File.exists?(candidate) || File.symlink?(candidate) }
+        raise "Nix dynamic loader was not included in the runtime closure" unless loader
+
+        image_loader = if loader.starts_with?(rootfs + "/")
+                         loader[(rootfs.size + 1)..]
+                       else
+                         loader
+                       end
+        image_loader = "/#{image_loader}" unless image_loader.starts_with?("/")
+        loader_lib = File.dirname(image_loader).sub(/\/lib64$/, "/lib")
+        script = "#!/bin/sh\nexec #{image_loader} --library-path /usr/lib:/lib:#{loader_lib} /app/ocawecore \"$@\"\n"
+        destination = File.join(rootfs, "app", "ocawe-entrypoint.sh")
+        File.write(destination, script)
+        File.chmod(destination, 0o755)
       end
 
       private def copy_nix_package(package : String, rootfs : String) : Nil
@@ -157,8 +217,13 @@ module Ocawe
         raise "nix package '#{package}' produced no output paths" if package_paths.empty?
 
         package_paths.each do |path|
-          copy_nix_closure(path, rootfs)
+          # Package executables retain their Nix interpreter/RPATH and must
+          # use the libraries in their own closure.  Publishing those
+          # libraries into /usr/lib can overwrite the runtime's glibc with an
+          # ABI-incompatible version (for example codex-acp versus ocawecore).
+          copy_nix_closure(path, rootfs, expose_libraries: false)
           link_package_bins(path, rootfs)
+          expose_ca_bundle(path, rootfs)
         end
       end
 
@@ -166,13 +231,23 @@ module Ocawe
         nixpkgs_attr?(package) ? "nixpkgs##{package}" : package
       end
 
-      private def copy_nix_closure(path : String, rootfs : String) : Nil
+      private def copy_nix_closure(path : String, rootfs : String, expose_libraries : Bool = false) : Nil
         output = IO::Memory.new
         status = Process.run("nix-store", args: ["-qR", path], output: output, error: Process::Redirect::Inherit)
         raise "could not query nix closure for #{path}" unless status.success?
 
         output.to_s.lines.map(&.strip).reject(&.empty?).sort!.each do |store_path|
           copy_absolute_path(store_path, rootfs)
+          expose_store_path_libraries(store_path, rootfs) if expose_libraries
+        end
+      end
+
+      private def expose_store_path_libraries(store_path : String, rootfs : String) : Nil
+        lib_dir = File.join(store_path, "lib")
+        return unless Dir.exists?(lib_dir)
+
+        Dir.children(lib_dir).select { |name| name.starts_with?("lib") && name.includes?(".so") }.sort!.each do |name|
+          expose_shared_library(File.join(lib_dir, name), rootfs)
         end
       end
 
@@ -189,6 +264,49 @@ module Ocawe
           File.delete(dst) if File.exists?(dst) || File.symlink?(dst)
           File.symlink(src, dst)
         end
+      end
+
+      # Nix packages keep shared objects under their store path. The generated
+      # image also contains the closure, but the normal dynamic linker does not
+      # search /nix/store. Expose package libraries in the conventional image
+      # search path while retaining absolute store-backed symlinks.
+      private def link_package_shared_libraries(package_path : String, rootfs : String) : Nil
+        lib_dir = File.join(package_path, "lib")
+        return unless Dir.exists?(lib_dir)
+
+        # Use Dir.children rather than a glob here. Crystal's glob handling
+        # has varied across the runtime versions used by the workflow image,
+        # while children preserves both versioned objects and their symlinks.
+        libraries = Dir.children(lib_dir).select { |name| name.starts_with?("lib") && name.includes?(".so") }.sort!
+        puts "[ocawe] exposing #{libraries.size} shared libraries from #{package_path}" unless libraries.empty?
+        libraries.each do |name|
+          source = File.join(lib_dir, name)
+          name = File.basename(source)
+          destination = File.join(rootfs, "usr", "lib", name)
+          Dir.mkdir_p(File.dirname(destination))
+          File.delete(destination) if File.exists?(destination) || File.symlink?(destination)
+          File.symlink(source, destination)
+        end
+      end
+
+      # Nix's certificate bundle lives under its store path, while HTTP
+      # clients in a scratch image conventionally look in /etc/ssl/certs.
+      # Expose it without copying secrets or relying on the host filesystem.
+      private def expose_ca_bundle(package_path : String, rootfs : String) : Nil
+        source = [
+          File.join(package_path, "etc", "ssl", "certs", "ca-bundle.crt"),
+          File.join(package_path, "etc", "ssl", "certs", "ca-certificates.crt"),
+        ].find { |candidate| File.file?(candidate) }
+        return unless source
+
+        certificates = File.join(rootfs, "etc", "ssl", "certs")
+        Dir.mkdir_p(certificates)
+        bundle = File.join(certificates, "ca-bundle.crt")
+        copy_file(source, bundle, 0o644)
+
+        legacy = File.join(certificates, "ca-certificates.crt")
+        File.delete(legacy) if File.exists?(legacy) || File.symlink?(legacy)
+        File.symlink("ca-bundle.crt", legacy)
       end
 
       private def collect_shared_libraries(binary : String) : Array(String)
@@ -224,13 +342,21 @@ module Ocawe
 
       private def copy_absolute_path(path : String, rootfs : String) : Nil
         destination = File.join(rootfs, path)
+        if File.directory?(path)
+          # A previous binary closure may already have created this store
+          # directory with only a subset of its shared libraries.  Merge the
+          # package closure into it; skipping an existing directory leaves
+          # tools such as codex-acp without libm/libstdc++ at runtime.
+          Dir.mkdir_p(destination)
+          Dir.children(path).each do |child|
+            copy_absolute_path(File.join(path, child), rootfs)
+          end
+          return
+        end
+
         return if File.exists?(destination)
         Dir.mkdir_p(File.dirname(destination))
-        if File.directory?(path)
-          copy_dir(path, destination, ignore_context_entries: false)
-        else
-          copy_file(path, destination, File.info(path).permissions.value)
-        end
+        copy_file(path, destination, File.info(path).permissions.value)
       end
 
       private def find_executable(name : String) : String?
@@ -270,6 +396,17 @@ module Ocawe
 
       private def copy_executable(src : String, dst : String) : Nil
         copy_file(src, dst, 0o755)
+      end
+
+      # Nix's `makeWrapper` exposes commands as shell scripts and keeps the
+      # actual ELF beside them as `.name-wrapped`.  A container entrypoint
+      # invokes the dynamic loader directly, so copying the wrapper produces
+      # an `invalid ELF header` at startup.  Prefer the sibling runtime when
+      # it exists; ordinary binaries keep their original path.
+      private def unwrap_runtime_binary(binary_path : String) : String
+        wrapped = File.join(File.dirname(binary_path), ".#{File.basename(binary_path)}-wrapped")
+        return wrapped if File.file?(wrapped) && !File.symlink?(wrapped)
+        binary_path
       end
 
       private def copy_file(src : String, dst : String, mode : Int32) : Nil

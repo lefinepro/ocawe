@@ -5,7 +5,7 @@ module OcaweCore
       @runtime_bin : String?
 
       private DEFAULT_PORT  = 4111
-      private CORE_COMMANDS = Set{"build", "dev", "up", "shell", "exec", "test", "pull", "-v", "--version", "-h", "--help"}
+      private CORE_COMMANDS = Set{"build", "dev", "up", "start", "stop", "shell", "exec", "test", "pull", "-v", "--version", "-h", "--help"}
 
       def initialize
       end
@@ -20,6 +20,10 @@ module OcaweCore
           dev(args)
         when "up"
           up(args)
+        when "start"
+          start(args)
+        when "stop"
+          stop(args)
         when "shell"
           shell(args)
         when "exec"
@@ -46,6 +50,8 @@ module OcaweCore
           Commands:
             build [--release] [--static] [--output PATH]
                 Build runtime binary.
+            build SERVICE --remote HOST [--manager NAME] [--deploy --namespace NAME]
+                Build a workflow project remotely, promote its runtime/image, and optionally deploy it.
             dev [PATH] [-d] [--port N] [--log-level LEVEL]
                 Build a development runtime and start server with live reload.
                 PATH: optional workflow directory (default: current directory)
@@ -54,12 +60,19 @@ module OcaweCore
                 PATH: optional workflow directory (default: current directory)
                 -d/--detach: run in background
                 --log-level: debug, warning, or critical (default: warning)
+            start [PATH] [-d] [--port N] [--log-level LEVEL]
+                Build/update the Cawfile runtime and start the optimized runtime API.
+                PATH: optional workflow directory (default: current directory)
+                -d/--detach: run in background
+                Crystal workflow code is precompiled when required.
+            stop [PATH]
+                Stop the runtime started by `ocawe start`.
             shell [PATH]
                 Open an interactive shell inside the running workflow environment.
             exec [PATH] -- COMMAND [ARG...]
                 Execute a command inside the running workflow environment.
             test [PATH]
-                Run Cawfile test blocks against ORATOR_URL/OCAWE_TEST_BASE_URL.
+                Run Cawfile test blocks against OCAWE_TEST_BASE_URL.
             pull REF
                 Clone or fast-forward pull a git Cawfile reference.
             -v, --version
@@ -81,7 +94,14 @@ module OcaweCore
 
       private def project_root : String
         @project_root ||= begin
-          root = installed_source_root || File.expand_path("../../..", __DIR__)
+          current = File.expand_path(Dir.current)
+          workspace_root = if File.file?(File.join(current, "src", "ocawe.cr"))
+                             current
+                           else
+                             candidate = File.expand_path("../ocawe", current)
+                             File.file?(File.join(candidate, "src", "ocawe.cr")) ? candidate : nil
+                           end
+          root = workspace_root || installed_source_root || File.expand_path("../../..", __DIR__)
           File.expand_path(root)
         end
       end

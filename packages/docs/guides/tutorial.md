@@ -3,14 +3,14 @@
 ## 1) Build runtime binary
 
 ```bash
-crystal build src/cli/main.cr -o build/ocawe
+nix build .#ocawe
 ```
 
 ## 2) Run dev mode and runtime up
 
 ```bash
-./build/ocawe dev --port 4111
-./build/ocawe up --port 4111
+./result/bin/ocawe dev --port 4111
+./result/bin/ocawe up --port 4111
 ```
 
 `ocawe up` runs auto-build and starts only the runtime server.
@@ -20,15 +20,15 @@ Run workflow as CLI command (Trigger API):
 
 ```bash
 # explicit workflow command
-./build/ocawe workflow solver task=deploy env=prod
+./result/bin/ocawe workflow solver task=deploy env=prod
 
 # other trigger kinds
-./build/ocawe agent code-reviewer --prompt "review this patch"
-./build/ocawe tool project_healthcheck
-./build/ocawe support onboarding-check
+./result/bin/ocawe agent code-reviewer --prompt "review this patch"
+./result/bin/ocawe tool project_healthcheck
+./result/bin/ocawe support onboarding-check
 
 # alias executable
-ln -sf ./build/ocawe /usr/local/bin/ocawe_example_workflow
+ln -sf ./result/bin/ocawe /usr/local/bin/ocawe_example_workflow
 ocawe_example_workflow
 ```
 

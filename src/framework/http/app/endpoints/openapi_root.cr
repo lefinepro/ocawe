@@ -15,6 +15,7 @@ module ACD
           "tags" => [
             {"name" => "System"},
             {"name" => "Workflows"},
+            {"name" => "Commands"},
             {"name" => "Tools"},
             {"name" => "Skills"},
             {"name" => "Runs"},

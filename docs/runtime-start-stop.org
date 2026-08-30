@@ -1,0 +1,96 @@
+#+TITLE: Runtime start/stop optimization
+#+DATE: 2026-08-29
+
+* Compatibility
+
+~ocawe up~ remains the existing full-runtime command. Its behavior, endpoint
+surface, and workflow-specific Crystal runtime path are retained for existing
+deployments.
+
+The new ~ocawe start~ and ~ocawe stop~ commands provide a smaller lifecycle
+for Cawfile-based deployments.
+
+* Start flow
+
+#+begin_src mermaid
+flowchart TD
+  A[ocawe start PATH] --> B[Load Cawfile]
+  B --> C{Crystal loader code?}
+  C -->|no| D[Use packaged ocawecore]
+  C -->|yes| E[Precompile workflow runtime]
+  D --> F[Create runtime.tar.zst with zstd]
+  E --> F
+  F --> G[Build or update container]
+  G --> H[Start ocawecore --start-mode]
+  H --> I[Load workflows at runtime]
+  I --> J{MastraAPI declared?}
+  J -->|yes| K[Enable Mastra compatibility routes]
+  J -->|no| L[Keep minimal API only]
+  K --> M[POST /run, POST /stop/:id, GET /metrics]
+  L --> M
+#+end_src
+
+* Minimal HTTP API
+
+- ~POST /run~ starts a workflow. The JSON body contains ~workflow_id~ and may
+  contain ~input_data~, ~run_id~, ~resource_id~, and ~resources~.
+- ~POST /stop/:id~ cancels run ~id~. The JSON body contains ~workflow_id~.
+- ~GET /metrics~ returns the current telemetry metric snapshot as JSON.
+- Mastra compatibility routes are mounted only when the Cawfile contains an
+  explicit ~Api::MastraAPI~ declaration.
+
+* Stop flow
+
+#+begin_src mermaid
+flowchart TD
+  A[ocawe stop PATH] --> B{Start container exists?}
+  B -->|yes| C[Graceful container stop]
+  C --> D[Remove start container]
+  B -->|no| E[Read .ocawe.pid]
+  E --> F[Send SIGTERM to local server]
+  D --> G[Lifecycle complete]
+  F --> G
+#+end_src
+
+* Known problems
+
+** Two execution paths
+
+There are intentionally two paths during migration. ~up~ remains compatible,
+while ~start~ adds the minimal API and its start-mode runtime flag. They should
+share only safe helpers; changing ~up~ implicitly would make existing container
+deployments difficult to reason about.
+
+** Crystal compilation is still possible in start mode
+
+The runtime can load ordinary Cawfile DSL at runtime. If a Cawfile contains
+Crystal loader code or registry files, ~start~ precompiles a workflow runtime
+before starting. This keeps custom Crystal behavior working but does not remove
+the compiler cost for those workflows.
+
+** Container and local process state differ
+
+~ocawe stop~ stops a container when a configured container runtime is available;
+otherwise it uses the start-mode PID file. A stale PID file or an externally
+removed container must be reported without stopping an unrelated process.
+
+** Runtime API is intentionally small
+
+The new mode does not mount the full administrative, MCP, federation, dataset,
+or workflow-management API. Those remain available through ~up~. Mastra routes
+are opt-in through Cawfile API declaration and should be validated before
+startup.
+
+** Precompiled runtime invalidation
+
+The workflow-specific runtime must be rebuilt when Cawfile Crystal code,
+registry files, or relevant framework sources change. A future implementation
+should replace process-id-only temporary names with a source fingerprint and
+clean stale generated binaries after successful startup.
+
+** Zstandard dependency
+
+~ocawe start~ requires the ~zstd~ executable and writes
+~build/<workflow-id>.runtime.tar.zst~. The archive is a portable runtime
+artifact for transfer and inspection; the container builder still creates the
+runtime image from its normal build context.

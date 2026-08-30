@@ -8,7 +8,7 @@ describe "Commands API example" do
 
     loader.requires.should be_empty
     loader.registry_files.map { |path| Path[path].relative_to(Path[root]).to_s }.should eq([
-      "plugins/functions/set_value.cr",
+      "plugins/commands/set_value.cr",
     ])
     bundle.dsl_source.not_nil!.join.should contain("input.command.\"generate_code\"")
     bundle.dsl_source.not_nil!.join.should contain("#set_value")

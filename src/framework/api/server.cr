@@ -36,6 +36,9 @@ module OcaweCore
           "GET /v1/hitl/runs",
           "GET /v1/hitl/runs/:workflowId/:runId",
           "POST /v1/hitl/runs/:workflowId/:runId/actions",
+          "POST /run",
+          "POST /stop/:id",
+          "GET /metrics",
         ]
 
         puts "[ocawecore] server scaffold ready on port #{@port}"

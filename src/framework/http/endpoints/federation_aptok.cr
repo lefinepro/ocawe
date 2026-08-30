@@ -101,10 +101,9 @@ module ACD
 
         env.response.status_code = handled ? 202 : 204
         env.response.content_type = "application/json"
-        # Internal model fan-out callers use the inbox as a synchronous
-        # OpenAI-compatible transport. Preserve the workflow result instead
-        # of reducing it to {"handled": true}; otherwise fmatch cannot see
-        # the generated answer.
+        # Preserve a result when a handler completes synchronously. Otherwise
+        # this response is only the 202/204 transport acknowledgement; the
+        # terminal Offer(Ticket) is published to resultInbox after execution.
         result ? result.to_json : {"handled" => handled}.to_json
       rescue ex
         env.response.status_code = 400
@@ -223,6 +222,11 @@ module ACD
       end
 
       private def inbox_signature_verification_required? : Bool
+        # Workers receive fan-out from the workflow's trusted federation peer.
+        # The worker is intentionally an internal execution endpoint; require
+        # signatures on public federation actors, but do not reject the
+        # router's internal delivery when this opt-out is configured.
+        return false if ENV["OCAWE_FEDERATION_SIGNATURES_REQUIRED"]? == "false"
         override = ENV["OCAWE_FEDERATION_SIGNATURES_REQUIRED"]?
         return false if override && ["false", "0", "no"].includes?(override.strip.downcase)
         @settings.federation.signatures_required
@@ -265,6 +269,11 @@ module ACD
           alias_uri: ENV["OCAWE_FEDERATION_ALIAS_URI"]?,
           public_key: public_key
         )
+        if public_key
+          if key_id = public_key["id"]?.try(&.as_s?)
+            actor["assertionMethod"] = JSON.parse([key_id].to_json)
+          end
+        end
         decorate_local_actor_document(actor)
         actor
       end
@@ -520,6 +529,12 @@ module ACD
 
         transport = Aptok::Transport.new
         key_pair = local_actor_key_pair(actor)
+        result_inbox = activity["object"]?.try(&.as_h?).try(&.["resultInbox"]?).try(&.as_s?).to_s.strip
+        unless result_inbox.empty?
+          target = result_inbox.rstrip('/').sub(/\/inbox(?:\/[^\/]*)?$/, "")
+          deliver_activity_to_inbox(transport, activity, actor, target, result_inbox, key_pair)
+          return
+        end
         @federation_kv.list("ocawe:federation:follow:").each do |entry|
           follow = JSON.parse(entry.value).as_h
           status = follow["status"]?.try(&.as_s?).to_s

@@ -6,7 +6,7 @@ agents, tools, and the Crystal-native runtime.
 ## Prerequisites
 
 - Nix, or `curl`/`wget` for GitHub Releases installation
-- Crystal (>= 1.9.0) only when building from source
+- Nix when building from source
 - Node.js and pnpm only for playground and docs development
 
 ## Installation
@@ -31,8 +31,7 @@ For source development:
 ```bash
 git clone https://github.com/lefinepro/ocawe.git
 cd ocawe
-nix develop
-crystal build src/cli/main.cr -o build/ocawe
+nix build .#ocawe
 ```
 
 ## Start the Runtime

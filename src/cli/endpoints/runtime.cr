@@ -3,20 +3,104 @@ require "file_utils"
 require "../../framework/discovery/cawfile_loader"
 require "../../framework/discovery/git_https_puller"
 require "../../framework/builder"
+require "../remote_builder"
 
 module OcaweCore
   module CLI
+    # Credentials deliberately stay outside the image. A workflow container
+    # receives only the authentication file from an existing Codex home; its
+    # session/cache directory is an isolated writable tmpfs.
+    module ContainerCredentials
+      CODEX_HOME_TARGET = "/run/ocawe/credentials/codex"
+
+      def self.arguments(environment : Hash(String, String)) : Array(String)
+        source = environment["CODEX_HOME"]?.try(&.strip)
+        return [] of String if source.nil? || source.empty?
+
+        source_path = File.expand_path(source)
+        auth_file = File.join(source_path, "auth.json")
+        return [] of String unless File.file?(auth_file)
+
+        [
+          "--env", "CODEX_HOME=#{CODEX_HOME_TARGET}",
+          "--tmpfs", CODEX_HOME_TARGET,
+          "--volume", "#{auth_file}:#{File.join(CODEX_HOME_TARGET, "auth.json")}:ro",
+        ]
+      end
+    end
+
+    # Federation marketplace metadata belongs to the solver process, not to the
+    # image.  Forward only the documented public declarations; credentials and
+    # arbitrary host environment variables must never leak into a workflow
+    # container.
+    module ContainerFederationEnvironment
+      FORWARDED_KEYS = [
+        "OCAWE_FEDERATION_RESOURCE_CONFORMS_TO",
+        "OCAWE_FEDERATION_ACTOR_NAME",
+        "OCAWE_FEDERATION_ACTOR_SUMMARY",
+        "OCAWE_FEDERATION_TAGS",
+        "OCAWE_FEDERATION_SIGNATURES_REQUIRED",
+      ]
+
+      def self.arguments(environment : Hash(String, String)) : Array(String)
+        arguments = [] of String
+        FORWARDED_KEYS.each do |key|
+          value = environment[key]?.try(&.strip)
+          next if value.nil? || value.empty?
+          arguments.concat(["--env", "#{key}=#{value}"])
+        end
+        arguments
+      end
+    end
+
     class Main
       private def build(args : Array(String)) : Nil
+        remote_host = nil.as(String?)
+        manager = "auto"
+        base_image = "ocawe:latest"
+        dry_run = false
+        deploy = false
+        namespace = "default"
         release = true
         static = false
         output = runtime_bin
 
         OptionParser.parse(args) do |parser|
+          parser.on("--remote HOST", "Build a service on a remote host") { |value| remote_host = value }
+          parser.on("--manager NAME", "Remote manager: auto, nerdctl, docker, or podman") { |value| manager = value }
+          parser.on("--base-image IMAGE", "Remote runtime base image") { |value| base_image = value }
+          parser.on("--dry-run", "Show the remote build without executing it") { dry_run = true }
+          parser.on("--deploy", "Update the matching Kubernetes deployment after promotion") { deploy = true }
+          parser.on("--namespace NAME", "Kubernetes namespace for --deploy (default: default)") { |value| namespace = value }
           parser.on("--release", "Build release binary (default)") { release = true }
           parser.on("--debug", "Build non-release binary") { release = false }
           parser.on("--static", "Build static binary") { static = true }
           parser.on("--output PATH", "Output binary path") { |v| output = v }
+        end
+
+        service = args.shift?
+        if remote_host
+          unless service
+            STDERR.puts "Error: ocawe build --remote requires SERVICE"
+            exit(1)
+          end
+          ok = RemoteBuilder.new(project_root).build(
+            service,
+            RemoteBuilder::Options.new(
+              host: remote_host.not_nil!,
+              manager: manager,
+              base_image: base_image,
+              deploy: deploy,
+              namespace: namespace,
+              dry_run: dry_run
+            )
+          )
+          exit(1) unless ok
+          return
+        end
+        if service
+          STDERR.puts "Error: SERVICE builds require --remote HOST"
+          exit(1)
         end
 
         abort_unless_success(build_runtime(release: release, static: static, output: output, force: true))
@@ -101,7 +185,27 @@ module OcaweCore
         run_server(args, dev_mode: false)
       end
 
-      private def run_server(args : Array(String), dev_mode : Bool) : Nil
+      private def start(args : Array(String)) : Nil
+        run_server(args, dev_mode: false, start_mode: true)
+      end
+
+      private def stop(args : Array(String)) : Nil
+        workflows_root = resolve_workflows_root(args.shift?)
+        cawfile = ACD::Discovery::CawfileLoader.find_cawfile(workflows_root)
+        unless cawfile
+          STDERR.puts "Error: no Cawfile found for #{workflows_root}"
+          exit(1)
+        end
+
+        bundle = ACD::Discovery::CawfileLoader.load(workflows_root, "root")
+        if bundle && bundle.container && bundle.container.not_nil!.configured? && container_runtime_available?
+          stop_container(detect_runtime, container_name_for_bundle(bundle))
+        else
+          stop_local_runtime(workflows_root)
+        end
+      end
+
+      private def run_server(args : Array(String), dev_mode : Bool, start_mode : Bool = false) : Nil
         port = nil
         detached = false
         log_level = nil.as(String?)
@@ -115,7 +219,8 @@ module OcaweCore
         workflows_root = resolve_workflows_root(args.first?)
         FileUtils.mkdir_p(workflows_root)
         runtime_bin = runtime_bin()
-        puts "[ocawe] preparing #{dev_mode ? "dev" : "up"} runtime binary=#{runtime_bin} workflows_root=#{workflows_root}"
+        mode_name = start_mode ? "start" : (dev_mode ? "dev" : "up")
+        puts "[ocawe] preparing #{mode_name} runtime binary=#{runtime_bin} workflows_root=#{workflows_root}"
         STDOUT.flush
 
         port ||= read_port_from_cawfile(workflows_root)
@@ -129,13 +234,32 @@ module OcaweCore
           container_config = cawfile_bundle.container if cawfile_bundle
         end
 
+        if start_mode && !cawfile_bundle
+          STDERR.puts "Error: ocawe start requires a Cawfile"
+          exit(1)
+        end
+
         if dev_mode
           Dir.cd(workflows_root) do
             abort_unless_success(build_runtime(release: false, output: runtime_bin))
           end
+        elsif workflow_runtime_required?(cawfile_bundle)
+          # A workflow can provide Crystal plugins (for example an inbox
+          # handler).  Those are compiled into a workflow-specific entrypoint;
+          # the packaged generic runtime cannot discover or load Crystal source
+          # after it has started.  Build that entrypoint before baking the
+          # container so the image executes the declared workflow, not only the
+          # framework shell.
+          workflow_runtime = File.join(Dir.tempdir, "ocawe-workflow-runtime-#{Process.pid}")
+          Dir.cd(workflows_root) do
+            abort_unless_success(build_runtime(release: true, output: workflow_runtime))
+          end
+          runtime_bin = workflow_runtime
         else
           abort_unless_success(ensure_runtime_binary(runtime_bin))
         end
+
+        package_start_runtime(workflows_root, runtime_bin, cawfile_bundle.not_nil!) if start_mode
 
         container_tag = nil.as(String?)
 
@@ -162,9 +286,10 @@ module OcaweCore
         end
 
         effective_port = (port || DEFAULT_PORT).not_nil!
-        puts "[ocawe] starting #{dev_mode ? "dev" : "up"} runtime port=#{effective_port} workflows_root=#{workflows_root}"
+        puts "[ocawe] starting #{mode_name} runtime port=#{effective_port} workflows_root=#{workflows_root}"
         STDOUT.flush
         runtime_args = ["--port=#{effective_port}"]
+        runtime_args << "--start-mode" if start_mode
         runtime_command = nil.as(String?)
         if image = container_tag
           if container_runtime_available?
@@ -191,15 +316,17 @@ module OcaweCore
           # used the now-unsupported `Process.fork`; spawning directly avoids the
           # deprecation and records the actual runtime PID (so `kill <pid>` works).
           runtime = spawn_runtime(runtime_command, runtime_bin, runtime_args, workflows_root)
-          pid = runtime.pid
-
-          pid_file = File.join(workflows_root, ".ocawe.pid")
-          File.open(pid_file, "w") { |f| f.puts pid }
-
-          puts "[ocawe] started in background (PID #{pid}, port #{port || DEFAULT_PORT})"
+          if start_mode && runtime_command
+            puts "[ocawe] started container runtime in background (port #{port || DEFAULT_PORT})"
+          else
+            pid = runtime.pid
+            pid_file = File.join(workflows_root, ".ocawe.pid")
+            File.open(pid_file, "w") { |f| f.puts pid }
+            puts "[ocawe] started in background (PID #{pid}, port #{port || DEFAULT_PORT})"
+          end
           puts "[ocawe] dev live reload enabled" if dev_mode
-          puts "[ocawe] logs: ocawe up --follow"
-          puts "[ocawe] stop: kill #{pid}"
+          puts "[ocawe] logs: ocawe #{start_mode ? "start" : "up"} --follow"
+          puts "[ocawe] stop: #{start_mode ? "ocawe stop" : "kill #{runtime.pid}"}"
         else
           runtime = spawn_runtime(runtime_command, runtime_bin, runtime_args, workflows_root)
           Signal::INT.trap do
@@ -212,6 +339,134 @@ module OcaweCore
             exit(1)
           end
         end
+      end
+
+      private def stop_container(runtime : String, container_name : String) : Nil
+        output = IO::Memory.new
+        status = Process.run(
+          runtime,
+          args: ["ps", "-q", "--filter", "name=^#{container_name}$"],
+          output: output,
+          error: Process::Redirect::Close,
+        )
+        unless status.success? && !output.to_s.strip.empty?
+          puts "[ocawe] container not running: #{container_name}"
+          return
+        end
+
+        stopped = Process.run(
+          runtime,
+          args: ["stop", "--time", "10", container_name],
+          output: Process::Redirect::Inherit,
+          error: Process::Redirect::Inherit,
+        ).success?
+        Process.run(
+          runtime,
+          args: ["rm", "-f", container_name],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close,
+        )
+        abort_unless_success(stopped)
+        puts "[ocawe] stopped container: #{container_name}"
+      end
+
+      private def package_start_runtime(
+        workflows_root : String,
+        runtime_binary : String,
+        bundle : ACD::Discovery::CawfileBundle,
+      ) : String
+        zstd_status = Process.run(
+          "zstd",
+          args: ["--version"],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close,
+        )
+        unless zstd_status.success?
+          STDERR.puts "Error: zstd is required by `ocawe start`"
+          exit(1)
+        end
+
+        package_root = File.join(Dir.tempdir, "ocawe-start-package-#{Process.pid}")
+        build_root = File.join(workflows_root, "build")
+        archive_base = File.join(build_root, "#{safe_runtime_name(bundle.id)}.runtime")
+        tar_path = "#{archive_base}.tar"
+        archive_path = "#{tar_path}.zst"
+
+        FileUtils.rm_rf(package_root)
+        FileUtils.mkdir_p(package_root)
+        FileUtils.mkdir_p(build_root)
+
+        FileUtils.cp(runtime_binary, File.join(package_root, "ocawecore"))
+        cawfile_path = ACD::Discovery::CawfileLoader.find_cawfile(workflows_root)
+        if cawfile_path
+          FileUtils.cp(cawfile_path, File.join(package_root, File.basename(cawfile_path)))
+        end
+
+        ["agents", "skills", "tools"].each do |entry|
+          source = File.join(workflows_root, entry)
+          FileUtils.cp_r(source, File.join(package_root, entry)) if File.exists?(source)
+        end
+
+        if container = bundle.container
+          container.files.each do |entry|
+            next if ["agents", "skills", "tools"].includes?(entry)
+            source = File.join(workflows_root, entry)
+            next unless File.exists?(source)
+            destination = File.join(package_root, entry)
+            FileUtils.mkdir_p(File.dirname(destination))
+            FileUtils.cp_r(source, destination)
+          end
+        end
+
+        File.delete(tar_path) if File.exists?(tar_path)
+        File.delete(archive_path) if File.exists?(archive_path)
+
+        tar_status = Process.run(
+          "tar",
+          args: ["-C", package_root, "-cf", tar_path, "."],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Inherit,
+        )
+        abort_unless_success(tar_status.success?)
+
+        zstd_status = Process.run(
+          "zstd",
+          args: ["-q", "-T0", "-f", tar_path, "-o", archive_path],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Inherit,
+        )
+        abort_unless_success(zstd_status.success?)
+        File.delete(tar_path)
+        puts "[ocawe] packaged runtime: #{archive_path}"
+        archive_path
+      ensure
+        FileUtils.rm_rf(package_root) if package_root
+      end
+
+      private def safe_runtime_name(value : String) : String
+        normalized = value.gsub(/[^a-zA-Z0-9_.-]/, "-")
+        normalized.empty? ? "ocawe" : normalized
+      end
+
+      private def stop_local_runtime(workflows_root : String) : Nil
+        pid_file = File.join(workflows_root, ".ocawe.pid")
+        unless File.file?(pid_file)
+          puts "[ocawe] no start-mode server found"
+          return
+        end
+
+        pid = File.read(pid_file).strip.to_i
+        Process.run(
+          "kill",
+          args: ["-TERM", pid.to_s],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close,
+        )
+        File.delete(pid_file)
+        puts "[ocawe] stopped local server: #{pid}"
+      rescue ex
+        STDERR.puts "Error: unable to stop local server: #{ex.message}"
+        exit(1)
       end
 
       private def shell(args : Array(String)) : Nil
@@ -390,10 +645,20 @@ module OcaweCore
       ) : String
         cleanup = [runtime, "rm", "-f", container_name].map { |part| shell_quote(part) }.join(" ")
         command = [runtime, "run", "--name", container_name, "--rm"]
+        command.concat(ContainerCredentials.arguments(ENV.to_h))
+        command.concat(ContainerFederationEnvironment.arguments(ENV.to_h))
         if mount = mount_workflows_root
           command.concat(["-v", "#{File.expand_path(mount)}:#{workdir}"])
         end
-        command.concat(["-w", workdir, "-p", "#{port}:#{port}", image, "/app/ocawecore"])
+        command.concat(["-w", workdir])
+        if ENV["OCAWE_CONTAINER_NETWORK"]? == "host"
+          command << "--network" << "host"
+        else
+          command.concat(["-p", "#{port}:#{port}"])
+        end
+        # The generated image owns the runtime through its ENTRYPOINT.  Passing
+        # /app/ocawecore again would make it the first runtime argument.
+        command << image
         command.concat(runtime_args)
         "#{cleanup} >/dev/null 2>&1 || true; #{command.map { |part| shell_quote(part) }.join(" ")}"
       end
@@ -416,7 +681,6 @@ module OcaweCore
         flags << "--release" if release
         flags << "--static" if static
         flags << "--no-debug" if release
-        flag_str = flags.empty? ? "" : flags.join(" ") + " "
         entrypoint = build_runtime_entrypoint
         unless force
           sources = runtime_source_paths(entrypoint)
@@ -426,18 +690,58 @@ module OcaweCore
           end
         end
 
-        # Check if crystal is available only when a rebuild is actually needed.
-        unless system("command -v crystal > /dev/null 2>&1")
-          STDERR.puts "Error: crystal compiler not found in PATH"
-          STDERR.puts "Please install Crystal: https://crystal-lang.org/install/"
+        unless system("command -v nix > /dev/null 2>&1")
+          STDERR.puts "Error: Nix is required to build the Ocawe runtime"
+          STDERR.puts "Install Nix and retry, or use a packaged ocawecore binary"
           return false
         end
-        main_flag = entrypoint == runtime_entry ? "-D ocawe_runtime_main " : ""
 
-        # Build from project root to ensure shard dependencies are found
-        Dir.cd(project_root) do
-          run_cmd("mkdir -p build && crystal build #{entrypoint} #{main_flag}#{flag_str}-o #{output}")
+        if entrypoint == runtime_entry && release && !static
+          return build_runtime_package(output)
         end
+
+        # Workflow-specific Crystal extensions are still compiled when a
+        # Cawfile explicitly declares them, but the compiler and all of its
+        # dependencies come from the flake development environment.
+        build_args = ["develop", project_root, "--command", "crystal", "build", entrypoint]
+        build_args.concat(["-D", "ocawe_runtime_main"]) if entrypoint == runtime_entry
+        build_args.concat(flags)
+        build_args.concat(["-o", output])
+        run_nix_command(build_args)
+      end
+
+      private def build_runtime_package(output : String) : Bool
+        package = nix_package_path
+        source = File.join(package, "bin", "ocawecore")
+        unless File.file?(source)
+          STDERR.puts "Error: Nix package did not produce #{source}"
+          return false
+        end
+
+        FileUtils.mkdir_p(File.dirname(output))
+        FileUtils.cp(source, output)
+        File.chmod(output, 0o755)
+        true
+      rescue ex
+        STDERR.puts "Error: Nix runtime build failed: #{ex.message}"
+        false
+      end
+
+      private def nix_package_path : String
+        output = IO::Memory.new
+        status = Process.run(
+          "nix",
+          args: ["build", "--no-link", "--print-out-paths", "#{project_root}#ocawe"],
+          output: output,
+          error: Process::Redirect::Inherit
+        )
+        raise "nix build failed with exit code #{status.exit_code}" unless status.success?
+
+        output.to_s.lines.map(&.strip).reject(&.empty?).first? || raise "nix build returned no output path"
+      end
+
+      private def run_nix_command(args : Array(String)) : Bool
+        Process.run("nix", args: args, output: Process::Redirect::Inherit, error: Process::Redirect::Inherit).success?
       end
 
       private def build_rootfs_packer : Bool
@@ -445,10 +749,11 @@ module OcaweCore
         output = File.join(project_root, "build", "rootfs_tar")
         return true unless File.file?(source)
         return true if File.file?(output) && File.info(output).modification_time >= File.info(source).modification_time
-        return true unless system("command -v cc > /dev/null 2>&1")
+        return true unless system("command -v nix > /dev/null 2>&1")
 
         Dir.cd(project_root) do
-          run_cmd("mkdir -p build && cc -Os -s -o #{shell_quote(output)} #{shell_quote(source)}")
+          Dir.mkdir_p(File.dirname(output))
+          run_nix_command(["develop", project_root, "--command", "cc", "-Os", "-s", "-o", output, source])
         end
       end
 
@@ -480,17 +785,15 @@ module OcaweCore
           return true
         end
 
-        unless system("command -v crystal > /dev/null 2>&1")
+        unless system("command -v nix > /dev/null 2>&1")
           STDERR.puts "Error: runtime binary not found: #{output}"
-          STDERR.puts "Run `ocawe build --release` in an environment with Crystal, or install the packaged ocawe binary."
+          STDERR.puts "Run `ocawe build --release` in an environment with Nix, or install the packaged ocawe binary."
           return false
         end
 
-        puts "[ocawe] building runtime: #{output}"
+        puts "[ocawe] building runtime with Nix: #{output}"
         STDOUT.flush
-        Dir.cd(project_root) do
-          run_cmd("mkdir -p build && crystal build #{runtime_entry} -D ocawe_runtime_main --release --no-debug -o #{output}")
-        end
+        build_runtime(release: true, output: output, force: true)
       end
 
       private def build_runtime_entrypoint : String
@@ -501,7 +804,10 @@ module OcaweCore
         crystal_loader = cawfile_bundle.try(&.crystal_loader)
         return runtime_entry unless crystal_loader
 
-        entrypoint = File.join(Dir.current, "build", "ocawe_runtime_entry.cr")
+        # Keep generated runtime glue outside the workflow tree.  A Cawfile is
+        # the application source of truth; `ocawe up/run` must not leave a
+        # project-owned build directory beside it.
+        entrypoint = File.join(Dir.tempdir, "ocawe-runtime-entry-#{Process.pid}.cr")
         entrypoint_dir = File.dirname(entrypoint)
         lines = [] of String
         lines << %(require "#{require_path(entrypoint_dir, runtime_entry)}")
@@ -509,13 +815,19 @@ module OcaweCore
           lines << runtime_entry_line(line, entrypoint_dir)
         end
         crystal_loader.registry_files.each do |path|
-          lines << %(require "#{require_path(entrypoint_dir, path)}")
+          require_line = %(require "#{require_path(entrypoint_dir, path)}")
+          lines << require_line unless lines.includes?(require_line)
         end
         lines << ""
         lines << "OcaweCore.run"
         FileUtils.mkdir_p(File.dirname(entrypoint))
         write_file_if_changed(entrypoint, lines.join("\n"))
         entrypoint
+      end
+
+      private def workflow_runtime_required?(bundle : ACD::Discovery::CawfileBundle?) : Bool
+        crystal_loader = bundle.try(&.crystal_loader)
+        crystal_loader ? (!crystal_loader.code.empty? || !crystal_loader.registry_files.empty?) : false
       end
 
       private def runtime_entry_line(line : String, entrypoint_dir : String) : String

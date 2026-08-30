@@ -24,6 +24,18 @@ module Ocawe
       @@capture_bootstrap_actions = previous_capture
     end
 
+    # Initialize the built-in node kinds without erasing handlers registered
+    # by compiled workflow plugins before the HTTP app starts.
+    def register_defaults! : Nil
+      register_default_node_kinds!
+      # Workflow plugins are loaded before the HTTP app starts, but the
+      # workflow-cache rebuild can reset registries after that load. Replay is
+      # idempotent: duplicate functions and node kinds are skipped by the
+      # internal registration helpers, while missing plugin node kinds are
+      # restored before the next workflow run.
+      replay_bootstrap_actions!
+    end
+
     def register_system_function(
       name : String,
       alias_name : String? = nil,
@@ -82,6 +94,9 @@ module Ocawe
       persist : Bool = false,
       &block : NodeContext -> Ocawe::Workflow::RunnableResult
     ) : String
+      if !persist && Ocawe::Workflow.function_registry.registered?(name)
+        return name
+      end
       canonical = Ocawe::Workflow.register_function(name, alias_name: alias_name, source: source, &block)
       if persist && @@capture_bootstrap_actions
         handler = block
@@ -98,6 +113,7 @@ module Ocawe
       persist : Bool = false,
       &block : NodeContext, AnyHash -> Ocawe::Workflow::NodeKindResult
     ) : Nil
+      return if !persist && Ocawe::Workflow.node_kind_registry.registered?(kind)
       Ocawe::Workflow.register_node_kind(kind, &block)
       if persist && @@capture_bootstrap_actions
         handler = block

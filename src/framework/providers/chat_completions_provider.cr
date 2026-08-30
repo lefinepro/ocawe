@@ -51,7 +51,13 @@ module OcaweCore
 
         body = JSON.parse(response.body)
         text, tool_calls = extract_result(body)
-        TextGenerationResponse.new(provider: "chat_completion", model: request.model, text: text, tool_calls: tool_calls)
+        TextGenerationResponse.new(
+          provider: "chat_completion",
+          model: request.model,
+          text: text,
+          tool_calls: tool_calls,
+          usage: TokenUsage.from_payload(body)
+        )
       end
 
       private def build_messages(request : TextGenerationRequest) : Array(JSON::Any)

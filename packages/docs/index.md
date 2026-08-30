@@ -9,8 +9,8 @@ workflows, ACP agent execution, datasets, and OpenAI-compatible APIs.
 Build and start the runtime:
 
 ```bash
-crystal build src/cli/main.cr -o build/ocawe
-./build/ocawe up
+nix build .#ocawe
+./result/bin/ocawe up
 ```
 
 Create your first root `Cawfile`:

@@ -67,4 +67,28 @@ WORKFLOW
       FileUtils.rm_rf(tmp_dir)
     end
   end
+
+  it "requires a Cawfile for the optimized start runtime" do
+    tmp_dir = "/tmp/ocawe_http_app_start_spec_#{Random.rand(1_000_000)}"
+    Dir.mkdir_p(tmp_dir)
+    begin
+      workflow_file = File.join(tmp_dir, "legacy.acd.cr")
+      File.write(workflow_file, "workflow \"legacy\" do\nend\n")
+      bundle = ACD::Discovery::WorkflowBundle.new(
+        id: "legacy",
+        root_path: tmp_dir,
+        workflow_file: workflow_file,
+        agents_dir: File.join(tmp_dir, "agents"),
+        skills_dir: File.join(tmp_dir, "skills"),
+        source_root_type: "preferred",
+      )
+
+      app = ACD::Kemal::App.new(0, start_mode: true)
+      expect_raises(Exception, /ocawe start requires a Cawfile/) do
+        app.test_load_workflow_definition(bundle, [] of ACD::Agents::LoadedAgent)
+      end
+    ensure
+      FileUtils.rm_rf(tmp_dir)
+    end
+  end
 end

@@ -31,9 +31,10 @@ module Ocawe
         command_args = config["args"]?.try(&.as_a?).try(&.compact_map { |v| v.as_s? }) || [] of String
         cwd = config["cwd"]?.try(&.as_s?) || @cwd
         agent_env = merge_env(config["env"]?)
+        task_container = nil
 
         if placement && placement["mode"]?.try(&.as_s?) == "container"
-          command, command_args, cwd, agent_env = container_command(
+          command, command_args, cwd, agent_env, task_container = container_command(
             command,
             command_args,
             cwd,
@@ -51,24 +52,33 @@ module Ocawe
         session_id = client.create_session(cwd)
 
         begin
+          if model = config["model"]?.try(&.as_s?)
+            client.set_model(model, session_id)
+          end
+
           # Send prompt
           result = client.prompt(input)
 
-          # Collect updates (non-blocking, just collect what's available)
-          updates = [] of ACP::SessionUpdate
-          10.times do
-            update = client.next_update(timeout: 2.seconds)
-            break unless update
-            updates << update
-          end
+          # The ACP agent streams the answer as message chunks before the
+          # prompt response. Drain the complete queued stream: limiting this
+          # to ten updates truncates normal Codex answers.
+          updates = client.drain_updates
 
           # Build output
           output = build_output(session_id, result, updates, config)
+          if models = client.session_models
+            output["models"] = models
+          end
+          if options = client.session_config_options
+            output["config_options"] = options
+          end
           output
         rescue ex : Exception
+          STDERR.puts "[acp] node=#{@node_id} command=#{command} failed: #{ex.message || ex.class.name}"
           raise "ACP node '#{ref}' failed: #{ex.message}"
         ensure
           client.close
+          remove_task_container(placement, task_container) if placement && task_container
         end
       end
 
@@ -88,7 +98,7 @@ module Ocawe
         agent_env : Hash(String, String),
         placement : Hash(String, JSON::Any),
         workspace : Hash(String, JSON::Any)?,
-      ) : {String, Array(String), String, Hash(String, String)}
+      ) : {String, Array(String), String, Hash(String, String), String}
         tool = placement["tool"]?.try(&.as_s?) || ENV["OCAWE_CONTAINER_TOOL"]? || "nerdctl"
         image = placement["image"]?.try(&.as_s?) || ENV["OCAWE_AGENT_CONTAINER_IMAGE"]? || "ocawe-agent:latest"
         command = placement["command"]?.try(&.as_s?) || command
@@ -101,6 +111,8 @@ module Ocawe
         write_policy = placement["write_policy"]?.try(&.as_s?) ||
                        workspace.try(&.["write_policy"]?).try(&.as_s?) ||
                        ENV["OCAWE_AGENT_WRITE_POLICY"]? || "write"
+
+        ensure_disk_space!(host_path || cwd, placement)
 
         task_name = "ocawe-acp-#{safe_name(@node_id)}-#{safe_name(@run_id)}-#{Random::Secure.hex(4)}"
         tool_args = placement["tool_args"]?.try(&.as_a?).try(&.compact_map { |value| value.as_s? }) || [] of String
@@ -156,7 +168,39 @@ module Ocawe
         args += ["-w", container_cwd, image]
         args << command unless placement["entrypoint"]?.try(&.as_s?) == command
         args += command_args
-        {tool, args, container_cwd, {} of String => String}
+        {tool, args, container_cwd, {} of String => String, task_name}
+      end
+
+      private def remove_task_container(placement : Hash(String, JSON::Any), task_name : String) : Nil
+        tool = placement["tool"]?.try(&.as_s?) || ENV["OCAWE_CONTAINER_TOOL"]? || "nerdctl"
+        tool_args = placement["tool_args"]?.try(&.as_a?).try(&.compact_map { |value| value.as_s? }) || [] of String
+        Process.run(
+          tool,
+          args: tool_args + ["rm", "-f", task_name],
+          input: Process::Redirect::Close,
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Close,
+        )
+      rescue ex
+        STDERR.puts "[acp] failed to remove task container #{task_name}: #{ex.message || ex.class.name}"
+      end
+
+      # A full disk must become a terminal workflow error before the runtime
+      # attempts to create a container. The threshold is deliberately part of
+      # the Cawfile placement so docker/nerdctl/podman deployments share the
+      # same policy without executor-specific defaults.
+      private def ensure_disk_space!(path : String, placement : Hash(String, JSON::Any)) : Nil
+        minimum = placement["min_free_bytes"]?.try(&.as_i?) ||
+                  ENV["OCAWE_MIN_FREE_BYTES"]?.try(&.to_i64?) || 0_i64
+        return if minimum <= 0
+        output = IO::Memory.new
+        status = Process.run("df", args: ["-Pk", path], output: output, error: Process::Redirect::Close)
+        raise "disk guard failed for #{path}" unless status.success?
+        free_kib = output.to_s.lines[1]?.try(&.split(/\s+/).reject(&.empty?)).try(&.[3]?.try(&.to_i64?)) || 0_i64
+        free_bytes = free_kib * 1024_i64
+        if free_bytes < minimum
+          raise "insufficient disk space for ACP container: #{free_bytes} bytes free, #{minimum} required"
+        end
       end
 
       private def safe_name(value : String) : String
@@ -181,14 +225,17 @@ module Ocawe
         # Extract content from updates
         content_parts = [] of String
         updates.each do |update|
-          next unless update.update.content
-          content_parts << (update.update.content.try(&.text) || "")
+          next unless update.update.sessionUpdate == "agent_message_chunk"
+          text = update.update.content.try(&.text).to_s
+          content_parts << text unless text.empty?
         end
+
+        content = content_parts.join
 
         output["session_id"] = JSON.parse(session_id.to_json)
         output["stop_reason"] = JSON.parse(result.stopReason.to_json)
-        output["content"] = JSON.parse(content_parts.join(" ").to_json)
-        output["message"] = JSON.parse(content_parts.join(" ").to_json)
+        output["content"] = JSON.parse(content.to_json)
+        output["message"] = JSON.parse(content.to_json)
 
         # Include metadata from config
         output["metadata"] = JSON.parse((config["metadata"]?.try(&.as_h?) || {} of String => JSON::Any).to_json)

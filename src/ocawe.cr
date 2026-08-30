@@ -1,3 +1,4 @@
+require "log"
 require "option_parser"
 require "./framework/utils/config_parser"
 require "./framework/api/public_types"
@@ -12,6 +13,7 @@ require "./framework/telemetry/prompt_metrics"
 require "./framework/discovery/cawfile_loader"
 require "./framework/testing/cawfile_runner"
 require "./framework/integration/pipeline_helpers"
+require "./framework/federation/synchronous_delivery"
 require "./framework/secrets/store"
 require "./framework/trigger/public_api"
 require "./framework/http/app"
@@ -32,12 +34,14 @@ module OcaweCore
     port = start_settings.port
     log_level = start_settings.log_level
     config_rcl = nil.as(String?)
+    start_mode = false
 
     OptionParser.parse do |parser|
       parser.banner = "Usage: ocawecore [arguments]"
       parser.on("-p PORT", "--port=PORT", "HTTP port") { |value| port = value.to_i }
       parser.on("--log-level=LEVEL", "Log level: debug, warning, critical") { |value| log_level = Ocawe::Config::LogLevel.parse(value) }
       parser.on("--config-rcl=PATH", "RCL config file path (alternative to Crystal-only defaults)") { |value| config_rcl = value }
+      parser.on("--start-mode", "Start the minimal runtime API") { start_mode = true }
       parser.on("-v", "--version", "Print version") do
         puts VERSION
         exit(0)
@@ -70,6 +74,7 @@ module OcaweCore
     ACD::Kemal::App.new(
       port,
       settings: settings,
+      start_mode: start_mode,
     ).start
   end
 

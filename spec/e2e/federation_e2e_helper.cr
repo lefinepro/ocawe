@@ -19,7 +19,7 @@ module FederationE2E
   # built without that flag starts and exits immediately.
   RUNTIME_BINARY_ENV     = "OCAWE_E2E_RUNTIME_BIN"
   DEFAULT_RUNTIME_BINARY = "bin/ocawecore"
-  RUNTIME_BUILD_COMMAND  = "crystal build src/ocawe.cr -Docawe_runtime_main -o bin/ocawecore"
+  RUNTIME_BUILD_COMMAND  = "nix build .#ocawe && cp -L result/bin/ocawecore bin/ocawecore"
 
   ACTIVITY_CONTENT_TYPE = "application/activity+json"
 
@@ -224,6 +224,22 @@ module FederationE2E
       next nil unless object
       next nil unless object["type"]?.try(&.as_s?) == "Note"
       next nil unless object["inReplyTo"]?.try(&.as_s?) == ticket_id
+      activity
+    end
+  end
+
+  # Correlation filter for the current ForgeFed result contract: workflow
+  # replies are Offer(Ticket) activities whose result Ticket points back to the
+  # received ticket through `inReplyTo`.
+  def result_tickets_replying_to(activities : Array(JSON::Any), ticket_id : String) : Array(Hash(String, JSON::Any))
+    activities.compact_map do |entry|
+      activity = entry.as_h?
+      next nil unless activity
+      next nil unless activity["type"]?.try(&.as_s?) == "Offer"
+      result_ticket = activity["object"]?.try(&.as_h?)
+      next nil unless result_ticket
+      next nil unless result_ticket["type"]?.try(&.as_s?) == "Ticket"
+      next nil unless result_ticket["inReplyTo"]?.try(&.as_s?) == ticket_id
       activity
     end
   end

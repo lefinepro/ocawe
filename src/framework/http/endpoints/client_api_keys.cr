@@ -8,7 +8,7 @@ module ACD
           end
           body = json_body(env)
           workflow_id = body["workflow_id"]?.try(&.as_s?).to_s.strip
-          workflow_id = "orator" if workflow_id.empty?
+          raise "workflow_id is required" if workflow_id.empty?
           label = body["label"]?.try(&.as_s?).to_s.strip
           env.response.status_code = 201
           env.response.content_type = "application/json"

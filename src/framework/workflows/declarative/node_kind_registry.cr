@@ -19,6 +19,10 @@ module Ocawe
           @handlers[key] = block
         end
 
+        def registered?(kind : String) : Bool
+          @handlers.has_key?(normalize(kind))
+        end
+
         def call(kind : String, ctx : NodeContext, parameters : AnyHash) : NodeKindResult
           key = normalize(kind)
           handler = @handlers[key]?

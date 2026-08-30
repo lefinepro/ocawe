@@ -50,17 +50,46 @@ module ACD
         activity_type = activity["type"]?.try(&.as_s?).to_s
         remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
         status = follow["status"]?.try(&.as_s?).to_s
+        local_actor = follow["local_actor"]?.try(&.as_s?).to_s
+        local_actor = @settings.federation.local_actor if local_actor.empty?
+        STDERR.puts "[federation] route activity=#{activity_type} status=#{status} id=#{activity["id"]?.try(&.as_s?)}"
 
         if activity_type == "Accept"
           update_aptok_follow_state(remote_actor, status: "active", error: "") unless remote_actor.empty?
           return true
         end
 
-        return false unless status.empty? || status == "active"
+        unless status.empty? || status == "active" || status == "following"
+          STDERR.puts "[federation] skip activity because follow status=#{status}"
+          return false
+        end
+        unless activity_targets_local_actor?(activity, local_actor)
+          STDERR.puts "[federation] ignore activity addressed to another solver"
+          return true
+        end
         ticket_payload = extract_ticket_activity_payload(activity)
-        return false unless ticket_payload
+        unless ticket_payload
+          STDERR.puts "[federation] skip activity because no Ticket payload"
+          return false
+        end
 
         process_ticket_create_activity(follow, activity, ticket_payload[:ticket], ticket_payload[:activity_type])
+      end
+
+      private def activity_targets_local_actor?(activity : Hash(String, JSON::Any), local_actor : String) : Bool
+        return true if local_actor.empty?
+        audience = activity["to"]?
+        return true unless audience
+
+        recipients = if values = audience.as_a?
+                       values.compact_map(&.as_s?)
+                     elsif value = audience.as_s?
+                       [value]
+                     else
+                       [] of String
+                     end
+        return true if recipients.empty?
+        recipients.any? { |recipient| recipient.rstrip('/') == local_actor.rstrip('/') }
       end
 
       private def normalize_federation_activity(raw : String?) : String
@@ -151,8 +180,9 @@ module ACD
         workflow_actor = resolve_ticket_workflow_actor(activity_doc, ticket, local_domain, local_actor)
         return false if workflow_actor.empty?
 
-        workflow_id = workflow_id_from_actor(workflow_actor)
+        workflow_id = "#{workflow_id_from_actor(workflow_actor)}"
         return false if workflow_id.empty?
+        run_id = "federation-#{workflow_id}-#{Random.rand(UInt64).to_s(16)}"
 
         task = ticket["name"]?.try(&.as_s?) || ticket["summary"]?.try(&.as_s?) || ""
         return false if task.strip.empty?
@@ -210,22 +240,45 @@ module ACD
           }.to_json),
         } of String => JSON::Any
 
-        run_result = @workflow_service.start_run(workflow_id, input_data: input_data)
+        run_result = @workflow_service.start_run(workflow_id, run_id: run_id, input_data: input_data)
         run_output = run_result.output || {} of String => JSON::Any
+        run_error = run_result.error.try(&.message).to_s
+        STDERR.puts "[federation] ticket run workflow=#{workflow_id} run=#{run_result.run_id} status=#{run_result.status} error=#{run_error} output_keys=#{run_output.keys.join(",")}"
         publish_result_activity_from_output(
           workflow_id: workflow_id,
           run_id: run_result.run_id,
           run_status: run_result.status,
           output: run_output,
           ticket: ticket,
-          requested_activity: activity,
-          remote_actor: remote_actor,
-          workflow_actor: workflow_actor,
-          local_domain: local_domain,
-          published_at: received_at,
+          requested_activity: "#{activity}",
+          remote_actor: "#{remote_actor}",
+          workflow_actor: "#{workflow_actor}",
+          local_domain: "#{local_domain}",
+          published_at: "#{received_at}",
         )
         true
-      rescue
+      rescue ex
+        error = ex.message || ex.class.name
+        STDERR.puts "[federation] ticket route failed: #{error}"
+        # A workflow/container failure is still a terminal federation result.
+        # Without this Offer the sender keeps the accepted task in queued
+        # forever, even though the one-shot container has already been removed.
+        publish_result_activity_from_output(
+          workflow_id: "#{workflow_id}",
+          run_id: "#{run_id}",
+          run_status: "failed",
+          output: {
+            "status" => JSON.parse("failed".to_json),
+            "error"  => JSON.parse(error.to_json),
+            "message" => JSON.parse("Solver execution failed: #{error}".to_json),
+          } of String => JSON::Any,
+          ticket: ticket,
+          requested_activity: "#{activity}",
+          remote_actor: "#{remote_actor}",
+          workflow_actor: "#{workflow_actor}",
+          local_domain: "#{local_domain}",
+          published_at: "#{received_at}",
+        )
         false
       end
 

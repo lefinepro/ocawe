@@ -1,6 +1,6 @@
 require "./spec_helper"
 
-describe "RegistryApi.register_function" do
+describe "Ocawe::Command.register" do
   before_each do
     Ocawe::RegistryApi.reset_all!
   end
@@ -13,7 +13,7 @@ describe "RegistryApi.register_function" do
       }.compact
     end
 
-    Ocawe::RegistryApi.register_function("set_value", &handler).should eq("set_value")
+    Ocawe::Command.register("set_value", handler).should eq("set_value")
 
     ctx = Ocawe::Workflow::NodeContext.new(
       workflow_id: "wf-command-api",
@@ -28,12 +28,20 @@ describe "RegistryApi.register_function" do
     result["input"].as_s.should eq("from-input")
   end
 
-  it "replays function registrations after a registry reset" do
+  it "publishes registered command names for the HTTP command catalog" do
+    Ocawe::Command.register("model_route", ->(_ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult {
+      {} of String => JSON::Any
+    })
+
+    Ocawe::Command.names.should contain("model_route")
+  end
+
+  it "replays command registrations after a registry reset" do
     handler = ->(_ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
       {"status" => json_str("ok")}
     end
 
-    Ocawe::RegistryApi.register_function("persisted_function", &handler)
+    Ocawe::Command.register("persisted_function", handler)
     Ocawe::RegistryApi.reset_all!
 
     ctx = Ocawe::Workflow::NodeContext.new(
@@ -47,14 +55,16 @@ describe "RegistryApi.register_function" do
     Ocawe::RegistryApi.call_function("persisted_function", ctx)["status"].as_s.should eq("ok")
   end
 
-  it "rejects empty function names and preserves collision behavior" do
+  it "rejects empty and duplicate command names" do
     handler = ->(_ctx : Ocawe::Workflow::NodeContext) : Ocawe::Workflow::RunnableResult do
       {} of String => JSON::Any
     end
 
-    expect_raises(Exception, /invalid function name/) { Ocawe::RegistryApi.register_function("   ", &handler) }
-    Ocawe::RegistryApi.register_function("duplicate_function", &handler)
-    Ocawe::RegistryApi.register_function(" DUPLICATE_FUNCTION ", &handler).should eq("duplicate_function:1")
+    expect_raises(Exception, /invalid command name/) { Ocawe::Command.register("   ", handler) }
+    Ocawe::Command.register("duplicate_function", handler)
+    expect_raises(Exception, /command already registered/) do
+      Ocawe::Command.register(" DUPLICATE_FUNCTION ", handler)
+    end
   end
 
   it "does not change legacy duplicate registration behavior" do
