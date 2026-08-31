@@ -1,3 +1,9 @@
+require "base64"
+require "digest/sha256"
+require "file_utils"
+require "http/client"
+require "uri"
+
 module ACD
   module Kemal
     class App
@@ -177,6 +183,11 @@ module ACD
         local_actor = follow["local_actor"]?.try(&.as_s?).to_s
         local_actor = @settings.federation.local_actor if local_actor.empty?
         local_domain = local_domain_from_actor_url(local_actor)
+
+        if project = ticket["ocawe_project"]?.try(&.as_h?)
+          return process_ocawe_project_task(follow, activity_doc, ticket, project, local_actor, local_domain)
+        end
+
         workflow_actor = resolve_ticket_workflow_actor(activity_doc, ticket, local_domain, local_actor)
         return false if workflow_actor.empty?
 
@@ -201,42 +212,42 @@ module ACD
         suffix = Random.rand(UInt64::MAX).to_s(16)
         assign_activity = JSON.parse({
           "@context" => [Aptok::ACTIVITYSTREAMS_CONTEXT, Aptok::FORGEFED_CONTEXT],
-          "id" => "#{local_domain}/activities/assign-#{suffix}",
-          "type" => "Assign",
-          "actor" => workflow_actor,
-          "object" => JSON.parse(ticket.to_json),
-          "target" => workflow_actor,
+          "id"       => "#{local_domain}/activities/assign-#{suffix}",
+          "type"     => "Assign",
+          "actor"    => workflow_actor,
+          "object"   => JSON.parse(ticket.to_json),
+          "target"   => workflow_actor,
         }.to_json).as_h
         append_aptok_outbox_event(workflow_actor, assign_activity, "outbox-assign-#{suffix}")
 
         input_data = {
-          "input" => JSON.parse(ticket.to_json),
-          "task" => JSON.parse(task.to_json),
-          "content" => JSON.parse(content.to_json),
-          "ticket_id" => JSON.parse(ticket_id.to_json),
-          "ticket" => JSON.parse(ticket.to_json),
-          "repo_url" => JSON.parse(repo_url.to_json),
-          "repo_ref" => JSON.parse(repo_ref.to_json),
-          "provider" => JSON.parse(provider.to_json),
-          "remote_actor" => JSON.parse(remote_actor.to_json),
-          "local_actor" => JSON.parse(local_actor.to_json),
-          "workflow_actor" => JSON.parse(workflow_actor.to_json),
-          "api" => JSON.parse("federation".to_json),
-          "activity" => JSON.parse(activity.to_json),
+          "input"            => JSON.parse(ticket.to_json),
+          "task"             => JSON.parse(task.to_json),
+          "content"          => JSON.parse(content.to_json),
+          "ticket_id"        => JSON.parse(ticket_id.to_json),
+          "ticket"           => JSON.parse(ticket.to_json),
+          "repo_url"         => JSON.parse(repo_url.to_json),
+          "repo_ref"         => JSON.parse(repo_ref.to_json),
+          "provider"         => JSON.parse(provider.to_json),
+          "remote_actor"     => JSON.parse(remote_actor.to_json),
+          "local_actor"      => JSON.parse(local_actor.to_json),
+          "workflow_actor"   => JSON.parse(workflow_actor.to_json),
+          "api"              => JSON.parse("federation".to_json),
+          "activity"         => JSON.parse(activity.to_json),
           "federation_input" => JSON.parse({
-            "api" => "federation",
-            "requested_activity" => activity,
+            "api"                    => "federation",
+            "requested_activity"     => activity,
             "incoming_activity_type" => incoming_activity_type,
-            "activity" => activity_doc,
-            "ticket" => ticket,
-            "task" => task,
-            "content" => content,
-            "ticket_id" => ticket_id,
-            "repo_url" => repo_url,
-            "repo_ref" => repo_ref,
-            "remote_actor" => remote_actor,
-            "local_actor" => local_actor,
-            "workflow_actor" => workflow_actor,
+            "activity"               => activity_doc,
+            "ticket"                 => ticket,
+            "task"                   => task,
+            "content"                => content,
+            "ticket_id"              => ticket_id,
+            "repo_url"               => repo_url,
+            "repo_ref"               => repo_ref,
+            "remote_actor"           => remote_actor,
+            "local_actor"            => local_actor,
+            "workflow_actor"         => workflow_actor,
           }.to_json),
         } of String => JSON::Any
 
@@ -268,8 +279,8 @@ module ACD
           run_id: "#{run_id}",
           run_status: "failed",
           output: {
-            "status" => JSON.parse("failed".to_json),
-            "error"  => JSON.parse(error.to_json),
+            "status"  => JSON.parse("failed".to_json),
+            "error"   => JSON.parse(error.to_json),
             "message" => JSON.parse("Solver execution failed: #{error}".to_json),
           } of String => JSON::Any,
           ticket: ticket,
@@ -280,6 +291,184 @@ module ACD
           published_at: "#{received_at}",
         )
         false
+      end
+
+      # A remote `ocawe up --remote` sends the selected project as a compressed
+      # archive in the Ticket. Run it locally on this server, using a child
+      # ocawecore process so the received project gets its own Cawfile runtime.
+      private def process_ocawe_project_task(
+        follow : Hash(String, JSON::Any),
+        activity_doc : Hash(String, JSON::Any),
+        ticket : Hash(String, JSON::Any),
+        project : Hash(String, JSON::Any),
+        local_actor : String,
+        local_domain : String,
+      ) : Bool
+        remote_actor = follow["remote_actor"]?.try(&.as_s?).to_s
+        remote_actor = activity_doc["actor"]?.try(&.as_s?).to_s if remote_actor.empty?
+        workflow_id = "remote-project"
+        run_id = "federation-remote-project-#{Random::Secure.hex(8)}"
+        received_at = Time.utc.to_s("%Y-%m-%dT%H:%M:%SZ")
+        workspace = File.join(Dir.current, ".ocawe", "federation-projects", "#{Time.utc.to_unix}-#{Random::Secure.hex(8)}")
+        process = nil.as(Process?)
+
+        begin
+          encoded = project["content_base64"]?.try(&.as_s?).to_s
+          raise "Ocawe project attachment is missing content_base64" if encoded.empty?
+          archive_bytes = Base64.decode_string(encoded)
+          expected_sha = project["sha256"]?.try(&.as_s?).to_s.strip
+          if !expected_sha.empty? && Digest::SHA256.hexdigest(archive_bytes) != expected_sha
+            raise "Ocawe project attachment checksum mismatch"
+          end
+
+          FileUtils.mkdir_p(workspace)
+          # The sender currently uses this fixed name. Do not let an inbound
+          # filename choose a path outside the isolated workspace.
+          archive_path = File.join(workspace, "project.tar.zst")
+          tar_path = File.join(workspace, "project.tar")
+          File.open(archive_path, "wb") { |io| io.write(archive_bytes.to_slice) }
+
+          unpack_ocawe_project!(archive_path, tar_path, workspace)
+          bundle = ACD::Discovery::CawfileLoader.load(workspace, "root")
+          raise "received Ocawe project has no loadable Cawfile" unless bundle
+          workflow_id = bundle.not_nil!.id
+          run_id = "federation-#{workflow_id}-#{Random::Secure.hex(8)}"
+
+          binary = ENV["OCAWECORE_BINARY"]?.to_s
+          binary = Process.executable_path.to_s if binary.empty?
+          raise "remote project execution requires ocawecore or OCAWECORE_BINARY" if binary.empty? || !File.file?(binary)
+
+          port = 20000 + Random.rand(20000)
+          process = Process.new(
+            binary,
+            args: ["--port=#{port}"],
+            chdir: workspace,
+            env: {"OCAWE_WORKFLOWS_ROOT" => workspace},
+            input: Process::Redirect::Close,
+            output: Process::Redirect::Inherit,
+            error: Process::Redirect::Inherit
+          )
+          wait_for_ocawe_project_runtime!(port)
+
+          task = ticket["name"]?.try(&.as_s?) || ticket["summary"]?.try(&.as_s?) || "Run Ocawe project"
+          content = ticket["content"]?.try(&.as_s?) || ""
+          input_data = {
+            "task"         => JSON.parse(task.to_json),
+            "content"      => JSON.parse(content.to_json),
+            "device_code"  => ticket["device_code"]? || JSON.parse("".to_json),
+            "ticket"       => JSON.parse(ticket.to_json),
+            "activity"     => JSON.parse(activity_doc.to_json),
+            "remote_actor" => JSON.parse(remote_actor.to_json),
+            "local_actor"  => JSON.parse(local_actor.to_json),
+            "api"          => JSON.parse("federation".to_json),
+          } of String => JSON::Any
+          payload = {
+            "run_id"     => JSON.parse(run_id.to_json),
+            "input_data" => JSON.parse(input_data.to_json),
+          } of String => JSON::Any
+          path = "/v1/workflows/#{::URI.encode_path_segment(workflow_id)}/runs"
+          response = ::HTTP::Client.post(
+            "http://127.0.0.1:#{port}#{path}",
+            headers: ::HTTP::Headers{"Content-Type" => "application/json"},
+            body: payload.to_json
+          )
+          unless response.status_code >= 200 && response.status_code < 300
+            raise "received Ocawe project failed HTTP #{response.status_code}: #{response.body}"
+          end
+          snapshot = JSON.parse(response.body).as_h?
+          raise "received Ocawe project returned a non-object run response" unless snapshot
+          status = snapshot.not_nil!["status"]?.try(&.as_s?).to_s
+          status = "completed" if status.empty?
+          output = snapshot.not_nil!["output"]?.try(&.as_h?) || {} of String => JSON::Any
+          STDERR.puts "[federation] ran received project workflow=#{workflow_id} run=#{run_id} status=#{status}"
+          publish_result_activity_from_output(
+            workflow_id: workflow_id,
+            run_id: run_id,
+            run_status: status,
+            output: output,
+            ticket: ticket,
+            requested_activity: "task",
+            remote_actor: remote_actor,
+            workflow_actor: local_actor,
+            local_domain: local_domain,
+            published_at: received_at,
+          ) unless remote_actor.empty?
+          true
+        rescue ex
+          error = ex.message || ex.class.name
+          STDERR.puts "[federation] received Ocawe project failed: #{error}"
+          publish_result_activity_from_output(
+            workflow_id: workflow_id,
+            run_id: run_id,
+            run_status: "failed",
+            output: {
+              "status"  => JSON.parse("failed".to_json),
+              "error"   => JSON.parse(error.to_json),
+              "message" => JSON.parse("Received Ocawe project failed: #{error}".to_json),
+            } of String => JSON::Any,
+            ticket: ticket,
+            requested_activity: "task",
+            remote_actor: remote_actor,
+            workflow_actor: local_actor,
+            local_domain: local_domain,
+            published_at: received_at,
+          ) unless remote_actor.empty?
+          false
+        ensure
+          terminate_ocawe_project_runtime(process) if process
+          FileUtils.rm_rf(workspace)
+        end
+      end
+
+      private def unpack_ocawe_project!(archive_path : String, tar_path : String, workspace : String) : Nil
+        zstd_status = Process.run(
+          "zstd",
+          args: ["-q", "-d", "-f", archive_path, "-o", tar_path],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Inherit
+        )
+        raise "zstd could not decompress the received project" unless zstd_status.success?
+
+        listing = IO::Memory.new
+        tar_status = Process.run(
+          "tar",
+          args: ["-tf", tar_path],
+          output: listing,
+          error: Process::Redirect::Close
+        )
+        raise "tar could not inspect the received project" unless tar_status.success?
+        listing.to_s.each_line do |entry|
+          path = entry.strip.rstrip("/")
+          parts = path.split("/")
+          raise "received project archive contains an unsafe path" if path.starts_with?("/") || parts.includes?("..")
+        end
+
+        extract_status = Process.run(
+          "tar",
+          args: ["-C", workspace, "--no-same-owner", "--no-same-permissions", "--no-absolute-names", "-xf", tar_path],
+          output: Process::Redirect::Close,
+          error: Process::Redirect::Inherit
+        )
+        raise "tar could not unpack the received project" unless extract_status.success?
+      end
+
+      private def wait_for_ocawe_project_runtime!(port : Int32) : Nil
+        deadline = Time.monotonic + 180.seconds
+        loop do
+          begin
+            response = ::HTTP::Client.get("http://127.0.0.1:#{port}/health")
+            return if response.status_code == 200
+          rescue
+          end
+          raise "received Ocawe project runtime did not become healthy" if Time.monotonic > deadline
+          sleep 100.milliseconds
+        end
+      end
+
+      private def terminate_ocawe_project_runtime(process : Process) : Nil
+        process.terminate
+        process.wait
+      rescue
       end
 
       private def workflow_id_from_actor(actor : String) : String
@@ -315,7 +504,6 @@ module ACD
         end
         ""
       end
-
     end
   end
 end

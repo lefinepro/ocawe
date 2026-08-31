@@ -34,4 +34,13 @@ describe OcaweCore::CLI::Main do
     output.includes?("container").should eq(false)
     output.includes?("container do").should eq(false)
   end
+
+  it "supports remote up with a path selector in dry-run mode" do
+    output = CliWorkflowCommandSpec.cli_output("up --remote \\@handle@lefine.pro caws/01-simple --dry-run")
+    output.includes?("ActivityPub dry-run").should eq(true)
+    output.includes?("project.tar.zst").should eq(true)
+    output.includes?("Profile: https://lefine.pro/actors/handle").should eq(true)
+    output.includes?("Task: https://lefine.pro/actors/ocawe-device/activities/ocawe-task-").should eq(true)
+    output.includes?("ssh").should eq(false)
+  end
 end

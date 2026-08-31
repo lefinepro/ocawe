@@ -379,6 +379,7 @@
           default = pkgs.mkShell {
             packages = [
               pkgs.crystal
+              pkgs.patchelf
               pkgs.pkg-config
               pkgs.shards
             ];

@@ -5,6 +5,9 @@ module ACD
       # The legacy `/v1/...` surface remains mounted by `ocawe up`.
       private def mount_start_runtime_endpoints
         post "/run" do |env|
+          if auth_error = caw_run_auth_error(env)
+            next auth_error
+          end
           body = json_body(env)
           workflow_id = body["workflow_id"]?.try(&.as_s?)
           unless workflow_id && !workflow_id.strip.empty?
@@ -15,6 +18,9 @@ module ACD
         end
 
         post "/stop/:id" do |env|
+          if auth_error = caw_run_auth_error(env)
+            next auth_error
+          end
           body = json_body(env)
           workflow_id = body["workflow_id"]?.try(&.as_s?)
           unless workflow_id && !workflow_id.strip.empty?
@@ -31,6 +37,9 @@ module ACD
         end
 
         get "/metrics" do |env|
+          if auth_error = caw_run_auth_error(env)
+            next auth_error
+          end
           env.response.content_type = "application/json"
           {
             "metrics" => Ocawe::Telemetry.metrics_snapshot.map do |point|

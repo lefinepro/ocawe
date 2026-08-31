@@ -50,7 +50,7 @@ module OcaweCore
           Commands:
             build [--release] [--static] [--output PATH]
                 Build runtime binary.
-            build SERVICE --remote HOST [--manager NAME] [--deploy --namespace NAME]
+            build [SERVICE|PATH] --remote HOST [--manager NAME] [--deploy --namespace NAME]
                 Build a workflow project remotely, promote its runtime/image, and optionally deploy it.
             dev [PATH] [-d] [--port N] [--log-level LEVEL]
                 Build a development runtime and start server with live reload.
@@ -60,6 +60,9 @@ module OcaweCore
                 PATH: optional workflow directory (default: current directory)
                 -d/--detach: run in background
                 --log-level: debug, warning, or critical (default: warning)
+            up --remote @HANDLE@DOMAIN [PATH] [--actor ACTOR_URL]
+                Send the Cawfile as an ActivityPub task to the profile and run it there.
+                PATH defaults to the current directory; delivery uses ActivityPub, not SSH.
             start [PATH] [-d] [--port N] [--log-level LEVEL]
                 Build/update the Cawfile runtime and start the optimized runtime API.
                 PATH: optional workflow directory (default: current directory)

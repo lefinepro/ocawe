@@ -23,7 +23,12 @@ module OcaweCore
 
       def build(service : String, options : Options) : Bool
         workflow_root = resolve_service(service)
-        safe_service = sanitize(service)
+        ssh_host = ssh_target(options.host)
+        # A path such as `.` is a valid local workflow selector but is not a
+        # valid container/image name. Use the resolved bundle directory so
+        # `ocawe build --remote HOST .` follows the same service naming
+        # convention as named Sireng pipelines.
+        safe_service = sanitize(File.basename(workflow_root))
 
         # Do not use a shared `/tmp/context`: another build (or a previous
         # sandbox invocation) may own it or leave it read-only.  A private
@@ -42,14 +47,14 @@ module OcaweCore
           image = "ocawe/#{safe_service}:#{hash}"
           remote_archive = "/tmp/ocawe-#{safe_service}-#{hash}.tar.gz"
 
-          puts "[ocawe] remote service=#{safe_service} host=#{options.host} hash=#{hash}"
+          puts "[ocawe] remote service=#{safe_service} host=#{ssh_host} hash=#{hash}"
           puts "[ocawe] remote image=#{image}"
           if options.dry_run
-            puts "[ocawe] dry-run: would upload #{archive} to #{options.host}:#{remote_archive}"
+            puts "[ocawe] dry-run: would upload #{archive} to #{ssh_host}:#{remote_archive}"
             return true
           end
 
-          run!("scp", ["-F", "/dev/null", "-o", "StrictHostKeyChecking=no", archive, "#{options.host}:#{remote_archive}"])
+          run!("scp", ["-F", "/dev/null", "-o", "StrictHostKeyChecking=no", archive, "#{ssh_host}:#{remote_archive}"])
           run_remote(options, safe_service, hash, image, remote_archive)
         ensure
           FileUtils.rm_rf(tmp)
@@ -180,10 +185,17 @@ module OcaweCore
         # builds deterministic and within the host memory budget.
         RUN cd /src/ocawe \\
           && mkdir -p /out \\
-          && nix develop . --command crystal build /src/workflow/build/runtime_entry.cr --threads 1 --release --no-debug -o /out/#{runtime_name}
+          && nix --extra-experimental-features 'nix-command flakes' develop . --command sh -c 'crystal build /src/workflow/build/runtime_entry.cr --threads 1 --release --no-debug -o /out/#{runtime_name} && patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 /out/#{runtime_name}'
 
         FROM ${BASE_IMAGE}
         WORKDIR /workflows/#{service}
+        # The compiled Ocawe runtime links against SQLite, while the public
+        # Crystal base image does not ship the runtime library. Without this
+        # package the container reports the misleading "no such file or
+        # directory" error when launching the otherwise present binary.
+        RUN apt-get update \
+          && apt-get install -y --no-install-recommends libsqlite3-0 \
+          && rm -rf /var/lib/apt/lists/*
         COPY --from=build /out/#{runtime_name} /runtime/#{runtime_name}
         COPY workflow/Cawfile /workflows/#{service}/Cawfile
         COPY workflow/plugins /workflows/#{service}/plugins
@@ -194,12 +206,12 @@ module OcaweCore
 
       private def run_remote(options : Options, service : String, hash : String, image : String, remote_archive : String) : Nil
         script = remote_script
-        args = ["-F", "/dev/null", "-o", "StrictHostKeyChecking=no", options.host, "bash", "-s", "--", service, hash, image, remote_archive, options.manager, options.base_image, options.runtime_root, options.deploy ? "1" : "0", options.namespace]
+        args = ["-F", "/dev/null", "-o", "StrictHostKeyChecking=no", ssh_target(options.host), "bash", "-s", "--", service, hash, image, remote_archive, options.manager, options.base_image, options.runtime_root, options.deploy ? "1" : "0", options.namespace]
         status = Process.run("ssh", args: args, input: IO::Memory.new(script), output: Process::Redirect::Inherit, error: Process::Redirect::Inherit)
         raise "remote build command exited with status #{status.exit_code}" unless status.success?
       end
 
-      private def remote_script : String
+      protected def remote_script : String
         <<-SCRIPT
         set -euo pipefail
         service="$1"
@@ -216,6 +228,16 @@ module OcaweCore
         build_root="/tmp/ocawe-builds/${service}/${hash}"
         version_root="${service_root}/${hash}"
         store_metadata="${service_root}/current.json"
+
+        # Multiple deploy invocations for the same content-addressed build
+        # must share the cache entry rather than creating the same extraction
+        # container concurrently.  The lock is deliberately outside the
+        # build directory because the directory is also used as the cache.
+        lock_file="/tmp/ocawe-${service}-${hash}.lock"
+        exec 9>"$lock_file"
+        if command -v flock >/dev/null 2>&1; then
+          flock 9
+        fi
 
         if [ "$(id -u)" -eq 0 ]; then
           sudo_cmd=()
@@ -331,33 +353,88 @@ module OcaweCore
           else
             kubectl_cmd=(sudo -n kubectl)
           fi
-          if [ -f "$build_root/context/workflow/Cawfile" ]; then
-            "${kubectl_cmd[@]}" "${kubectl_args[@]}" create configmap "${service}-workflow" \
-              --from-file="Cawfile=$build_root/context/workflow/Cawfile" \
-              --dry-run=client -o yaml | "${kubectl_cmd[@]}" "${kubectl_args[@]}" apply -f -
-          fi
-          if [ -d "$build_root/context/workflow/plugins" ]; then
-            plugin_args=()
-            while IFS= read -r -d '' plugin_file; do
-              plugin_name="$(basename "$plugin_file")"
-              plugin_args+=("--from-file=${plugin_name}=${plugin_file}")
-            done < <(find "$build_root/context/workflow/plugins" -type f -print0 | sort -z)
-            if [ "${#plugin_args[@]}" -gt 0 ]; then
-              "${kubectl_cmd[@]}" "${kubectl_args[@]}" create configmap "${service}-plugins" \
-                "${plugin_args[@]}" \
-              --dry-run=client -o yaml | "${kubectl_cmd[@]}" "${kubectl_args[@]}" apply -f -
+          addon_manifest="/var/lib/rancher/k3s/server/manifests/ocawe-${service}.yaml"
+          if [ -f "$addon_manifest" ]; then
+            # K3s addons reconcile their manifest after every apply/restart. A
+            # live Deployment patch alone therefore regresses to the old
+            # workflow, image, and legacy runtime mount. Keep the addon file
+            # as the source of truth whenever this service is addon-managed.
+            command -v jq >/dev/null 2>&1 || {
+              echo "[ocawe] addon-managed deploy requires jq on the remote host" >&2
+              exit 1
+            }
+            cawfile="$build_root/context/workflow/Cawfile"
+            plugin_data='{}'
+            if [ -d "$build_root/context/workflow/plugins" ]; then
+              while IFS= read -r -d '' plugin_file; do
+                plugin_name="$(basename "$plugin_file")"
+                plugin_content="$(jq -Rs . < "$plugin_file")"
+                plugin_data="$(jq --arg name "$plugin_name" --argjson content "$plugin_content" '. + {($name): $content}' <<<"$plugin_data")"
+              done < <(find "$build_root/context/workflow/plugins" -type f -print0 | sort -z)
             fi
+            addon_tmp="${addon_manifest}.tmp.$$"
+            run_privileged jq \
+              --arg service "$service" \
+              --arg image "$image" \
+              --arg runtime_name "$runtime_name" \
+              --arg workflow_hash "$hash" \
+              --rawfile cawfile "$cawfile" \
+              --argjson plugin_data "$plugin_data" \
+              '
+                def update_item:
+                  if .kind == "ConfigMap" and .metadata.name == ($service + "-workflow") then
+                    .data.Cawfile = $cawfile
+                  elif .kind == "ConfigMap" and .metadata.name == ($service + "-plugins") then
+                    .data = $plugin_data
+                  elif .kind == "Deployment" and .metadata.name == $service then
+                    .spec.template.metadata.annotations["sireng.io/workflow-hash"] = $workflow_hash
+                    | .spec.template.spec.containers = (.spec.template.spec.containers | map(
+                        if .name == $service then
+                          .image = $image
+                          | .volumeMounts = ((.volumeMounts // []) | map(
+                              select(.mountPath != "/runtime" and .mountPath != ("/runtime/" + $runtime_name))
+                            ))
+                        else . end
+                      ))
+                  else . end;
+                if .kind == "List" then .items |= map(update_item) else update_item end
+              ' "$addon_manifest" | run_privileged tee "$addon_tmp" >/dev/null
+            run_privileged install -m 0644 "$addon_tmp" "$addon_manifest"
+            run_privileged rm -f "$addon_tmp"
+            "${kubectl_cmd[@]}" "${kubectl_args[@]}" apply -f "$addon_manifest"
+          else
+            if [ -f "$build_root/context/workflow/Cawfile" ]; then
+              "${kubectl_cmd[@]}" "${kubectl_args[@]}" create configmap "${service}-workflow" \
+                --from-file="Cawfile=$build_root/context/workflow/Cawfile" \
+                --dry-run=client -o yaml | "${kubectl_cmd[@]}" "${kubectl_args[@]}" apply -f -
+            fi
+            if [ -d "$build_root/context/workflow/plugins" ]; then
+              plugin_args=()
+              while IFS= read -r -d '' plugin_file; do
+                plugin_name="$(basename "$plugin_file")"
+                plugin_args+=("--from-file=${plugin_name}=${plugin_file}")
+              done < <(find "$build_root/context/workflow/plugins" -type f -print0 | sort -z)
+              if [ "${#plugin_args[@]}" -gt 0 ]; then
+                "${kubectl_cmd[@]}" "${kubectl_args[@]}" create configmap "${service}-plugins" \
+                  "${plugin_args[@]}" \
+                --dry-run=client -o yaml | "${kubectl_cmd[@]}" "${kubectl_args[@]}" apply -f -
+              fi
+            fi
+            # Strategic merge keeps project-owned environment variables and
+            # data mounts. Only the legacy host-mounted runtime is removed so
+            # the binary from this exact image remains authoritative.
+            patch_payload=$(printf '{"spec":{"template":{"spec":{"containers":[{"name":"%s","image":"%s","volumeMounts":[{"mountPath":"/workflows/%s/Cawfile","name":"cawfile","subPath":"Cawfile"},{"mountPath":"/workflows/%s/plugins","name":"plugins"},{"mountPath":"/runtime","$patch":"delete"},{"mountPath":"/runtime/%s","$patch":"delete"}]}]}}}}' "$service" "$image" "$service" "$service" "$runtime_name")
+            "${kubectl_cmd[@]}" "${kubectl_args[@]}" patch deployment "$service" --type=strategic -p "$patch_payload"
+            "${kubectl_cmd[@]}" "${kubectl_args[@]}" set image "deployment/$service" "$service=$image"
           fi
-          # Strategic merge keeps project-owned environment variables and data
-          # mounts. Only the legacy host-mounted runtime is removed so the
-          # binary from this exact image remains authoritative.
-          patch_payload=$(printf '{"spec":{"template":{"spec":{"containers":[{"name":"%s","image":"%s","volumeMounts":[{"mountPath":"/workflows/%s/Cawfile","name":"cawfile","subPath":"Cawfile"},{"mountPath":"/workflows/%s/plugins","name":"plugins"},{"mountPath":"/runtime","$patch":"delete"},{"mountPath":"/runtime/%s","$patch":"delete"}]}]}}}}' "$service" "$image" "$service" "$service" "$runtime_name")
-          "${kubectl_cmd[@]}" "${kubectl_args[@]}" patch deployment "$service" --type=strategic -p "$patch_payload"
-          "${kubectl_cmd[@]}" "${kubectl_args[@]}" set image "deployment/$service" "$service=$image"
           "${kubectl_cmd[@]}" "${kubectl_args[@]}" rollout status "deployment/$service" --timeout=180s
           echo "[ocawe] deployed $service to namespace $namespace"
         fi
         SCRIPT
+      end
+
+      private def ssh_target(value : String) : String
+        value.starts_with?("@") ? value[1..] : value
       end
 
       private def runtime_entry_line(line : String, entrypoint_dir : String) : String

@@ -21,6 +21,13 @@ module ACD
       private def start_workflow_run_from_body(env, workflow_id : String, body : Ocawe::Workflow::AnyHash) : String
         input_data = body["input_data"]?.try(&.as_h?) || body["input"]?.try(&.as_h?) || body.dup
         resources = body["resources"]?.try(&.as_h?)
+        uploaded_file_resources = resolve_file_resources(body)
+        unless uploaded_file_resources.empty?
+          resources ||= {} of String => JSON::Any
+          file_resources = resources["files"]?.try(&.as_a?) || [] of JSON::Any
+          file_resources.concat(uploaded_file_resources.map { |resource| JSON.parse(resource.to_json) })
+          resources["files"] = JSON.parse(file_resources.to_json)
+        end
         input_data.delete("resources")
         run_id = body["run_id"]?.try(&.as_s?)
         resource_id = body["resource_id"]?.try(&.as_s?)

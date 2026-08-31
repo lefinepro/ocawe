@@ -10,9 +10,10 @@ module ACD
           workflow_id = body["workflow_id"]?.try(&.as_s?).to_s.strip
           raise "workflow_id is required" if workflow_id.empty?
           label = body["label"]?.try(&.as_s?).to_s.strip
+          requested_token = body["token"]?.try(&.as_s?)
           env.response.status_code = 201
           env.response.content_type = "application/json"
-          Ocawe::ClientApiKeys.create(workflow_id, label).to_json
+          Ocawe::ClientApiKeys.create(workflow_id, label, requested_token).to_json
         rescue ex
           json_error(env, 422, "api_key_error", ex.message || "could not create API key")
         end

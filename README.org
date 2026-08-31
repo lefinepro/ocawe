@@ -209,6 +209,7 @@ build.
 
 #+begin_src bash
 ocawe build planner --remote build-host
+ocawe build --remote build-host .
 ocawe build planner --remote build-host --manager nerdctl
 ocawe build planner --remote build-host --dry-run
 #+end_src
@@ -223,6 +224,29 @@ nix run .#deploy -- planner
 sireng deploy planner
 sireng deploy planner --version <source-hash>
 #+end_src
+
+For the one-command remote workflow path, use =up=. It resolves the target
+ActivityPub profile, packages the selected project as =project.tar.zst=, sends
+it as a ForgeFed task, and lets that profile unpack and run the included
+Cawfile on its server. The path defaults to the current directory:
+
+#+begin_src bash
+nix run github:lefinepro/ocawe -- up --remote @handle@lefine.pro .
+#+end_src
+
+The command returns the target profile and ActivityPub task id:
+
+#+begin_example
+Profile: https://lefine.pro/actors/handle
+Task: https://lefine.pro/actors/ocawe-device/activities/ocawe-task-...
+Status: accepted (202)
+#+end_example
+
+The Cawfile and a local device code are saved with mode 0600 in
+=.ocawe/remote-task.json= after delivery. Remote =up= uses WebFinger and
+ActivityPub; it does not use SSH or create a Kubernetes namespace. The archive
+excludes =.git=, =.env*=, private-key files, dependency caches, and build
+output. Use =--dry-run= to inspect the task and archive size without sending it.
 
 ** Workflow Triggers
 

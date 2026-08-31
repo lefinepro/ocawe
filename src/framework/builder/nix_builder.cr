@@ -257,12 +257,16 @@ module Ocawe
 
         Dir.children(bin_dir).sort.each do |name|
           src = File.join(bin_dir, name)
-          next unless File.exists?(src)
+          next unless File.file?(src) || File.symlink?(src)
 
           dst = File.join(rootfs, "usr", "bin", name)
           Dir.mkdir_p(File.dirname(dst))
           File.delete(dst) if File.exists?(dst) || File.symlink?(dst)
-          File.symlink(src, dst)
+          # The link is resolved inside the generated image, not on the host
+          # that produced the rootfs.  Keep the target rooted at the image's
+          # /nix/store even when the build runs from a different mount.
+          target = File.join("/nix/store", File.basename(package_path), "bin", name)
+          File.symlink(target, dst)
         end
       end
 
