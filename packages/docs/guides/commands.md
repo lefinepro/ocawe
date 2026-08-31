@@ -66,3 +66,26 @@ Mastra-compatible routes are enabled only when the Cawfile declares
 `Api::MastraAPI`. Each start also writes a compressed runtime bundle to
 `build/<workflow-id>.runtime.tar.zst`; the bundle contains `ocawecore`, the
 Cawfile, and workflow assets.
+
+`build` can target a Sireng/Kubernetes host. Remote `up` is an ActivityPub
+task hand-off: it resolves a profile through WebFinger, packages the selected
+project as `project.tar.zst`, sends it as a ForgeFed task, and lets that profile
+unpack and run the included Cawfile on its server:
+
+```bash
+nix run github:lefinepro/ocawe -- up --remote @handle@lefine.pro .
+```
+
+Example output:
+
+```text
+Profile: https://lefine.pro/actors/handle
+Task: https://lefine.pro/actors/ocawe-device/activities/ocawe-task-...
+Status: accepted (202)
+```
+
+The Cawfile and a local device code are saved with mode `0600` in
+`.ocawe/remote-task.json` after delivery. Remote `up` uses WebFinger and
+ActivityPub, not SSH or a Kubernetes namespace. The archive excludes `.git`,
+`.env*`, private-key files, dependency caches, and build output. `--dry-run`
+previews the task and archive size without sending it.

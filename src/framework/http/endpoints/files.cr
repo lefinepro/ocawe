@@ -5,6 +5,9 @@ module ACD
     class App
       private def mount_file_endpoints
         post "/v1/files" do |env|
+          if auth_error = caw_run_auth_error(env)
+            next auth_error
+          end
           filename, purpose, content = parse_file_upload(env)
           file = @file_service.create(filename, content, purpose)
           env.response.status_code = 201
@@ -15,6 +18,9 @@ module ACD
         end
 
         get "/v1/files" do |env|
+          if auth_error = caw_run_auth_error(env)
+            next auth_error
+          end
           env.response.content_type = "application/json"
           {
             "object" => "list",
@@ -23,6 +29,9 @@ module ACD
         end
 
         get "/v1/files/:fileId" do |env|
+          if auth_error = caw_run_auth_error(env)
+            next auth_error
+          end
           file_id = env.params.url["fileId"]
           file = @file_service.get(file_id)
           unless file
@@ -34,6 +43,9 @@ module ACD
         end
 
         get "/v1/files/:fileId/content" do |env|
+          if auth_error = caw_run_auth_error(env)
+            next auth_error
+          end
           file_id = env.params.url["fileId"]
           content = @file_service.content(file_id)
           unless content
@@ -45,6 +57,9 @@ module ACD
         end
 
         delete "/v1/files/:fileId" do |env|
+          if auth_error = caw_run_auth_error(env)
+            next auth_error
+          end
           file_id = env.params.url["fileId"]
           deleted = @file_service.delete(file_id)
           unless deleted

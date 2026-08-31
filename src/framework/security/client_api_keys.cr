@@ -31,13 +31,33 @@ module Ocawe
       value.to_s.downcase.in?("1", "true", "yes")
     end
 
-    def create(workflow_id : String, label : String = "") : AnyHash
+    def create(workflow_id : String, label : String = "", requested_token : String? = nil) : AnyHash
       ensure_schema
       id = "key_#{Random::Secure.hex(12)}"
-      token = "#{PREFIX}#{Random::Secure.hex(32)}"
+      token = requested_token.to_s.strip
+      token = "#{PREFIX}#{Random::Secure.hex(32)}" if token.empty?
+      validate_token!(token) if requested_token
       now = Time.utc.to_rfc3339
       db = PG.connect(dsn)
       begin
+        if requested_token
+          existing = db.query_one?(
+            "SELECT id, label, active, created_at::text FROM ocawe_api_keys WHERE workflow_id = $1 AND token_hash = $2 AND active = TRUE LIMIT 1",
+            workflow_id,
+            token_hash(token),
+            as: {String, String, Bool, String},
+          )
+          if existing
+            return {
+              "id"          => json(existing[0]),
+              "workflow_id" => json(workflow_id),
+              "label"       => json(existing[1]),
+              "active"      => json(existing[2]),
+              "created_at"  => json(existing[3]),
+              "token"       => json(token),
+            }
+          end
+        end
         db.exec(<<-SQL, id, workflow_id, label, token_hash(token), now)
           INSERT INTO ocawe_api_keys
             (id, workflow_id, label, token_hash, active, created_at, updated_at)
@@ -54,6 +74,12 @@ module Ocawe
         "created_at"  => json(now),
         "token"       => json(token),
       }
+    end
+
+    private def validate_token!(token : String) : Nil
+      unless token.starts_with?(PREFIX) && token.size <= 256 && token.matches?(/\A[A-Za-z0-9_-]+\z/)
+        raise "API key must use the lf- prefix and contain only URL-safe characters"
+      end
     end
 
     def list(workflow_id : String? = nil) : Array(JSON::Any)

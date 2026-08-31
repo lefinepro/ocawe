@@ -82,7 +82,6 @@ module ACD
 
       private def unsigned_registered_inbox_response(env) : String?
         return nil if inbox_signature_verification_required?
-        return nil unless Ocawe::Workflow.function_registry.registered?("ocawe_handle_aptok_inbox_activity")
 
         raw = env.request.body.try(&.gets_to_end).to_s
         activity = JSON.parse(raw).as_h
@@ -97,6 +96,12 @@ module ACD
           return {"handled" => true, "status" => "accepted"}.to_json
         end
         result = process_registered_aptok_inbox_result(activity)
+        if result.nil?
+          # Built-in ForgeFed ticket routing is available even when a workflow
+          # does not register a custom inbox function (the executor does this).
+          process_aptok_inbox_activity(activity)
+          result = {"handled" => JSON.parse("true")}
+        end
         handled = result.try(&.["handled"]?).try(&.as_bool?) || false
 
         env.response.status_code = handled ? 202 : 204

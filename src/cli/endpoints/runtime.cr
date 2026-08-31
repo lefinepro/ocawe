@@ -4,6 +4,7 @@ require "../../framework/discovery/cawfile_loader"
 require "../../framework/discovery/git_https_puller"
 require "../../framework/builder"
 require "../remote_builder"
+require "../remote_runner"
 
 module OcaweCore
   module CLI
@@ -182,7 +183,49 @@ module OcaweCore
       end
 
       private def up(args : Array(String)) : Nil
+        if remote_option?(args)
+          up_remote(args)
+          return
+        end
         run_server(args, dev_mode: false)
+      end
+
+      private def up_remote(args : Array(String)) : Nil
+        profile = nil.as(String?)
+        actor = ENV["OCAWE_FEDERATION_LOCAL_ACTOR"]?.to_s
+        actor = "https://lefine.pro/actors/ocawe-device" if actor.empty?
+        dry_run = false
+
+        OptionParser.parse(args) do |parser|
+          parser.on("--remote @HANDLE@DOMAIN", "Send the Cawfile as an ActivityPub task to a profile") { |value| profile = value }
+          parser.on("--actor ACTOR_URL", "ActivityPub sender actor URL") { |value| actor = value }
+          parser.on("--dry-run", "Show the ActivityPub task without sending it") { dry_run = true }
+        end
+
+        unless profile
+          STDERR.puts "Error: ocawe up --remote requires @HANDLE@DOMAIN"
+          exit(1)
+        end
+
+        service = args.shift? || "."
+        unless args.empty?
+          STDERR.puts "Error: unexpected arguments: #{args.join(" ")}"
+          exit(1)
+        end
+
+        ok = RemoteRunner.new(project_root).up(
+          service,
+          RemoteRunner::Options.new(
+            profile: profile.not_nil!,
+            actor: actor,
+            dry_run: dry_run,
+          )
+        )
+        exit(1) unless ok
+      end
+
+      private def remote_option?(args : Array(String)) : Bool
+        args.any? { |arg| arg == "--remote" || arg.starts_with?("--remote=") }
       end
 
       private def start(args : Array(String)) : Nil

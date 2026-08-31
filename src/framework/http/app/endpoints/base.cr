@@ -98,6 +98,7 @@ module ACD
         mount_docs_endpoints
         if @start_mode
           mount_start_runtime_endpoints
+          mount_file_endpoints
           mount_compat_endpoints if mastra_api_enabled?
         elsif !@settings.api.federation_only?
           mount_workflow_endpoints
