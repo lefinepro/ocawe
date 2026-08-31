@@ -437,7 +437,7 @@ module ACD
           error: Process::Redirect::Close
         )
         raise "tar could not inspect the received project" unless tar_status.success?
-        listing.to_s.lines.each do |entry|
+        listing.to_s.each_line do |entry|
           path = entry.strip.rstrip("/")
           parts = path.split("/")
           raise "received project archive contains an unsafe path" if path.starts_with?("/") || parts.includes?("..")
