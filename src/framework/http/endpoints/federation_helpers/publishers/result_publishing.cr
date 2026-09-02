@@ -114,7 +114,11 @@ module ACD
       end
 
       private def add_lefine_task_result_fields(activity : Hash(String, JSON::Any), ticket : Hash(String, JSON::Any), status : String) : Nil
-        task_ref = ticket["taskRef"]?.try(&.as_s?) || ticket["task_ref"]?.try(&.as_s?) || ""
+        task_ref = pick_first_non_empty(
+          ticket["taskRef"]?.try(&.as_s?),
+          ticket["task_ref"]?.try(&.as_s?),
+          ticket_attachment_value(ticket, "taskRef"),
+        )
         return if task_ref.empty?
 
         object = activity["object"]?.try(&.as_h?)
@@ -136,6 +140,7 @@ module ACD
 
         headers = ::HTTP::Headers{"Content-Type" => "application/activity+json"}
         response = ::HTTP::Client.post(inbox, headers: headers, body: activity.to_json)
+        STDERR.puts "[federation] lefine result delivered inbox=#{inbox} status=#{response.status_code}"
         unless response.status_code >= 200 && response.status_code < 300
           STDERR.puts "[federation] lefine result delivery failed HTTP #{response.status_code}: #{response.body}"
         end

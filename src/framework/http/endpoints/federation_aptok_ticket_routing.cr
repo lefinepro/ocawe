@@ -2,7 +2,7 @@ module ACD
   module Kemal
     class App
       private def process_aptok_inbox_activity(activity : Aptok::JsonMap) : Bool
-        return true if process_registered_aptok_inbox_activity(activity)
+        return true if !lefine_plan_solver_only? && process_registered_aptok_inbox_activity(activity)
 
         remote_actor = activity["actor"]?.try(&.as_s?).to_s
         follow = if remote_actor.empty?
@@ -56,8 +56,36 @@ module ACD
         ticket_payload = extract_ticket_activity_payload(activity)
         STDERR.puts "[federation] inbox activity ignored: no ticket payload type=#{activity_type}" unless ticket_payload
         return false unless ticket_payload
+        if lefine_plan_solver_only? && !lefine_plan_ticket?(ticket_payload[:ticket])
+          STDERR.puts "[federation] inbox activity skipped: non-lefine-plan ticket"
+          return true
+        end
 
         process_ticket_create_activity(follow, activity, ticket_payload[:ticket], ticket_payload[:activity_type])
+      end
+
+      private def lefine_plan_solver_only? : Bool
+        ENV["OCAWE_LEFINE_PLAN_SOLVER_ONLY"]?.to_s.downcase.in?({"1", "true", "yes"})
+      end
+
+      private def lefine_plan_ticket?(ticket : Hash(String, JSON::Any)) : Bool
+        return true if ticket["taskRef"]?.try(&.as_s?).to_s.starts_with?("task/")
+        return true if ticket["activity"]?.try(&.as_s?).to_s == "plan"
+        ticket_attachment_value(ticket, "command") == "#plan"
+      end
+
+      private def ticket_attachment_value(ticket : Hash(String, JSON::Any), name : String) : String
+        attachment = ticket["attachment"]?
+        if attachment_hash = attachment.try(&.as_h?)
+          return attachment_hash["value"]?.try(&.as_s?).to_s if attachment_hash["name"]?.try(&.as_s?).to_s == name
+        end
+
+        attachments = attachment.try(&.as_a?) || [] of JSON::Any
+        attachments.each do |entry|
+          next unless entry_hash = entry.as_h?
+          return entry_hash["value"]?.try(&.as_s?).to_s if entry_hash["name"]?.try(&.as_s?).to_s == name
+        end
+        ""
       end
 
       private def normalize_federation_activity(raw : String?) : String
@@ -91,9 +119,11 @@ module ACD
       private def extract_ticket_activity_payload(activity : Hash(String, JSON::Any)) : NamedTuple(activity_type: String, ticket: Hash(String, JSON::Any))?
         activity_type = activity["type"]?.try(&.as_s?).to_s.strip
         return {activity_type: activity_type, ticket: activity} if activity_type == "Ticket"
+        return {activity_type: activity_type, ticket: activity} if activity_type == "Proposal"
         return nil unless activity_type == "Create" || activity_type == "Offer"
         ticket = activity["object"]?.try(&.as_h?) || {} of String => JSON::Any
-        return nil unless ticket["type"]?.try(&.as_s?).to_s.strip.downcase == "ticket"
+        object_type = ticket["type"]?.try(&.as_s?).to_s.strip.downcase
+        return nil unless object_type == "ticket" || object_type == "proposal"
         {activity_type: activity_type, ticket: ticket}
       end
 
@@ -220,6 +250,7 @@ module ACD
         } of String => JSON::Any
 
         if @scheduler.enabled?
+          STDERR.puts "[federation] enqueue workflow=#{workflow_id} ticket=#{ticket_id}"
           @scheduler.enqueue(
             Ocawe::Workflow::Scheduler::Job.new(
               workflow_id: workflow_id,
@@ -230,6 +261,7 @@ module ACD
           return true
         end
 
+        STDERR.puts "[federation] start workflow=#{workflow_id} ticket=#{ticket_id}"
         run_result = @workflow_service.start_run(workflow_id, input_data: input_data)
         run_output = run_result.output || {} of String => JSON::Any
         publish_result_activity_from_output(
@@ -249,6 +281,38 @@ module ACD
         STDERR.puts "[federation] ticket activity processing failed: #{ex.message || ex.class.name}"
         ex.backtrace?.try(&.each { |line| STDERR.puts line })
         false
+      end
+
+      private def normalize_ticket_result_inbox!(ticket : Hash(String, JSON::Any), follow : Hash(String, JSON::Any)) : Nil
+        remote_inbox = follow["remote_inbox"]?.try(&.as_s?).to_s
+        return if remote_inbox.empty?
+
+        attachment = ticket["attachment"]?
+        if attachment_hash = attachment.try(&.as_h?)
+          normalize_result_inbox_attachment!(attachment_hash, remote_inbox)
+          return
+        end
+
+        attachments = attachment.try(&.as_a?) || [] of JSON::Any
+        attachments.each do |entry|
+          next unless entry_hash = entry.as_h?
+          normalize_result_inbox_attachment!(entry_hash, remote_inbox)
+        end
+      end
+
+      private def normalize_result_inbox_attachment!(entry : Hash(String, JSON::Any), remote_inbox : String) : Nil
+        return unless entry["name"]?.try(&.as_s?).to_s == "resultInbox"
+        raw = entry["href"]?.try(&.as_s?) || entry["value"]?.try(&.as_s?) || ""
+        return if raw.empty?
+
+        rewritten = rewrite_endpoint_origin(raw, remote_inbox)
+        return if rewritten.empty? || rewritten == raw
+
+        if entry.has_key?("href")
+          entry["href"] = JSON.parse(rewritten.to_json)
+        else
+          entry["value"] = JSON.parse(rewritten.to_json)
+        end
       end
 
       private def workflow_id_from_actor(actor : String) : String

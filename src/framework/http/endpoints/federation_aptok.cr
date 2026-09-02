@@ -128,6 +128,10 @@ module ACD
         env.request.headers.each do |key, values|
           headers[key] = values.join(", ")
         end
+        accept = headers["Accept"]?
+        if accept.nil? || accept.to_s.strip.empty? || accept.to_s.includes?("*/*")
+          headers["Accept"] = "application/activity+json, application/ld+json, application/json"
+        end
 
         Aptok::Request.new(
           env.request.method,

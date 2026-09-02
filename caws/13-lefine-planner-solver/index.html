@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lefine Marketplace</title>
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="topbar" aria-label="Marketplace navigation">
+        <a class="brand" href="#" aria-label="Lefine Marketplace home">
+          <span aria-hidden="true">L</span>
+          Lefine
+        </a>
+        <div class="nav-links" aria-label="Primary">
+          <a href="#collections">Collections</a>
+          <a href="#products">Products</a>
+          <a href="#orders">Orders</a>
+        </div>
+        <button class="icon-button" type="button" aria-label="Open cart">Bag</button>
+      </nav>
+
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Curated workflow marketplace</p>
+          <h1>Lefine Marketplace</h1>
+          <p class="lede">
+            Browse vetted solver packs, planning templates, and automation kits for faster operational workflows.
+          </p>
+          <form class="search-panel" aria-label="Search marketplace">
+            <label for="market-search">Search catalog</label>
+            <div>
+              <input id="market-search" type="search" placeholder="Search templates, solvers, integrations" />
+              <button type="submit">Search</button>
+            </div>
+          </form>
+        </div>
+
+        <aside class="deal-panel" aria-label="Featured marketplace item">
+          <img
+            src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80"
+            alt="Laptop showing a workflow dashboard"
+          />
+          <div>
+            <p>Featured Kit</p>
+            <h2>Planner Pro Bundle</h2>
+            <span>$49</span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="content-grid" id="collections">
+        <aside class="filters" aria-label="Marketplace filters">
+          <h2>Categories</h2>
+          <button type="button" class="active">All</button>
+          <button type="button">Planner packs</button>
+          <button type="button">Solver tools</button>
+          <button type="button">Dashboards</button>
+          <button type="button">Integrations</button>
+        </aside>
+
+        <section class="catalog" id="products">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Popular now</p>
+              <h2>Marketplace picks</h2>
+            </div>
+            <button type="button" class="text-button">View all</button>
+          </div>
+
+          <div class="product-grid">
+            <article class="product-card">
+              <img
+                src="https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=700&q=80"
+                alt="Team reviewing workflow boards"
+              />
+              <div>
+                <p>Template</p>
+                <h3>Launch Planner</h3>
+                <span>$18</span>
+              </div>
+              <button type="button">Add</button>
+            </article>
+            <article class="product-card">
+              <img
+                src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=700&q=80"
+                alt="Server racks for automation infrastructure"
+              />
+              <div>
+                <p>Solver</p>
+                <h3>Ops Runner</h3>
+                <span>$32</span>
+              </div>
+              <button type="button">Add</button>
+            </article>
+            <article class="product-card">
+              <img
+                src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=700&q=80"
+                alt="Analytics dashboard on a desktop screen"
+              />
+              <div>
+                <p>Dashboard</p>
+                <h3>Review Console</h3>
+                <span>$24</span>
+              </div>
+              <button type="button">Add</button>
+            </article>
+            <article class="product-card">
+              <img
+                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=700&q=80"
+                alt="Data charts on a monitor"
+              />
+              <div>
+                <p>Integration</p>
+                <h3>Registry Sync</h3>
+                <span>$15</span>
+              </div>
+              <button type="button">Add</button>
+            </article>
+          </div>
+        </section>
+
+        <aside class="order-summary" id="orders" aria-label="Order summary">
+          <h2>Order Summary</h2>
+          <div class="summary-line">
+            <span>Planner Pro Bundle</span>
+            <strong>$49</strong>
+          </div>
+          <div class="summary-line">
+            <span>Registry Sync</span>
+            <strong>$15</strong>
+          </div>
+          <div class="summary-total">
+            <span>Total</span>
+            <strong>$64</strong>
+          </div>
+          <button type="button">Checkout</button>
+        </aside>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

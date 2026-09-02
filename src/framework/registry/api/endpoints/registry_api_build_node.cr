@@ -58,9 +58,14 @@ module Ocawe
         metadata["workspace"] = JSON.parse(workspace.to_json) if workspace
 
         executor = Ocawe::Workflow::ExecExecutor.new
-        return WorkflowNode.new(id, NodeKind::Exec, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
-          WorkflowNodeResult.continue(executor.exec(id, ctx, runtime: runtime, env: env, workflow_root: workflow_root))
+        node = nil.as(WorkflowNode?)
+        node = WorkflowNode.new(id, NodeKind::Exec, metadata: metadata, input_schema: input_schema, output_schema: output_schema) do |ctx|
+          STDERR.flush
+          effective_workspace = node.try(&.metadata).try(&.["workspace"]?).try(&.as_h?)
+          STDERR.flush
+          WorkflowNodeResult.continue(executor.exec(id, ctx, runtime: runtime, env: env, workflow_root: workflow_root, workspace: effective_workspace))
         end
+        node.not_nil!
       when "agent"
         metadata = {} of String => JSON::Any
         metadata["has_resume_schema"] = JSON.parse(true.to_json) if resume_schema

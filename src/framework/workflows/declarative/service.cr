@@ -13,9 +13,11 @@ module Ocawe
         request_context : AnyHash? = nil,
         output_options : WorkflowOutputOptions = WorkflowOutputOptions.new,
         runtime_context : AnyHash? = nil,
-        trigger_data : AnyHash? = nil
+        trigger_data : AnyHash? = nil,
       )
+        STDERR.flush
         run = @engine.create_run(workflow_id, WorkflowRunOptions.new(run_id, resource_id))
+        STDERR.flush
         result = run.start(
           input_data: input_data,
           resources: resources,
@@ -24,6 +26,7 @@ module Ocawe
           runtime_context: runtime_context,
           trigger_data: trigger_data,
         )
+        STDERR.flush
         @engine.persist(run.get_current_run)
         result
       end
@@ -38,7 +41,7 @@ module Ocawe
         output_options : WorkflowOutputOptions = WorkflowOutputOptions.new,
         runtime_context : AnyHash? = nil,
         trigger_data : AnyHash? = nil,
-        wait_for_all_paths : Bool = false
+        wait_for_all_paths : Bool = false,
       )
         run = hydrate_run(workflow_id, run_id)
         result = run.resume(
@@ -81,7 +84,7 @@ module Ocawe
         request_context : AnyHash? = nil,
         output_options : WorkflowOutputOptions = WorkflowOutputOptions.new,
         trigger_data : AnyHash? = nil,
-        runtime_context : AnyHash? = nil
+        runtime_context : AnyHash? = nil,
       )
         run = hydrate_run(workflow_id, run_id)
         result = run.time_travel(
@@ -107,7 +110,7 @@ module Ocawe
         output_options : WorkflowOutputOptions = WorkflowOutputOptions.new,
         request_context : AnyHash? = nil,
         trigger_data : AnyHash? = nil,
-        runtime_context : AnyHash? = nil
+        runtime_context : AnyHash? = nil,
       )
         run = hydrate_run(workflow_id, run_id)
         events = run.watch(

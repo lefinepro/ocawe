@@ -19,6 +19,7 @@ module ACD
           i += 1
 
           next if line.empty? || line.starts_with?("#")
+          next if line.match(/^follow\s+\[/)
           next if line == "end"
 
           # Parse agent nodes inside while block

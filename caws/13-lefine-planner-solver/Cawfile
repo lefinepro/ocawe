@@ -9,7 +9,7 @@ settings do
   port = 4111
 
   federation do
-    auto_subscribe = ["http://fmatch:7277/actor/planner"]
+    auto_subscribe = ["https://lefine.pro/actors/planner"]
     s2s_poll_interval_seconds = 15
     s2s_http_timeout_seconds = 20
     signatures_required = false
@@ -17,7 +17,7 @@ settings do
   end
 
   scheduler do
-    enabled = true
+    enabled = false
     min_workers = 0
     max_workers = 1
     target_queue_depth = 1
@@ -25,7 +25,7 @@ settings do
 end
 
 container do
-  packages = ["codex", "git", "curl", "jq"]
+  packages = ["git", "curl", "jq"]
   files = ["."]
 end
 
@@ -44,5 +44,6 @@ end
 #+tags: codex; coder; planner
 @[Validate(Input, Output)]
 workflow "coder" do
-  exec "tools/lefine_codex_solver.sh", runtime: {shell: "bash"}
+  @[Workspace(path: "/workspace/ocawe/caws/13-lefine-planner-solver", host_path: "/opt/lefine-planner-solver/workflows", write_policy: "write")]
+  exec "codex-acp", runtime: {acp: {command: "/opt/solver-tools/codex-acp-adapter.sh"}, placement: {mode: "container", image: "executor:latest", entrypoint: "/opt/solver-tools/codex-acp-adapter.sh", tool: "/run/current-system/sw/bin/nerdctl", tool_args: ["--address", "unix:///run/containerd/containerd.sock"], network: "host", mounts: [{host: "/opt/lefine-planner-solver/workflows", target: "/workspace/ocawe/caws/13-lefine-planner-solver"}, {host: "/nix/store", target: "/nix/store", mode: "ro"}, {host: "/run/current-system", target: "/run/current-system", mode: "ro"}, {host: "/root/.codex-acp", target: "/root/.codex"}, {host: "/root/.nix-profile", target: "/root/.nix-profile", mode: "ro"}, {host: "/opt/solver-tools", target: "/opt/solver-tools", mode: "ro"}, {host: "/etc/ssl/certs", target: "/etc/ssl/certs", mode: "ro"}, {host: "/etc/static/ssl/certs", target: "/etc/static/ssl/certs", mode: "ro"}], env: {CODEX_HOME: "/root/.codex", PATH: "/run/current-system/sw/bin:/usr/bin:/bin:/opt/solver-tools", SSL_CERT_FILE: "/etc/static/ssl/certs/ca-bundle.crt"}, inherit_env: ["OPENAI_API_KEY", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]}}
 end

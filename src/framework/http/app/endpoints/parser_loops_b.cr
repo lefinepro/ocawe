@@ -11,6 +11,7 @@ module ACD
           i += 1
 
           next if line.empty? || line.starts_with?("#")
+          next if line.match(/^follow\s+\[/)
           next if line == "end"
 
           if match = line.match(/^\s*agent\s+"([^"]+)"(.*)$/)
@@ -138,7 +139,7 @@ module ACD
         voice_config : Ocawe::Workflow::AnyHash? = nil,
         guardrails_config : Ocawe::Workflow::AnyHash? = nil,
         input_schema : Ocawe::Workflows::DSL::Validator? = nil,
-        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil,
       ) : Ocawe::Workflow::WorkflowNode
         builder = Ocawe::Workflow::WorkflowDefinition.new("__registry_builder__")
         Ocawe::RegistryApi.build_node(
@@ -162,7 +163,7 @@ module ACD
         attributes : Ocawe::Workflow::AnyHash? = nil,
         input_schema : Ocawe::Workflows::DSL::Validator? = nil,
         output_schema : Ocawe::Workflows::DSL::Validator? = nil,
-        workflow_root : String? = nil
+        workflow_root : String? = nil,
       ) : Ocawe::Workflow::WorkflowNode
         raise "exec requires runtime for non-mcp refs: #{ref}" if runtime.nil? && !ref.starts_with?("mcp:")
 
@@ -184,7 +185,7 @@ module ACD
         method : String,
         url : String,
         attributes : Hash(String, String),
-        workflow_file : String
+        workflow_file : String,
       ) : Ocawe::Workflow::WorkflowNode
         config = {
           "method" => JSON.parse(method.upcase.to_json),
@@ -213,7 +214,7 @@ module ACD
         id : String,
         attributes : Ocawe::Workflow::AnyHash? = nil,
         input_schema : Ocawe::Workflows::DSL::Validator? = nil,
-        output_schema : Ocawe::Workflows::DSL::Validator? = nil
+        output_schema : Ocawe::Workflows::DSL::Validator? = nil,
       ) : Ocawe::Workflow::WorkflowNode
         builder = Ocawe::Workflow::WorkflowDefinition.new("__registry_builder__")
         Ocawe::RegistryApi.build_node(

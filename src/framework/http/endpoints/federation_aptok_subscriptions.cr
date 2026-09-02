@@ -29,21 +29,31 @@ module ACD
         end
         actor_doc ||= Aptok::JsonMap.new
         remote_actor = actor_doc["id"]?.try(&.as_s?) || target.remote_actor
-        remote_outbox = actor_doc["outbox"]?.try(&.as_s?).to_s
-        remote_inbox = actor_doc["inbox"]?.try(&.as_s?).to_s
-        remote_outbox = infer_activitypub_peer_endpoint(remote_actor, "outbox") if remote_outbox.empty?
-        remote_inbox = infer_activitypub_peer_endpoint(remote_actor, "inbox") if remote_inbox.empty?
+        remote_outbox = subscription_endpoint(
+          actor_doc["outbox"]?.try(&.as_s?).to_s,
+          target.remote_actor,
+          remote_actor,
+          "outbox"
+        )
+        remote_inbox = subscription_endpoint(
+          actor_doc["inbox"]?.try(&.as_s?).to_s,
+          target.remote_actor,
+          remote_actor,
+          "inbox"
+        )
         key = "ocawe:federation:follow:#{remote_actor}"
 
         if existing = @federation_kv.get(key).try { |raw| JSON.parse(raw).as_h }
           status = existing["status"]?.try(&.as_s?).to_s
           if status == "active" || status == "following"
             refreshed = false
-            if existing["remote_outbox"]?.try(&.as_s?).to_s.empty? && !remote_outbox.empty?
+            existing_outbox = existing["remote_outbox"]?.try(&.as_s?).to_s
+            existing_inbox = existing["remote_inbox"]?.try(&.as_s?).to_s
+            if should_replace_subscription_endpoint?(existing_outbox, target.remote_actor, remote_actor, "outbox") && !remote_outbox.empty?
               existing["remote_outbox"] = Aptok.json(remote_outbox)
               refreshed = true
             end
-            if existing["remote_inbox"]?.try(&.as_s?).to_s.empty? && !remote_inbox.empty?
+            if should_replace_subscription_endpoint?(existing_inbox, target.remote_actor, remote_actor, "inbox") && !remote_inbox.empty?
               existing["remote_inbox"] = Aptok.json(remote_inbox)
               refreshed = true
             end
@@ -107,6 +117,11 @@ module ACD
       private def infer_activitypub_peer_endpoint(actor : String, endpoint : String) : String
         uri = URI.parse(actor)
         path = uri.path || ""
+        if path.starts_with?("/actors/")
+          port = uri.port ? ":#{uri.port}" : ""
+          return "#{uri.scheme}://#{uri.host}#{port}/#{endpoint}"
+        end
+
         marker = "/actor/"
         idx = path.index(marker)
         return "" unless idx
@@ -118,6 +133,67 @@ module ACD
         "#{uri.scheme}://#{uri.host}#{port}/#{endpoint}/#{handle}"
       rescue
         ""
+      end
+
+      private def subscription_endpoint(discovered : String, subscription_actor : String, remote_actor : String, endpoint : String) : String
+        if should_replace_subscription_endpoint?(discovered, subscription_actor, remote_actor, endpoint)
+          fallback = infer_activitypub_peer_endpoint(subscription_actor, endpoint)
+          return fallback if URI.parse(subscription_actor).path.to_s.starts_with?("/actors/") && !fallback.empty?
+
+          rewritten = rewrite_endpoint_origin(discovered, subscription_actor)
+          return rewritten unless rewritten.empty?
+          return fallback
+        end
+        discovered.strip
+      rescue
+        discovered.strip
+      end
+
+      private def should_replace_subscription_endpoint?(discovered : String, subscription_actor : String, remote_actor : String, endpoint : String) : Bool
+        fallback = infer_activitypub_peer_endpoint(subscription_actor, endpoint)
+        return false if fallback.empty?
+        value = discovered.strip
+        return true if value.empty?
+
+        discovered_uri = URI.parse(value)
+        fallback_uri = URI.parse(fallback)
+        discovered_host = discovered_uri.host.to_s.downcase
+        fallback_host = fallback_uri.host.to_s.downcase
+        return false if discovered_host == fallback_host
+        container_local_host?(discovered_host) || actor_endpoint_uses_different_origin?(value, remote_actor, fallback)
+      rescue
+        false
+      end
+
+      private def container_local_host?(host : String) : Bool
+        return true if host.empty?
+        return true if host == "localhost" || host == "127.0.0.1" || host == "::1"
+        !host.includes?(".")
+      end
+
+      private def rewrite_endpoint_origin(endpoint : String, subscription_actor : String) : String
+        endpoint_uri = URI.parse(endpoint)
+        subscription_uri = URI.parse(subscription_actor)
+        return "" if endpoint_uri.path.to_s.empty? || subscription_uri.host.to_s.empty?
+
+        port = subscription_uri.port ? ":#{subscription_uri.port}" : ""
+        query = endpoint_uri.query ? "?#{endpoint_uri.query}" : ""
+        fragment = endpoint_uri.fragment ? "##{endpoint_uri.fragment}" : ""
+        "#{subscription_uri.scheme}://#{subscription_uri.host}#{port}#{endpoint_uri.path}#{query}#{fragment}"
+      rescue
+        ""
+      end
+
+      private def actor_endpoint_uses_different_origin?(endpoint : String, remote_actor : String, fallback : String) : Bool
+        endpoint_uri = URI.parse(endpoint)
+        actor_uri = URI.parse(remote_actor)
+        fallback_uri = URI.parse(fallback)
+        endpoint_host = endpoint_uri.host.to_s.downcase
+        actor_host = actor_uri.host.to_s.downcase
+        fallback_host = fallback_uri.host.to_s.downcase
+        !actor_host.empty? && endpoint_host == actor_host && endpoint_host != fallback_host && container_local_host?(endpoint_host)
+      rescue
+        false
       end
 
       private def start_federation_poller : Nil
@@ -166,7 +242,7 @@ module ACD
             STDERR.puts "[federation] polling remote_actor=#{remote_actor} outbox=#{remote_outbox}"
             collection = fetch_activitypub_collection(remote_outbox) ||
                          ctx.lookup_object(remote_outbox, Aptok::LookupObjectOptions.new(cross_origin: "trust"))
-            activities = collection ? ctx.traverse_collection(collection, 50) : [] of Aptok::JsonMap
+            activities = collection ? ctx.traverse_collection(collection, 250) : [] of Aptok::JsonMap
             activities = ordered_collection_items(collection) if activities.empty? && collection
             STDERR.puts "[federation] poll fetched remote_actor=#{remote_actor} activities=#{activities.size}"
             activities.each do |activity|

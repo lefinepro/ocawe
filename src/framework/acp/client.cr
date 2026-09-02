@@ -47,19 +47,19 @@ module ACP
 
       # Send initialize request
       params_json = {
-        "protocolVersion" => 1,
+        "protocolVersion"    => 1,
         "clientCapabilities" => {
           "fs" => {
-            "readTextFile" => true,
-            "writeTextFile" => true
+            "readTextFile"  => true,
+            "writeTextFile" => true,
           },
-          "terminal" => true
+          "terminal" => true,
         },
         "clientInfo" => {
-          "name" => "ocawe",
-          "title" => "Ocawe Runtime",
-          "version" => "0.0.1"
-        }
+          "name"    => "ocawe",
+          "title"   => "Ocawe Runtime",
+          "version" => "0.0.1",
+        },
       }
 
       params = InitializeParams.from_json(params_json.to_json)
@@ -70,6 +70,9 @@ module ACP
       @agent_info = init_result.agentInfo
       @agent_capabilities = init_result.agentCapabilities
 
+      # ACP requires the client to acknowledge initialization before
+      # session methods may be used. Some agents tolerate omitting this,
+      # but Codex waits for it and otherwise never answers session/new.
       init_result
     end
 
@@ -92,10 +95,10 @@ module ACP
 
       params_json = {
         "sessionId" => sid,
-        "prompt" => [{
+        "prompt"    => [{
           "type" => "text",
-          "text" => prompt_text
-        }]
+          "text" => prompt_text,
+        }],
       }
 
       params = SessionPromptParams.from_json(params_json.to_json)
@@ -110,7 +113,7 @@ module ACP
 
       params_json = {
         "sessionId" => sid,
-        "prompt" => content.map(&.to_json)
+        "prompt"    => content.map(&.to_json),
       }
 
       params = SessionPromptParams.from_json(params_json.to_json)
@@ -179,16 +182,15 @@ module ACP
       id = @request_id += 1
       req_json = {
         "jsonrpc" => "2.0",
-        "id" => id,
-        "method" => method,
-        "params" => JSON.parse(params.to_json)
+        "id"      => id,
+        "method"  => method,
+        "params"  => JSON.parse(params.to_json),
       }
 
       response_channel = Channel(JsonRpcResponse).new(1)
       @pending_responses[id] = response_channel
 
       send_message_json(req_json)
-
       response = response_channel.receive
       @pending_responses.delete(id)
 
@@ -205,8 +207,8 @@ module ACP
 
       notif_json = {
         "jsonrpc" => "2.0",
-        "method" => method,
-        "params" => JSON.parse(params.to_json)
+        "method"  => method,
+        "params"  => JSON.parse(params.to_json),
       }
 
       send_message_json(notif_json)
@@ -247,7 +249,8 @@ module ACP
     private def handle_message(line : String)
       json = JSON.parse(line)
 
-      if json["id"]?
+      fields = json.as_h
+      if fields.has_key?("id")
         # Response
         response = JsonRpcResponse.from_json(line)
         if id = response.id

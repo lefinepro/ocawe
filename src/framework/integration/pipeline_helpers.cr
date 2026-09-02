@@ -1,6 +1,7 @@
 require "file_utils"
 require "http/client"
 require "json"
+require "aptok"
 require "uri"
 
 module Ocawe
@@ -95,6 +96,40 @@ module Ocawe
       true
     end
 
+    def marketplace_request_activity(
+      id : String,
+      actor : String,
+      target : String,
+      title : String,
+      content : String,
+      resource : String,
+      action : String = "deliverService",
+      unit : String = "one",
+      value : String = "1",
+    ) : String
+      intent = Aptok.marketplace_intent(
+        "#{id}#intent",
+        action,
+        Aptok.marketplace_quantity(unit, value),
+        resource_conforms_to: resource
+      )
+      proposal = Aptok.marketplace_proposal(
+        "#{id}#proposal",
+        "request",
+        actor,
+        intent,
+        name: title,
+        content: content,
+        to: [target]
+      )
+      Aptok.validate_fep_0837!(proposal)
+
+      activity = Aptok.create(id, actor, proposal)
+      ensure_context(activity, "https://w3id.org/fep/0837")
+      activity["to"] = Aptok.json([target])
+      activity.to_json
+    end
+
     def as_string(value : JSON::Any?) : String?
       return nil unless value
       value.as_s? || value.as_i?.try(&.to_s) || value.as_f?.try(&.to_s) || value.as_bool?.try(&.to_s)
@@ -118,6 +153,20 @@ module Ocawe
         "Accept-Encoding" => "identity",
         "User-Agent"      => "ocawe-pipeline/1.0",
       }
+    end
+
+    private def ensure_context(activity : Hash(String, JSON::Any), context : String) : Nil
+      current = activity["@context"]?
+      contexts = [] of JSON::Any
+      if array = current.try(&.as_a?)
+        contexts.concat(array)
+      elsif current
+        contexts << current
+      end
+      return if contexts.any? { |item| item.as_s? == context }
+
+      contexts << Aptok.json(context)
+      activity["@context"] = Aptok.json(contexts)
     end
   end
 end

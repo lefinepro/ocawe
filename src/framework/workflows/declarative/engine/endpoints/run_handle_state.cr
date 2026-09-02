@@ -45,6 +45,7 @@ module Ocawe
         resume_data : AnyHash?,
         explicit_node : String?,
       ) : WorkflowRunResult
+        STDERR.flush
         run_started_at = Ocawe::Utils::TimeCompat.monotonic
         telemetry_run_status = "running"
         run_span = Ocawe::Telemetry.start_span(
@@ -78,13 +79,17 @@ module Ocawe
 
         previous_node_id = nil.as(String?)
         previous_node_result = nil.as(AnyHash?)
+        STDERR.flush
 
         while @node_index < @definition.nodes.size
           node = @definition.nodes[@node_index]
           node_logger_config = @definition.logger_for_node(node.id)
+          STDERR.flush
           runtime_logger.node_started(node.id, node_logger_config)
+          STDERR.flush
           node_input_data = node_input_for(node, previous_node_id, previous_node_result)
           node_started_at = Ocawe::Utils::TimeCompat.monotonic
+          STDERR.flush
           node_span = Ocawe::Telemetry.start_span(
             "workflow.node",
             {
@@ -94,6 +99,7 @@ module Ocawe
               "workflow.node_kind" => node.kind.to_s.downcase,
             } of String => Ocawe::Telemetry::AttributeValue
           )
+          STDERR.flush
           node_telemetry_status = "running"
           ctx = NodeContext.new(
             workflow_id: @workflow_id,

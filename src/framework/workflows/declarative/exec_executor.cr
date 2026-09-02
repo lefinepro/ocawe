@@ -11,7 +11,7 @@ require "./acp_executor"
 module Ocawe
   module Workflow
     class ExecExecutor
-      def exec(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil) : AnyHash
+      def exec(ref : String, ctx : NodeContext, runtime : AnyHash? = nil, env : AnyHash? = nil, workflow_root : String? = nil, workspace : AnyHash? = nil) : AnyHash
         started = Ocawe::Utils::TimeCompat.monotonic
         status = "success"
         span = Ocawe::Telemetry.start_span(
@@ -32,7 +32,8 @@ module Ocawe
 
           # Check for ACP runtime
           if acp_config = runtime["acp"]?
-            return exec_acp(ref, ctx, acp_config, env, workflow_root)
+            placement = runtime["placement"]?.try(&.as_h?)
+            return exec_acp(ref, ctx, acp_config, placement, env, workflow_root, workspace)
           end
 
           if runtime.has_key?("git+https")
@@ -58,7 +59,7 @@ module Ocawe
         end
       end
 
-      private def exec_acp(ref : String, ctx : NodeContext, acp_config : JSON::Any, env : AnyHash?, workflow_root : String?) : AnyHash
+      private def exec_acp(ref : String, ctx : NodeContext, acp_config : JSON::Any, placement : AnyHash?, env : AnyHash?, workflow_root : String?, workspace : AnyHash?) : AnyHash
         config = acp_config.as_h? || {} of String => JSON::Any
         input = acp_prompt_input(ctx.input_data)
 
@@ -68,8 +69,8 @@ module Ocawe
         # Resolve working directory
         cwd = workflow_root || Dir.current
 
-        executor = ACPExecutor.new(ref, cwd, exec_env)
-        executor.run(ref, input, config)
+        executor = ACPExecutor.new(ref, ctx.run_id, cwd, exec_env)
+        executor.run(ref, input, config, placement: placement, workspace: workspace)
       end
 
       private def acp_prompt_input(input_data : AnyHash) : String

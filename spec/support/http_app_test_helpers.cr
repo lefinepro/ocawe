@@ -173,6 +173,10 @@ class ACD::Kemal::App
     ensure_aptok_subscription(value)
   end
 
+  def test_subscription_endpoint(discovered : String, subscription_actor : String, remote_actor : String, endpoint : String) : String
+    subscription_endpoint(discovered, subscription_actor, remote_actor, endpoint)
+  end
+
   def test_verify_webhook_signature(payload : String, headers : ::HTTP::Headers) : Bool
     verify_webhook_signature(payload, headers)
   end

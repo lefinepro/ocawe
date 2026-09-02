@@ -80,6 +80,7 @@ module ACD
         @workflow_creation_lock = Mutex.new
         @reload_lock = Mutex.new
         @cache_lock = Mutex.new
+        @federation_runtime_ready = false
       end
 
       def start
@@ -116,7 +117,11 @@ module ACD
         end
         if federation_api_enabled?
           mount_federation_endpoints
-          bootstrap_federation_subscriptions
+          @federation_runtime_ready = true
+          spawn do
+            sleep 2.seconds
+            bootstrap_federation_subscriptions
+          end
           start_federation_poller
         end
 
@@ -303,7 +308,7 @@ module ACD
           @workflow_service = Ocawe::Workflow::Service.new(@workflow_engine)
         end
 
-        bootstrap_federation_subscriptions if federation_api_enabled?
+        bootstrap_federation_subscriptions if @federation_runtime_ready && federation_api_enabled?
       end
 
       private def start_service_workflows : Nil

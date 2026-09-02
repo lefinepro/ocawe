@@ -23,6 +23,7 @@ module ACD
           i += 1
 
           next if line.empty? || line.starts_with?("#")
+          next if line.match(/^follow\s+\[/)
 
           # Handle parallel do...end block
           if line.match(/^\s*parallel\s+do\s*$/)

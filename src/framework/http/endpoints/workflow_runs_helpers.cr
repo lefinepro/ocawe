@@ -40,17 +40,19 @@ module ACD
           env.response.status_code = 202
           env.response.content_type = "application/json"
           return {
-            "run_id"          => queued_run_id,
-            "workflow_id"     => workflow_id,
-            "status"          => "queued",
-            "status_url"      => "/v1/workflows/#{workflow_id}/runs/#{queued_run_id}",
-            "scheduler"    => status,
+            "run_id"      => queued_run_id,
+            "workflow_id" => workflow_id,
+            "status"      => "queued",
+            "status_url"  => "/v1/workflows/#{workflow_id}/runs/#{queued_run_id}",
+            "scheduler"   => status,
           }.to_json
         end
 
         result_or_error = with_workflow_errors(env) do
+          STDERR.flush
           @workflow_service.start_run(workflow_id, run_id: run_id, resource_id: resource_id, input_data: input_data, resources: resources)
         end
+        STDERR.flush
         return result_or_error if result_or_error.is_a?(String)
 
         run_result = result_or_error.as(Ocawe::Workflow::WorkflowRunResult)
@@ -93,7 +95,7 @@ module ACD
       private def publish_scheduled_federation_result(
         job : Ocawe::Workflow::Scheduler::Job,
         run_status : String,
-        output : Hash(String, JSON::Any)
+        output : Hash(String, JSON::Any),
       ) : Bool
         context = job.input_data["federation_result_context"]?.try(&.as_h?)
         return false unless context
