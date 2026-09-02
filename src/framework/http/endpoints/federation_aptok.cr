@@ -269,6 +269,8 @@ module ACD
           workflow_id,
           ctx.get_inbox_uri(workflow_id),
           ctx.get_outbox_uri(workflow_id),
+          followers: "#{actor_uri}/followers",
+          following: "#{actor_uri}/following",
           name: ENV["OCAWE_FEDERATION_ACTOR_NAME"]? || workflow_id,
           shared_inbox: "#{ctx.origin}/inbox",
           alias_uri: ENV["OCAWE_FEDERATION_ALIAS_URI"]?,

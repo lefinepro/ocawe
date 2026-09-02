@@ -359,46 +359,16 @@ module OcaweCore
             # live Deployment patch alone therefore regresses to the old
             # workflow, image, and legacy runtime mount. Keep the addon file
             # as the source of truth whenever this service is addon-managed.
-            command -v jq >/dev/null 2>&1 || {
-              echo "[ocawe] addon-managed deploy requires jq on the remote host" >&2
-              exit 1
-            }
-            cawfile="$build_root/context/workflow/Cawfile"
-            plugin_data='{}'
-            if [ -d "$build_root/context/workflow/plugins" ]; then
-              while IFS= read -r -d '' plugin_file; do
-                plugin_name="$(basename "$plugin_file")"
-                plugin_content="$(jq -Rs . < "$plugin_file")"
-                plugin_data="$(jq --arg name "$plugin_name" --argjson content "$plugin_content" '. + {($name): $content}' <<<"$plugin_data")"
-              done < <(find "$build_root/context/workflow/plugins" -type f -print0 | sort -z)
-            fi
             addon_tmp="${addon_manifest}.tmp.$$"
-            run_privileged jq \
-              --arg service "$service" \
-              --arg image "$image" \
-              --arg runtime_name "$runtime_name" \
-              --arg workflow_hash "$hash" \
-              --rawfile cawfile "$cawfile" \
-              --argjson plugin_data "$plugin_data" \
-              '
-                def update_item:
-                  if .kind == "ConfigMap" and .metadata.name == ($service + "-workflow") then
-                    .data.Cawfile = $cawfile
-                  elif .kind == "ConfigMap" and .metadata.name == ($service + "-plugins") then
-                    .data = $plugin_data
-                  elif .kind == "Deployment" and .metadata.name == $service then
-                    .spec.template.metadata.annotations["sireng.io/workflow-hash"] = $workflow_hash
-                    | .spec.template.spec.containers = (.spec.template.spec.containers | map(
-                        if .name == $service then
-                          .image = $image
-                          | .volumeMounts = ((.volumeMounts // []) | map(
-                              select(.mountPath != "/runtime" and .mountPath != ("/runtime/" + $runtime_name))
-                            ))
-                        else . end
-                      ))
-                  else . end;
-                if .kind == "List" then .items |= map(update_item) else update_item end
-              ' "$addon_manifest" | run_privileged tee "$addon_tmp" >/dev/null
+            # NixOS installs addon manifests as read-only store symlinks, and
+            # K3s manifests are YAML rather than JSON. Dereference the file
+            # and update its image textually instead of requiring jq or
+            # mutating a Nix store path.
+            run_privileged cp -L "$addon_manifest" "$addon_tmp"
+            run_privileged sed -i -E "s|^([[:space:]]+image: ).*$|\\1${image}|" "$addon_tmp"
+            if [ -L "$addon_manifest" ]; then
+              run_privileged rm -f "$addon_manifest"
+            fi
             run_privileged install -m 0644 "$addon_tmp" "$addon_manifest"
             run_privileged rm -f "$addon_tmp"
             "${kubectl_cmd[@]}" "${kubectl_args[@]}" apply -f "$addon_manifest"
