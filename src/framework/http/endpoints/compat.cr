@@ -286,20 +286,24 @@ module ACD
 
       private def orator_command_from_prompt(prompt : String) : Ocawe::Workflow::AnyHash?
         raw = prompt.strip.sub(/\Auser:\s*/i, "").strip.sub(/\A>\s*/, "").strip
-        match = raw.match(/\A#(plan|bg|background|key|keys|invite)(?:\s+([\s\S]*))?\z/i)
+        match = raw.match(/\A#(plan|bg|background|key|keys|invite|caw)(?:\s+([\s\S]*))?\z/i)
         return nil unless match
 
         name = match[1].downcase
         name = "bg" if name == "background"
         name = "keys" if name == "key"
         value = (match[2]? || "").strip
+        if name == "caw"
+          return nil unless value.downcase == "run"
+          value = "run"
+        end
         JSON.parse({name => (value.empty? ? true : value)}.to_json).as_h
       end
 
       private def copy_chat_identity_fields(source : Ocawe::Workflow::AnyHash, target : Ocawe::Workflow::AnyHash) : Nil
-        ["user_actor", "user_handle"].each do |field|
-          value = source[field]?.try(&.as_s?)
-          target[field] = JSON.parse(value.to_json) if value && !value.strip.empty?
+        ["user_actor", "user_handle", "caw_files", "caw_sharing", "caw_agent"].each do |field|
+          value = source[field]?
+          target[field] = JSON.parse(value.to_json) if value
         end
         if command = source["command"]?.try(&.as_h?)
           target["command"] = JSON.parse(command.to_json)
